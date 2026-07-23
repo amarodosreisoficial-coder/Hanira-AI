@@ -12,7 +12,16 @@ import {
   getOwnedAttachments,
 } from "@/services/attachments";
 import { getAIModelConfig } from "@/lib/ai/models";
+import { createDefaultOllamaProvider } from "@/lib/ai/providers/ollama";
 import { classifyOpenAIError } from "@/lib/openai/errors";
+import {
+  buildTextChatProviderRequest,
+  createTextChatProviderResponse,
+  isOllamaTextProviderEnabled,
+  shouldUseOllamaTextProvider,
+  streamEvent,
+  streamHeaders,
+} from "@/lib/ai/runtime/text-chat-runtime";
 import {
   createRequestId,
   logServerEvent,
@@ -21,21 +30,6 @@ import {
 const MAX_CONTEXT_MESSAGES = 20;
 const SYSTEM_PROMPT =
   "Você é Hanira, uma inteligência artificial elegante, acolhedora, inteligente e natural. Converse em português do Brasil por padrão. Seja clara, humana e útil, sem fingir ser humana. Adapte profundidade, tom e vocabulário ao usuário. Use as memórias disponíveis somente quando forem relevantes.";
-
-function streamEvent(type: string, data: Record<string, unknown> = {}) {
-  return `data: ${JSON.stringify({ type, ...data })}\n\n`;
-}
-
-function streamHeaders(conversationId: string, requestId: string) {
-  return {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "X-Conversation-Id": conversationId,
-    "X-Request-ID": requestId,
-    "X-Content-Type-Options": "nosniff",
-  };
-}
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -74,7 +68,7 @@ export async function POST(request: Request) {
     if (user.demo) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
-    return await createOpenAIStream(
+    return await createChatStream(
       request,
       user.id,
       payload,
@@ -189,7 +183,7 @@ function createDemoStream(
   });
 }
 
-async function createOpenAIStream(
+async function createChatStream(
   request: Request,
   userId: string,
   payload: {
@@ -348,6 +342,67 @@ async function createOpenAIStream(
   ]
     .filter(Boolean)
     .join("\n");
+  const stableConversationId = conversationId;
+
+  const useOllamaText = shouldUseOllamaTextProvider({
+    ollamaEnabled: isOllamaTextProviderEnabled(),
+    attachmentCount: attachments.length,
+    imageAttachmentCount: imageAttachments.length,
+  });
+
+  if (useOllamaText) {
+    return createTextChatProviderResponse({
+      request,
+      provider: createDefaultOllamaProvider(),
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: SYSTEM_PROMPT,
+        personalization,
+        context,
+      }),
+      conversationId: stableConversationId,
+      requestId,
+      mode: "ollama",
+      onComplete: async ({ assistantContent }) => {
+        await persistAssistantResponse({
+          supabase,
+          conversationId: stableConversationId,
+          userId,
+          requestId,
+          assistantContent,
+          userMessage: payload.message,
+        });
+        logServerEvent({
+          level: "info",
+          requestId,
+          route: "/api/chat",
+          event: "stream_completed",
+          status: 200,
+          durationMs: Date.now() - startedAt,
+        });
+      },
+      onFailed: async (_error, safeError) => {
+        logServerEvent({
+          level: "error",
+          requestId,
+          route: "/api/chat",
+          event: "stream_failed",
+          status: safeError.status,
+          durationMs: Date.now() - startedAt,
+          errorType: safeError.type,
+        });
+      },
+      onCancelled: async () => {
+        logServerEvent({
+          level: "info",
+          requestId,
+          route: "/api/chat",
+          event: "stream_cancelled",
+          status: 499,
+          durationMs: Date.now() - startedAt,
+        });
+      },
+    });
+  }
 
   const openai = getOpenAIClient();
   const models = getAIModelConfig();
@@ -411,7 +466,6 @@ async function createOpenAIStream(
 
   const encoder = new TextEncoder();
   let assistantContent = "";
-  const stableConversationId = conversationId;
   const responseStream = new ReadableStream({
     async start(controller) {
       controller.enqueue(
@@ -434,34 +488,14 @@ async function createOpenAIStream(
         }
 
         if (assistantContent && !abortController.signal.aborted) {
-          const { error: assistantSaveError } = await supabase
-            .from("messages")
-            .upsert(
-              {
-                conversation_id: stableConversationId,
-                user_id: userId,
-                role: "assistant",
-                content: assistantContent,
-                request_id: requestId,
-              },
-              {
-                onConflict: "conversation_id,request_id,role",
-                ignoreDuplicates: true,
-              },
-            );
-          if (assistantSaveError) throw assistantSaveError;
-          await supabase
-            .from("conversations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", stableConversationId)
-            .eq("user_id", userId);
-          if (payload.message) {
-            await saveExplicitMemory(
-              userId,
-              stableConversationId,
-              payload.message,
-            );
-          }
+          await persistAssistantResponse({
+            supabase,
+            conversationId: stableConversationId,
+            userId,
+            requestId,
+            assistantContent,
+            userMessage: payload.message,
+          });
           controller.enqueue(
             encoder.encode(
               streamEvent("done", { conversationId: stableConversationId }),
@@ -547,6 +581,48 @@ async function createOpenAIStream(
   return new Response(responseStream, {
     headers: streamHeaders(stableConversationId, requestId),
   });
+}
+
+async function persistAssistantResponse(options: {
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
+  conversationId: string;
+  userId: string;
+  requestId: string;
+  assistantContent: string;
+  userMessage: string;
+}) {
+  if (!options.assistantContent) return;
+
+  const { error: assistantSaveError } = await options.supabase
+    .from("messages")
+    .upsert(
+      {
+        conversation_id: options.conversationId,
+        user_id: options.userId,
+        role: "assistant",
+        content: options.assistantContent,
+        request_id: options.requestId,
+      },
+      {
+        onConflict: "conversation_id,request_id,role",
+        ignoreDuplicates: true,
+      },
+    );
+  if (assistantSaveError) throw assistantSaveError;
+
+  await options.supabase
+    .from("conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", options.conversationId)
+    .eq("user_id", options.userId);
+
+  if (options.userMessage) {
+    await saveExplicitMemory(
+      options.userId,
+      options.conversationId,
+      options.userMessage,
+    );
+  }
 }
 
 function createStoredResponseStream(
