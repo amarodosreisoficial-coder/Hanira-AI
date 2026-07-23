@@ -1,39 +1,34 @@
 import { headers } from "next/headers";
-import OpenAI from "openai";
 import { ZodError } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/security/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chatRequestSchema } from "@/lib/validation/chat";
-import { getRelevantMemories, saveExplicitMemory } from "@/services/memory";
-import { getOpenAIClient } from "@/services/openai";
 import {
-  attachmentImageDataUrl,
-  getOwnedAttachments,
-} from "@/services/attachments";
-import { getAIModelConfig } from "@/lib/ai/models";
-import { createDefaultOllamaProvider } from "@/lib/ai/providers/ollama";
-import { classifyOpenAIError } from "@/lib/openai/errors";
-import {
+  createTextChatRuntime,
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
-  isOllamaTextProviderEnabled,
   shouldUseOllamaTextProvider,
   streamEvent,
   streamHeaders,
-} from "@/lib/ai/runtime/text-chat-runtime";
+  toPublicAIError,
+} from "@/lib/ai/runtime";
+import { AIProviderError } from "@/lib/ai/types";
 import {
   createRequestId,
   logServerEvent,
 } from "@/lib/logging/server";
+import { checkRateLimit } from "@/lib/security/rate-limit";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chatRequestSchema } from "@/lib/validation/chat";
+import { getOwnedAttachments } from "@/services/attachments";
+import { getRelevantMemories, saveExplicitMemory } from "@/services/memory";
 
 const MAX_CONTEXT_MESSAGES = 20;
 const SYSTEM_PROMPT =
-  "Você é Hanira, uma inteligência artificial elegante, acolhedora, inteligente e natural. Converse em português do Brasil por padrão. Seja clara, humana e útil, sem fingir ser humana. Adapte profundidade, tom e vocabulário ao usuário. Use as memórias disponíveis somente quando forem relevantes.";
+  "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
   let requestId = createRequestId(request);
+
   try {
     const user = await requireSessionUser();
     const payload = chatRequestSchema.parse(await request.json());
@@ -44,6 +39,7 @@ export async function POST(request: Request) {
       headerStore.get("x-real-ip") ??
       "unknown";
     const rate = checkRateLimit(`${user.id}:${ip}`);
+
     if (!rate.allowed) {
       logServerEvent({
         level: "warn",
@@ -68,6 +64,7 @@ export async function POST(request: Request) {
     if (user.demo) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
+
     return await createChatStream(
       request,
       user.id,
@@ -88,39 +85,40 @@ export async function POST(request: Request) {
       });
       return Response.json(
         {
-          error: error.issues[0]?.message ?? "Mensagem inválida.",
+          error: error.issues[0]?.message ?? "Mensagem invalida.",
           requestId,
         },
         { status: 400, headers: { "X-Request-ID": requestId } },
       );
     }
+
     if (error instanceof Error && error.message === "UNAUTHENTICATED") {
       return Response.json(
-        { error: "Faça login para conversar.", requestId },
+        { error: "Faca login para conversar.", requestId },
         { status: 401, headers: { "X-Request-ID": requestId } },
       );
     }
-    const safeError =
-      error instanceof OpenAI.APIError
-        ? classifyOpenAIError(error)
-        : {
-            status: 500,
-            type: error instanceof Error ? error.name : "UnknownError",
-            message: "A Hanira não conseguiu responder agora. Tente novamente.",
-          };
+
+    const publicError = toPublicAIError(error);
+    const status = publicError.status;
+    const message =
+      publicError.message ||
+      "A Hanira nao conseguiu responder agora. Tente novamente.";
+
     logServerEvent({
       level: "error",
       requestId,
       route: "/api/chat",
       event: "request_failed",
-      status: safeError.status,
+      status,
       durationMs: Date.now() - startedAt,
-      errorType: safeError.type,
+      errorType: error instanceof Error ? error.name : "UnknownError",
     });
+
     return Response.json(
-      { error: safeError.message, requestId },
+      { error: message, requestId },
       {
-        status: safeError.status,
+        status,
         headers: { "X-Request-ID": requestId },
       },
     );
@@ -142,11 +140,11 @@ function createDemoStream(
     (attachment) => attachment.type === "image",
   );
   const subject = payload.message
-    ? `“${payload.message.slice(0, 100)}${payload.message.length > 100 ? "…" : ""}”`
+    ? `"${payload.message.slice(0, 100)}${payload.message.length > 100 ? "..." : ""}"`
     : "o arquivo enviado";
   const answer = hasImages
-    ? `Recebi ${subject} e o preview está disponível localmente. A imagem não foi analisada por IA: a análise real exige OpenAI e Supabase configurados.`
-    : `Entendi. Você quer explorar ${subject}. Estou em modo demonstração. A transcrição e as respostas reais exigem os serviços configurados.`;
+    ? `Recebi ${subject} e o preview esta disponivel localmente. A imagem nao foi analisada por IA: a analise real exige servicos externos configurados.`
+    : `Entendi. Voce quer explorar ${subject}. Estou em modo demonstracao. A transcricao e as respostas reais exigem os servicos configurados.`;
   const words = answer.match(/\S+\s*/g) ?? [answer];
   const encoder = new TextEncoder();
 
@@ -157,16 +155,19 @@ function createDemoStream(
           streamEvent("start", { conversationId, mode: "demo", requestId }),
         ),
       );
+
       for (const delta of words) {
         if (request.signal.aborted) break;
         controller.enqueue(encoder.encode(streamEvent("delta", { delta })));
         await new Promise((resolve) => setTimeout(resolve, 24));
       }
+
       if (!request.signal.aborted) {
         controller.enqueue(
           encoder.encode(streamEvent("done", { conversationId })),
         );
       }
+
       logServerEvent({
         level: "info",
         requestId,
@@ -178,6 +179,7 @@ function createDemoStream(
       controller.close();
     },
   });
+
   return new Response(stream, {
     headers: streamHeaders(conversationId, requestId),
   });
@@ -207,22 +209,26 @@ async function createChatStream(
       .eq("id", conversationId)
       .eq("user_id", userId)
       .maybeSingle();
+
     if (!data) {
-      return Response.json({ error: "Conversa não encontrada." }, { status: 404 });
+      return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
     }
   } else {
     const { data, error } = await supabase
       .from("conversations")
       .insert({
         user_id: userId,
-        title: payload.message.slice(0, 60) || "Análise de mídia",
+        title: payload.message.slice(0, 60) || "Analise de midia",
       })
       .select("id")
       .single();
     if (error) throw error;
     conversationId = data.id;
   }
-  if (!conversationId) throw new Error("Conversa não inicializada.");
+
+  if (!conversationId) {
+    throw new Error("Conversa nao inicializada.");
+  }
 
   const { data: existingRequest } = await supabase
     .from("messages")
@@ -233,6 +239,7 @@ async function createChatStream(
   const existingAssistant = existingRequest?.find(
     (message) => message.role === "assistant",
   );
+
   if (existingAssistant) {
     return createStoredResponseStream(
       conversationId,
@@ -254,6 +261,7 @@ async function createChatStream(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
     if (
       latestMessage?.role === "user" &&
       latestMessage.content === payload.message
@@ -290,6 +298,7 @@ async function createChatStream(
     if (messageError) throw messageError;
     userMessageId = insertedMessage.id;
   }
+
   if (attachments.length && userMessageId) {
     const { error: attachmentLinkError } = await supabase
       .from("attachments")
@@ -302,10 +311,11 @@ async function createChatStream(
       );
     if (attachmentLinkError) throw attachmentLinkError;
   }
+
   await supabase
     .from("conversations")
     .update({
-      title: payload.message.slice(0, 60) || "Análise de mídia",
+      title: payload.message.slice(0, 60) || "Analise de midia",
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId)
@@ -325,261 +335,101 @@ async function createChatStream(
       .select("preferred_name,response_style")
       .eq("user_id", userId)
       .maybeSingle(),
-    getRelevantMemories(userId, payload.message || "mídia enviada"),
+    getRelevantMemories(userId, payload.message || "midia enviada"),
   ]);
 
   const context = [...(messages ?? [])].reverse();
   const personalization = [
     settings?.preferred_name
-      ? `O nome preferido do usuário é ${settings.preferred_name}.`
+      ? `O nome preferido do usuario e ${settings.preferred_name}.`
       : "",
     settings?.response_style
       ? `Estilo de resposta solicitado: ${settings.response_style}.`
       : "",
     memories.length
-      ? `Memórias relevantes, use somente se ajudarem:\n- ${memories.join("\n- ")}`
+      ? `Memorias relevantes, use somente se ajudarem:\n- ${memories.join("\n- ")}`
       : "",
   ]
     .filter(Boolean)
     .join("\n");
-  const stableConversationId = conversationId;
 
-  const useOllamaText = shouldUseOllamaTextProvider({
-    ollamaEnabled: isOllamaTextProviderEnabled(),
+  const runtime = createTextChatRuntime();
+  const eligible = shouldUseOllamaTextProvider({
+    ollamaEnabled: true,
     attachmentCount: attachments.length,
     imageAttachmentCount: imageAttachments.length,
   });
 
-  if (useOllamaText) {
-    return createTextChatProviderResponse({
-      request,
-      provider: createDefaultOllamaProvider(),
-      providerRequest: buildTextChatProviderRequest({
-        systemPrompt: SYSTEM_PROMPT,
-        personalization,
-        context,
-      }),
-      conversationId: stableConversationId,
-      requestId,
-      mode: "ollama",
-      onComplete: async ({ assistantContent }) => {
-        await persistAssistantResponse({
-          supabase,
-          conversationId: stableConversationId,
-          userId,
-          requestId,
-          assistantContent,
-          userMessage: payload.message,
-        });
-        logServerEvent({
-          level: "info",
-          requestId,
-          route: "/api/chat",
-          event: "stream_completed",
-          status: 200,
-          durationMs: Date.now() - startedAt,
-        });
-      },
-      onFailed: async (_error, safeError) => {
-        logServerEvent({
-          level: "error",
-          requestId,
-          route: "/api/chat",
-          event: "stream_failed",
-          status: safeError.status,
-          durationMs: Date.now() - startedAt,
-          errorType: safeError.type,
-        });
-      },
-      onCancelled: async () => {
-        logServerEvent({
-          level: "info",
-          requestId,
-          route: "/api/chat",
-          event: "stream_cancelled",
-          status: 499,
-          durationMs: Date.now() - startedAt,
-        });
-      },
+  if (!eligible) {
+    throw new AIProviderError({
+      code: "unsupported_capability",
+      message: "O runtime principal atual aceita apenas chat textual simples.",
+      provider: runtime.provider.providerId,
+      model: runtime.model,
+      retryable: false,
     });
   }
 
-  const openai = getOpenAIClient();
-  const models = getAIModelConfig();
-  const abortController = new AbortController();
-  const abort = () => abortController.abort();
-  request.signal.addEventListener("abort", abort, { once: true });
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    abort();
-  }, 45_000);
-
-  let openAIStream;
-  try {
-    const input: OpenAI.Responses.ResponseInput = context.map((message) => ({
-      role: message.role as "user" | "assistant",
-      content: message.content,
-    }));
-    if (imageAttachments.length) {
-      const imageContent = await Promise.all(
-        imageAttachments.map(async (attachment) => ({
-          type: "input_image" as const,
-          image_url: await attachmentImageDataUrl(attachment),
-          detail: "auto" as const,
-        })),
-      );
-      const lastUserIndex = context.findLastIndex(
-        (message) => message.role === "user",
-      );
-      const multimodalContent = [
-        {
-          type: "input_text" as const,
-          text:
-            payload.message ||
-            "Analise cuidadosamente as imagens enviadas e descreva os pontos relevantes.",
-        },
-        ...imageContent,
-      ];
-      if (lastUserIndex >= 0) {
-        input[lastUserIndex] = {
-          role: "user",
-          content: multimodalContent,
-        };
-      }
-    }
-    openAIStream = await openai.responses.create(
-      {
-        model: imageAttachments.length ? models.vision : models.chat,
-        instructions: `${SYSTEM_PROMPT}\n${personalization}`,
-        input,
-        stream: true,
-        store: false,
+  return createTextChatProviderResponse({
+    request,
+    provider: runtime.provider,
+    providerRequest: {
+      ...buildTextChatProviderRequest({
+        systemPrompt: SYSTEM_PROMPT,
+        personalization,
+        context,
+        model: runtime.model,
+      }),
+      signal: request.signal,
+      timeoutMs: 45_000,
+      metadata: {
+        conversationId,
+        requestId,
+        userId,
       },
-      { signal: abortController.signal },
-    );
-  } catch (error) {
-    clearTimeout(timeout);
-    request.signal.removeEventListener("abort", abort);
-    throw error;
-  }
-
-  const encoder = new TextEncoder();
-  let assistantContent = "";
-  const responseStream = new ReadableStream({
-    async start(controller) {
-      controller.enqueue(
-        encoder.encode(
-          streamEvent("start", {
-            conversationId: stableConversationId,
-            mode: "openai",
-            requestId,
-          }),
-        ),
-      );
-      try {
-        for await (const event of openAIStream) {
-          if (event.type === "response.output_text.delta") {
-            assistantContent += event.delta;
-            controller.enqueue(
-              encoder.encode(streamEvent("delta", { delta: event.delta })),
-            );
-          }
-        }
-
-        if (assistantContent && !abortController.signal.aborted) {
-          await persistAssistantResponse({
-            supabase,
-            conversationId: stableConversationId,
-            userId,
-            requestId,
-            assistantContent,
-            userMessage: payload.message,
-          });
-          controller.enqueue(
-            encoder.encode(
-              streamEvent("done", { conversationId: stableConversationId }),
-            ),
-          );
-          logServerEvent({
-            level: "info",
-            requestId,
-            route: "/api/chat",
-            event: "stream_completed",
-            status: 200,
-            durationMs: Date.now() - startedAt,
-          });
-        }
-      } catch (error) {
-        if (!abortController.signal.aborted) {
-          const safeError =
-            error instanceof OpenAI.APIError
-              ? classifyOpenAIError(error)
-              : {
-                  status: 500,
-                  type: error instanceof Error ? error.name : "PersistenceError",
-                  message:
-                    "A resposta foi gerada, mas não pôde ser salva. Tente novamente.",
-                };
-          logServerEvent({
-            level: "error",
-            requestId,
-            route: "/api/chat",
-            event: "stream_failed",
-            status: safeError.status,
-            durationMs: Date.now() - startedAt,
-            errorType: safeError.type,
-          });
-          controller.enqueue(
-            encoder.encode(
-              streamEvent("error", {
-                message: safeError.message,
-                requestId,
-              }),
-            ),
-          );
-        } else if (timedOut) {
-          const safeError = classifyOpenAIError({ name: "AbortError" });
-          controller.enqueue(
-            encoder.encode(
-              streamEvent("error", {
-                message: safeError.message,
-                requestId,
-              }),
-            ),
-          );
-          logServerEvent({
-            level: "warn",
-            requestId,
-            route: "/api/chat",
-            event: "stream_timeout",
-            status: safeError.status,
-            durationMs: Date.now() - startedAt,
-            errorType: safeError.type,
-          });
-        } else {
-          logServerEvent({
-            level: "info",
-            requestId,
-            route: "/api/chat",
-            event: "stream_cancelled",
-            status: 499,
-            durationMs: Date.now() - startedAt,
-          });
-        }
-      } finally {
-        clearTimeout(timeout);
-        request.signal.removeEventListener("abort", abort);
-        controller.close();
-      }
     },
-    cancel() {
-      abortController.abort();
+    conversationId,
+    requestId,
+    mode: runtime.provider.providerId,
+    onComplete: async ({ assistantContent }) => {
+      await persistAssistantResponse({
+        supabase,
+        conversationId,
+        userId,
+        requestId,
+        assistantContent,
+        userMessage: payload.message,
+      });
+      logServerEvent({
+        level: "info",
+        requestId,
+        route: "/api/chat",
+        event: "stream_completed",
+        status: 200,
+        durationMs: Date.now() - startedAt,
+      });
     },
-  });
-
-  return new Response(responseStream, {
-    headers: streamHeaders(stableConversationId, requestId),
+    onFailed: async (_error, safeError) => {
+      logServerEvent({
+        level: "error",
+        requestId,
+        route: "/api/chat",
+        event: "stream_failed",
+        status: safeError.status,
+        durationMs: Date.now() - startedAt,
+        errorType: safeError.type,
+      });
+    },
+    onCancelled: async () => {
+      logServerEvent({
+        level: "info",
+        requestId,
+        route: "/api/chat",
+        event: "stream_cancelled",
+        status: 499,
+        durationMs: Date.now() - startedAt,
+      });
+    },
   });
 }
 
@@ -639,7 +489,7 @@ function createStoredResponseStream(
           streamEvent("start", {
             conversationId,
             requestId,
-            mode: "openai",
+            mode: "ollama",
             replayed: true,
           }),
         ),
@@ -659,6 +509,7 @@ function createStoredResponseStream(
       });
     },
   });
+
   return new Response(stream, {
     headers: streamHeaders(conversationId, requestId),
   });

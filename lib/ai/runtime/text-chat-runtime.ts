@@ -1,10 +1,10 @@
 import type { AIProvider } from "@/lib/ai/provider";
 import type {
   AIChatRequest,
-  AIProviderErrorCode,
   AIStreamEvent,
 } from "@/lib/ai/types";
 import { AIProviderError } from "@/lib/ai/types";
+import { toPublicAIError } from "@/lib/ai/runtime/public-ai-errors";
 
 export interface TextChatContextMessage {
   role: "user" | "assistant";
@@ -104,70 +104,52 @@ export function toPublicTextChatError(error: unknown): PublicTextChatError {
     };
   }
 
-  const byCode: Record<AIProviderErrorCode, PublicTextChatError> = {
-    authentication: {
-      status: 503,
-      type: "LocalAIUnavailable",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
-    },
-    authorization: {
-      status: 503,
-      type: "LocalAIUnavailable",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
-    },
-    rate_limit: {
-      status: 429,
-      type: "LocalAIRateLimit",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
-    },
-    timeout: {
-      status: 408,
-      type: "LocalAITimeout",
-      message: "A Hanira demorou mais que o esperado para responder.",
-    },
-    unavailable: {
-      status: 503,
-      type: "LocalAIUnavailable",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
-    },
-    invalid_request: {
-      status: 500,
-      type: "LocalAIInvalidRequest",
-      message: "O motor local da Hanira retornou uma resposta invalida.",
-    },
-    unsupported_capability: {
-      status: 500,
+  if (error.code === "unsupported_capability") {
+    return {
+      status: 400,
       type: "LocalAIUnsupportedCapability",
-      message: "O motor local da Hanira nao suporta este pedido no momento.",
-    },
-    model_not_found: {
-      status: 503,
-      type: "LocalAIModelNotInstalled",
-      message: "O modelo local da Hanira ainda nao esta instalado.",
-    },
-    content_rejected: {
+      message: "Nao foi possivel processar esta solicitacao.",
+    };
+  }
+
+  if (error.code === "content_rejected") {
+    return {
       status: 400,
       type: "LocalAIContentRejected",
       message: "A Hanira nao conseguiu responder a esse pedido.",
-    },
-    cancelled: {
-      status: 499,
-      type: "LocalAICancelled",
-      message: "A resposta foi interrompida.",
-    },
-    provider_error: {
-      status: 502,
-      type: "LocalAIInvalidResponse",
-      message: "O motor local da Hanira retornou uma resposta invalida.",
-    },
-    unknown: {
-      status: 500,
-      type: "LocalAIUnknownError",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
-    },
-  };
+    };
+  }
 
-  return byCode[error.code];
+  if (error.code === "rate_limit") {
+    return {
+      status: 429,
+      type: "LocalAIRateLimit",
+      message: "O motor local da Hanira nao esta disponivel no momento.",
+    };
+  }
+
+  const publicError = toPublicAIError(error);
+  return {
+    status: publicError.status,
+    type:
+      publicError.code === "timeout"
+        ? "LocalAITimeout"
+        : publicError.code === "unavailable"
+          ? "LocalAIUnavailable"
+          : publicError.code === "model_not_found"
+            ? "LocalAIModelNotInstalled"
+            : publicError.code === "invalid_request"
+              ? "LocalAIInvalidRequest"
+              : publicError.code === "provider_error"
+                ? "LocalAIInvalidResponse"
+                : publicError.code === "cancelled"
+                  ? "LocalAICancelled"
+                  : "LocalAIUnknownError",
+    message:
+      publicError.code === "cancelled"
+        ? "A resposta foi interrompida."
+        : publicError.message,
+  };
 }
 
 function isExternalCancellation(error: unknown, request: Request) {
@@ -176,6 +158,15 @@ function isExternalCancellation(error: unknown, request: Request) {
     error instanceof AIProviderError &&
     error.code === "cancelled"
   );
+}
+
+function createInvalidStreamEventError(providerId: string) {
+  return new AIProviderError({
+    code: "provider_error",
+    message: "O provider retornou um evento de stream invalido.",
+    provider: providerId,
+    retryable: true,
+  });
 }
 
 export function createTextChatProviderResponse(
@@ -214,6 +205,14 @@ export function createTextChatProviderResponse(
 
           if (event.type === "error") {
             throw event.error;
+          }
+
+          if (event.type !== "finish") {
+            throw createInvalidStreamEventError(options.provider.providerId);
+          }
+
+          if (!assistantContent.trim()) {
+            throw createInvalidStreamEventError(options.provider.providerId);
           }
 
           finished = true;

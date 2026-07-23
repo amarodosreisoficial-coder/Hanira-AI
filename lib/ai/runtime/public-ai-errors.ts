@@ -1,3 +1,5 @@
+import { AIProviderError } from "@/lib/ai/types";
+
 export type PublicAIErrorCode =
   | "unavailable"
   | "model_not_found"
@@ -7,10 +9,7 @@ export type PublicAIErrorCode =
   | "provider_error"
   | "unknown";
 
-// Temporary structural contract for Pacote 08B.
-// The canonical provider error contract lives in the AI Engine.
-// After combining packages, imports should come from lib/ai/provider.ts and lib/ai/types.ts.
-export interface TextRuntimeProviderErrorLike {
+export interface AIProviderErrorLike {
   code?: PublicAIErrorCode | string;
   name?: string;
   message?: string;
@@ -58,7 +57,7 @@ const PUBLIC_AI_ERROR_MESSAGES: Record<
 };
 
 function normalizePublicAIErrorCode(error: unknown): PublicAIErrorCode {
-  const candidate = error as TextRuntimeProviderErrorLike | undefined;
+  const candidate = error as AIProviderErrorLike | undefined;
 
   if (candidate?.code === "cancelled" || candidate?.name === "AbortError") {
     return "cancelled";
@@ -82,6 +81,15 @@ function normalizePublicAIErrorCode(error: unknown): PublicAIErrorCode {
 }
 
 export function toPublicAIError(error: unknown): PublicAIError {
+  if (error instanceof AIProviderError && error.code === "unsupported_capability") {
+    return {
+      code: "invalid_request",
+      message: "Nao foi possivel processar esta solicitacao.",
+      status: 400,
+      cancelled: false,
+    };
+  }
+
   const code = normalizePublicAIErrorCode(error);
   if (code === "cancelled") {
     return {

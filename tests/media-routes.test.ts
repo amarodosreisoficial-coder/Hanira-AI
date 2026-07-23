@@ -30,11 +30,13 @@ describe("contratos das rotas de voz e visão", () => {
     expect(source).toContain("checkRateLimit");
   });
 
-  it("chat multimodal usa IDs próprios e entrada de imagem", () => {
+  it("chat principal usa anexos proprios, mas restringe o runtime a texto simples", () => {
     const source = route("app/api/chat/route.ts");
     expect(source).toContain("getOwnedAttachments");
-    expect(source).toContain('"input_image"');
-    expect(source).toContain("attachmentImageDataUrl");
+    expect(source).toContain("createTextChatRuntime");
+    expect(source).toContain("unsupported_capability");
+    expect(source).not.toContain('"input_image"');
+    expect(source).not.toContain("attachmentImageDataUrl");
     expect(source).not.toContain("signedUrl");
   });
 });

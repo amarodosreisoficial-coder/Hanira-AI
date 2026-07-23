@@ -11,10 +11,11 @@ import {
 } from "../lib/ai/types";
 import {
   buildTextChatProviderRequest,
+  createTextChatRuntime,
   createTextChatProviderResponse,
   shouldUseOllamaTextProvider,
   toPublicTextChatError,
-} from "../lib/ai/runtime/text-chat-runtime";
+} from "../lib/ai/runtime";
 
 class FakeStreamProvider implements AIProvider {
   readonly providerId = "fake-ollama";
@@ -236,7 +237,7 @@ describe("runtime controlado do chat com Ollama", () => {
       { type: "delta", delta: "parcial" },
       {
         type: "error",
-        message: "O motor local da Hanira retornou uma resposta invalida.",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
         requestId: "r1",
       },
     ]);
@@ -306,12 +307,12 @@ describe("runtime controlado do chat com Ollama", () => {
     });
     await expect(readSseEvents(unavailableResponse)).resolves.toContainEqual({
       type: "error",
-      message: "O motor local da Hanira nao esta disponivel no momento.",
+      message: "O motor local da Hanira não está disponível no momento.",
       requestId: "r2",
     });
     await expect(readSseEvents(modelResponse)).resolves.toContainEqual({
       type: "error",
-      message: "O modelo local da Hanira ainda nao esta instalado.",
+      message: "O modelo local da Hanira ainda não está instalado.",
       requestId: "r3",
     });
   });
@@ -358,6 +359,207 @@ describe("runtime controlado do chat com Ollama", () => {
     expect(persisted).toBe(false);
   });
 
+  it("falha quando o stream termina sem finish e nao persiste parcial", async () => {
+    const provider = new FakeStreamProvider([
+      { type: "start", provider: "fake-ollama", model: "qwen" },
+      { type: "text-delta", textDelta: "parcial" },
+    ]);
+    let persisted = false;
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider,
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-sem-finish",
+      requestId: "r-sem-finish",
+      mode: "ollama",
+      onComplete: async () => {
+        persisted = true;
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-sem-finish",
+        mode: "ollama",
+        requestId: "r-sem-finish",
+      },
+      { type: "delta", delta: "parcial" },
+      {
+        type: "error",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
+        requestId: "r-sem-finish",
+      },
+    ]);
+    expect(persisted).toBe(false);
+  });
+
+  it("evento desconhecido gera error, nao emite done e nao persiste", async () => {
+    const provider = new FakeStreamProvider([
+      { type: "start", provider: "fake-ollama", model: "qwen" },
+      { type: "text-delta", textDelta: "parcial" },
+      { type: "mystery" } as unknown as AIStreamEvent,
+    ]);
+    let persisted = false;
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider,
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-unknown",
+      requestId: "r-unknown",
+      mode: "ollama",
+      onComplete: async () => {
+        persisted = true;
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-unknown",
+        mode: "ollama",
+        requestId: "r-unknown",
+      },
+      { type: "delta", delta: "parcial" },
+      {
+        type: "error",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
+        requestId: "r-unknown",
+      },
+    ]);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(persisted).toBe(false);
+  });
+
+  it("resposta vazia com finish gera error, nao emite done e nao persiste", async () => {
+    let persisted = false;
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider: new FakeStreamProvider([
+        { type: "start", provider: "fake-ollama", model: "qwen" },
+        { type: "finish", finishReason: "stop" },
+      ]),
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-empty",
+      requestId: "r-empty",
+      mode: "ollama",
+      onComplete: async ({ assistantContent }) => {
+        if (assistantContent) {
+          persisted = true;
+        }
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-empty",
+        mode: "ollama",
+        requestId: "r-empty",
+      },
+      {
+        type: "error",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
+        requestId: "r-empty",
+      },
+    ]);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(persisted).toBe(false);
+  });
+
+  it("usage antes de finish nao conclui o stream", async () => {
+    let persisted = false;
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider: new FakeStreamProvider([
+        { type: "start", provider: "fake-ollama", model: "qwen" },
+        {
+          type: "usage",
+          usage: { inputUnits: 1, outputUnits: 0, totalUnits: 1 },
+        },
+        { type: "text-delta", textDelta: "ok" },
+        { type: "finish", finishReason: "stop" },
+      ]),
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-usage",
+      requestId: "r-usage",
+      mode: "ollama",
+      onComplete: async () => {
+        persisted = true;
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-usage",
+        mode: "ollama",
+        requestId: "r-usage",
+      },
+      { type: "delta", delta: "ok" },
+      { type: "done", conversationId: "c-usage" },
+    ]);
+    expect(persisted).toBe(true);
+  });
+
+  it("falha de persistencia nao emite done enganoso", async () => {
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider: new FakeStreamProvider([
+        { type: "start", provider: "fake-ollama", model: "qwen" },
+        { type: "text-delta", textDelta: "final" },
+        { type: "finish", finishReason: "stop" },
+      ]),
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-persist-fail",
+      requestId: "r-persist-fail",
+      mode: "ollama",
+      onComplete: async () => {
+        throw new Error("db down");
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-persist-fail",
+        mode: "ollama",
+        requestId: "r-persist-fail",
+      },
+      { type: "delta", delta: "final" },
+      {
+        type: "error",
+        message: "A resposta foi gerada, mas nao pode ser salva. Tente novamente.",
+        requestId: "r-persist-fail",
+      },
+    ]);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+  });
+
   it("mapeia erro de persistencia para mensagem segura", () => {
     expect(toPublicTextChatError(new Error("db down"))).toEqual({
       status: 500,
@@ -367,11 +569,18 @@ describe("runtime controlado do chat com Ollama", () => {
     });
   });
 
-  it("mantem a rota ligada ao helper de elegibilidade e nao instancia OpenAIProvider", () => {
+  it("mantem a rota ligada ao helper de elegibilidade e compoe runtime Ollama sem OpenAIProvider", () => {
     const source = route("app/api/chat/route.ts");
     expect(source).toContain("shouldUseOllamaTextProvider");
-    expect(source).toContain("createDefaultOllamaProvider()");
+    expect(source).toContain("createTextChatRuntime()");
     expect(source).not.toContain("createDefaultOpenAIProvider");
     expect(source).not.toContain("new OpenAIProvider");
+  });
+
+  it("instancia o runtime principal sem singleton global mutavel", () => {
+    const source = route("lib/ai/runtime/create-text-chat-runtime.ts");
+    expect(source).toContain("new OllamaProvider");
+    expect(source).not.toContain("let runtime");
+    expect(createTextChatRuntime).toBeTypeOf("function");
   });
 });
