@@ -2,44 +2,115 @@ import type { AIProvider } from "@/lib/ai/provider";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
 
+const MIN_CONNECT_TIMEOUT_MS = 250;
+const MAX_CONNECT_TIMEOUT_MS = 30_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
+const MIN_REQUEST_TIMEOUT_MS = 1_000;
+const MAX_REQUEST_TIMEOUT_MS = 600_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 45_000;
+
+export interface OllamaRuntimeConfig {
+  enabled: true;
+  baseUrl: string;
+  model: string;
+  connectTimeoutMs: number;
+  requestTimeoutMs: number;
+}
+
 export interface TextChatRuntimeConfig {
   provider: AIProvider;
   model: string;
   baseUrl: string;
+  connectTimeoutMs: number;
+  requestTimeoutMs: number;
+  providerId: string;
+}
+
+function createInvalidConfigError(
+  message: string,
+  metadata?: Record<string, unknown>,
+) {
+  return new AIProviderError({
+    code: "invalid_request",
+    message,
+    provider: "ollama",
+    retryable: false,
+    metadata,
+  });
 }
 
 function readRequiredEnv(name: "OLLAMA_BASE_URL" | "OLLAMA_MODEL") {
-  const value = process.env[name]?.trim();
+  const rawValue = process.env[name];
+  const value = rawValue?.trim();
   if (!value) {
-    throw new AIProviderError({
-      code: "invalid_request",
-      message: `A configuracao ${name} e obrigatoria para o runtime Ollama.`,
-      provider: "ollama",
-      retryable: false,
-      metadata: { env: name },
-    });
+    throw createInvalidConfigError(
+      `A configuracao ${name} e obrigatoria para o runtime Ollama.`,
+      { env: name },
+    );
   }
 
   return value;
 }
 
-function normalizeBaseUrl(baseUrl: string) {
-  try {
-    const parsed = new URL(baseUrl);
-    return parsed.toString().replace(/\/$/, "");
-  } catch (error) {
-    throw new AIProviderError({
-      code: "invalid_request",
-      message: "A configuracao OLLAMA_BASE_URL e invalida.",
-      provider: "ollama",
-      retryable: false,
-      cause: error,
-      metadata: { env: "OLLAMA_BASE_URL" },
-    });
+function parseBoundedIntegerEnv(options: {
+  name: "OLLAMA_CONNECT_TIMEOUT_MS" | "OLLAMA_REQUEST_TIMEOUT_MS";
+  min: number;
+  max: number;
+  fallback: number;
+}) {
+  const rawValue = process.env[options.name];
+  if (rawValue === undefined) {
+    return options.fallback;
   }
+
+  const value = rawValue.trim();
+  if (!/^\d+$/.test(value)) {
+    throw createInvalidConfigError(
+      `A configuracao ${options.name} deve ser um inteiro positivo.`,
+      { env: options.name },
+    );
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < options.min || parsed > options.max) {
+    throw createInvalidConfigError(
+      `A configuracao ${options.name} esta fora do limite permitido.`,
+      {
+        env: options.name,
+        min: options.min,
+        max: options.max,
+      },
+    );
+  }
+
+  return parsed;
 }
 
-export function createTextChatRuntime(): TextChatRuntimeConfig {
+function normalizeBaseUrl(baseUrl: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch (error) {
+    throw createInvalidConfigError(
+      "A configuracao OLLAMA_BASE_URL e invalida.",
+      {
+        env: "OLLAMA_BASE_URL",
+        causeName: error instanceof Error ? error.name : "InvalidUrl",
+      },
+    );
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw createInvalidConfigError(
+      "A configuracao OLLAMA_BASE_URL usa um protocolo invalido.",
+      { env: "OLLAMA_BASE_URL" },
+    );
+  }
+
+  return parsed.toString().replace(/\/$/, "");
+}
+
+export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
   if (process.env.AI_ENGINE_OLLAMA_ENABLED !== "true") {
     throw new AIProviderError({
       code: "unavailable",
@@ -52,13 +123,66 @@ export function createTextChatRuntime(): TextChatRuntimeConfig {
 
   const baseUrl = normalizeBaseUrl(readRequiredEnv("OLLAMA_BASE_URL"));
   const model = readRequiredEnv("OLLAMA_MODEL");
+  const connectTimeoutMs = parseBoundedIntegerEnv({
+    name: "OLLAMA_CONNECT_TIMEOUT_MS",
+    min: MIN_CONNECT_TIMEOUT_MS,
+    max: MAX_CONNECT_TIMEOUT_MS,
+    fallback: DEFAULT_CONNECT_TIMEOUT_MS,
+  });
+  const requestTimeoutMs = parseBoundedIntegerEnv({
+    name: "OLLAMA_REQUEST_TIMEOUT_MS",
+    min: MIN_REQUEST_TIMEOUT_MS,
+    max: MAX_REQUEST_TIMEOUT_MS,
+    fallback: DEFAULT_REQUEST_TIMEOUT_MS,
+  });
+
+  if (requestTimeoutMs < connectTimeoutMs) {
+    throw createInvalidConfigError(
+      "A configuracao de timeout do Ollama e invalida.",
+      {
+        env: "OLLAMA_REQUEST_TIMEOUT_MS",
+        relatedEnv: "OLLAMA_CONNECT_TIMEOUT_MS",
+      },
+    );
+  }
 
   return {
-    provider: new OllamaProvider({
-      baseUrl,
-      defaultModel: model,
-    }),
-    model,
+    enabled: true,
     baseUrl,
+    model,
+    connectTimeoutMs,
+    requestTimeoutMs,
   };
 }
+
+export function createTextChatRuntime(): TextChatRuntimeConfig {
+  const config = resolveOllamaRuntimeConfig();
+  const provider = new OllamaProvider({
+    baseUrl: config.baseUrl,
+    defaultModel: config.model,
+    connectTimeoutMs: config.connectTimeoutMs,
+    requestTimeoutMs: config.requestTimeoutMs,
+  });
+
+  return {
+    provider,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    connectTimeoutMs: config.connectTimeoutMs,
+    requestTimeoutMs: config.requestTimeoutMs,
+    providerId: provider.providerId,
+  };
+}
+
+export const OLLAMA_RUNTIME_TIMEOUT_LIMITS = {
+  connect: {
+    min: MIN_CONNECT_TIMEOUT_MS,
+    max: MAX_CONNECT_TIMEOUT_MS,
+    fallback: DEFAULT_CONNECT_TIMEOUT_MS,
+  },
+  request: {
+    min: MIN_REQUEST_TIMEOUT_MS,
+    max: MAX_REQUEST_TIMEOUT_MS,
+    fallback: DEFAULT_REQUEST_TIMEOUT_MS,
+  },
+} as const;

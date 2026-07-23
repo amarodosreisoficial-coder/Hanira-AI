@@ -10,6 +10,13 @@ export interface ServerLogEntry {
   status: number;
   durationMs: number;
   errorType?: string;
+  conversationId?: string;
+  providerId?: string;
+  modelId?: string;
+  errorCode?: string;
+  stage?: string;
+  statusCode?: number;
+  cancelledByClient?: boolean;
 }
 
 export function createRequestId(request?: Request) {
@@ -31,6 +38,15 @@ export function logServerEvent(entry: ServerLogEntry) {
     event: entry.event,
     status: entry.status,
     durationMs: Math.max(0, Math.round(entry.durationMs)),
+    ...(entry.conversationId && { conversationId: entry.conversationId }),
+    ...(entry.providerId && { providerId: entry.providerId }),
+    ...(entry.modelId && { modelId: entry.modelId }),
+    ...(entry.errorCode && { errorCode: entry.errorCode }),
+    ...(entry.stage && { stage: entry.stage }),
+    ...(typeof entry.statusCode === "number" && { statusCode: entry.statusCode }),
+    ...(typeof entry.cancelledByClient === "boolean" && {
+      cancelledByClient: entry.cancelledByClient,
+    }),
     ...(entry.errorType && { errorType: entry.errorType }),
   });
 

@@ -34,6 +34,30 @@ function createStreamResponse(chunks: Uint8Array[], init?: ResponseInit) {
   );
 }
 
+function createTrackedBody(
+  chunks: Array<{ done: boolean; value?: Uint8Array }>,
+  tracker: { cancelCalls: number; releaseLockCalls: number },
+) {
+  return {
+    getReader() {
+      let index = 0;
+      return {
+        async read() {
+          const chunk = chunks[index++];
+          if (!chunk) return { done: true, value: undefined };
+          return chunk;
+        },
+        async cancel() {
+          tracker.cancelCalls += 1;
+        },
+        releaseLock() {
+          tracker.releaseLockCalls += 1;
+        },
+      };
+    },
+  } as unknown as ReadableStream<Uint8Array>;
+}
+
 function splitUtf8(value: string, splitAt: number): Uint8Array[] {
   const bytes = new TextEncoder().encode(value);
   return [bytes.slice(0, splitAt), bytes.slice(splitAt)];
@@ -338,6 +362,34 @@ describe("OllamaProvider", () => {
     });
   });
 
+  it("rejeita content-type inesperado em generate e stream", async () => {
+    const generateProvider = new OllamaProvider({
+      fetch: async () =>
+        new Response(JSON.stringify({ done: true, message: { content: "ok" } }), {
+          headers: { "content-type": "text/plain" },
+        }),
+    });
+
+    await expect(
+      generateProvider.generate({ messages: [{ role: "user", text: "oi" }] }),
+    ).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "unexpected-content-type" }),
+    });
+
+    const streamProvider = new OllamaProvider({
+      fetch: async () =>
+        new Response("{}", {
+          headers: { "content-type": "text/html" },
+        }),
+    });
+
+    await expect(collectStream(streamProvider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "unexpected-content-type" }),
+    });
+  });
+
   it("normaliza HTTP error e modelo nao instalado", async () => {
     const httpProvider = new OllamaProvider({
       fetch: async () => createJsonResponse({ error: "server exploded" }, { status: 500 }),
@@ -366,6 +418,30 @@ describe("OllamaProvider", () => {
       provider: "ollama",
       statusCode: 404,
     });
+
+    const endpoint404Provider = new OllamaProvider({
+      fetch: async () => createJsonResponse({ error: "route missing" }, { status: 404 }),
+    });
+
+    await expect(
+      endpoint404Provider.generate({ messages: [{ role: "user", text: "oi" }] }),
+    ).rejects.toMatchObject({
+      code: "unavailable",
+      provider: "ollama",
+      statusCode: 404,
+    });
+
+    const rateLimitProvider = new OllamaProvider({
+      fetch: async () => createJsonResponse({ error: "too many requests" }, { status: 429 }),
+    });
+
+    await expect(
+      rateLimitProvider.generate({ messages: [{ role: "user", text: "oi" }] }),
+    ).rejects.toMatchObject({
+      code: "rate_limit",
+      provider: "ollama",
+      statusCode: 429,
+    });
   });
 
   it("normaliza indisponibilidade, timeout e cancelamento", async () => {
@@ -383,22 +459,85 @@ describe("OllamaProvider", () => {
       retryable: true,
     });
 
+    const dnsProvider = new OllamaProvider({
+      fetch: async () => {
+        throw new Error("getaddrinfo ENOTFOUND ollama.local");
+      },
+    });
+
+    await expect(
+      dnsProvider.generate({ messages: [{ role: "user", text: "oi" }] }),
+    ).rejects.toMatchObject({
+      code: "unavailable",
+      provider: "ollama",
+    });
+
+    const closedConnectionProvider = new OllamaProvider({
+      fetch: async () => {
+        throw new Error("socket hang up");
+      },
+    });
+
+    await expect(
+      closedConnectionProvider.generate({ messages: [{ role: "user", text: "oi" }] }),
+    ).rejects.toMatchObject({
+      code: "provider_error",
+      provider: "ollama",
+    });
+
     const timeoutProvider = new OllamaProvider({
-      fetch: async () =>
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new DOMException("aborted", "AbortError")), 20);
-        }),
+      fetch: async (_input, init) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => {
+                  controller.error(new DOMException("aborted", "AbortError"));
+                },
+                { once: true },
+              );
+            },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      requestTimeoutMs: 5,
     });
 
     await expect(
       timeoutProvider.generate({
         messages: [{ role: "user", text: "oi" }],
-        timeoutMs: 5,
       }),
     ).rejects.toMatchObject({
       code: "timeout",
       provider: "ollama",
       retryable: true,
+      metadata: expect.objectContaining({ stage: "request" }),
+    });
+
+    const connectTimeoutProvider = new OllamaProvider({
+      fetch: async (_input, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+      connectTimeoutMs: 5,
+      requestTimeoutMs: 50,
+    });
+
+    await expect(
+      connectTimeoutProvider.generate({
+        messages: [{ role: "user", text: "oi" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "timeout",
+      provider: "ollama",
+      metadata: expect.objectContaining({ stage: "connect" }),
     });
 
     const controller = new AbortController();
@@ -487,7 +626,7 @@ describe("OllamaProvider", () => {
     });
   });
 
-  it("retorna finish unknown se o stream termina sem evento done", async () => {
+  it("falha se o stream termina sem evento done", async () => {
     const provider = new OllamaProvider({
       fetch: async () =>
         createStreamResponse([
@@ -497,10 +636,171 @@ describe("OllamaProvider", () => {
         ]),
     });
 
-    const events = await collectStream(provider);
-    expect(events.at(-1)).toEqual({
-      type: "finish",
-      finishReason: "unknown",
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "stream-without-finish" }),
     });
+  });
+
+  it("interrompe o stream quando o Ollama envia erro explicito no NDJSON", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"message\":{\"content\":\"parcial\"},\"done\":false}\n{\"error\":\"model not found, try pulling it first\"}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "model_not_found",
+      provider: "ollama",
+    });
+  });
+
+  it("rejeita finish duplicado apos validar o restante do stream", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"done\":true,\"done_reason\":\"stop\"}\n{\"done\":true,\"done_reason\":\"stop\"}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "post-finish-data" }),
+    });
+  });
+
+  it("rejeita usage apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"done\":true,\"done_reason\":\"stop\"}\n{\"done\":false,\"prompt_eval_count\":1,\"eval_count\":2}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "post-finish-data" }),
+    });
+  });
+
+  it("rejeita delta apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"done\":true,\"done_reason\":\"stop\"}\n{\"message\":{\"content\":\"extra\"},\"done\":false}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "post-finish-data" }),
+    });
+  });
+
+  it("rejeita error apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"done\":true,\"done_reason\":\"stop\"}\n{\"error\":\"model not found, try pulling it first\"}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "post-finish-data" }),
+    });
+  });
+
+  it("rejeita JSON invalido apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"done\":true,\"done_reason\":\"stop\"}\n{bad json}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "invalid-json" }),
+    });
+  });
+
+  it("aceita linhas vazias apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"message\":{\"content\":\"ok\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}\n\n \r\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).resolves.toEqual([
+      { type: "start", provider: "ollama", model: DEFAULT_OLLAMA_MODEL },
+      { type: "text-delta", textDelta: "ok" },
+      { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
+  it("aceita EOF imediato apos finish", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"message\":{\"content\":\"ok\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).resolves.toEqual([
+      { type: "start", provider: "ollama", model: DEFAULT_OLLAMA_MODEL },
+      { type: "text-delta", textDelta: "ok" },
+      { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
+  it("mantem cleanup do reader apos violacao pos-finish", async () => {
+    const tracker = { cancelCalls: 0, releaseLockCalls: 0 };
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/x-ndjson" }),
+          body: createTrackedBody(
+            [
+              {
+                done: false,
+                value: new TextEncoder().encode(
+                  "{\"done\":true,\"done_reason\":\"stop\"}\n{\"done\":true,\"done_reason\":\"stop\"}\n",
+                ),
+              },
+              { done: true },
+            ],
+            tracker,
+          ),
+          text: async () => "",
+        }) as Response,
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "post-finish-data" }),
+    });
+    expect(tracker.cancelCalls).toBe(1);
+    expect(tracker.releaseLockCalls).toBe(1);
   });
 });

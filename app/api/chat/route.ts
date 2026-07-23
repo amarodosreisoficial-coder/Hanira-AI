@@ -370,6 +370,19 @@ async function createChatStream(
     });
   }
 
+  logServerEvent({
+    level: "info",
+    requestId,
+    conversationId,
+    providerId: runtime.providerId,
+    modelId: runtime.model,
+    route: "/api/chat",
+    event: "generation_started",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    stage: "provider_stream",
+  });
+
   return createTextChatProviderResponse({
     request,
     provider: runtime.provider,
@@ -381,7 +394,7 @@ async function createChatStream(
         model: runtime.model,
       }),
       signal: request.signal,
-      timeoutMs: 45_000,
+      timeoutMs: runtime.requestTimeoutMs,
       metadata: {
         conversationId,
         requestId,
@@ -403,31 +416,63 @@ async function createChatStream(
       logServerEvent({
         level: "info",
         requestId,
+        conversationId,
+        providerId: runtime.providerId,
+        modelId: runtime.model,
         route: "/api/chat",
-        event: "stream_completed",
+        event: "generation_completed",
         status: 200,
         durationMs: Date.now() - startedAt,
+        stage: "provider_stream",
       });
     },
-    onFailed: async (_error, safeError) => {
+    onFailed: async (error, safeError) => {
+      const providerError = error instanceof AIProviderError ? error : null;
+      const errorCode = providerError?.code;
+      const metadataStage = providerError?.metadata?.stage;
+      const isTimeout = errorCode === "timeout";
+      const event =
+        errorCode === "unavailable"
+          ? "provider_unavailable"
+          : errorCode === "model_not_found"
+            ? "model_not_found"
+            : errorCode === "provider_error"
+              ? "invalid_provider_response"
+              : isTimeout
+                ? "generation_timed_out"
+                : safeError.type === "TextChatPersistenceError"
+                  ? "persistence_failed"
+                  : "stream_failed";
+
       logServerEvent({
-        level: "error",
+        level: isTimeout ? "warn" : "error",
         requestId,
+        conversationId,
+        providerId: runtime.providerId,
+        modelId: runtime.model,
         route: "/api/chat",
-        event: "stream_failed",
+        event,
         status: safeError.status,
         durationMs: Date.now() - startedAt,
         errorType: safeError.type,
+        errorCode,
+        stage: typeof metadataStage === "string" ? metadataStage : "provider_stream",
+        statusCode: providerError?.statusCode,
       });
     },
     onCancelled: async () => {
       logServerEvent({
         level: "info",
         requestId,
+        conversationId,
+        providerId: runtime.providerId,
+        modelId: runtime.model,
         route: "/api/chat",
-        event: "stream_cancelled",
+        event: "generation_cancelled",
         status: 499,
         durationMs: Date.now() - startedAt,
+        cancelledByClient: true,
+        stage: "provider_stream",
       });
     },
   });

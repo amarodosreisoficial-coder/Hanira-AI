@@ -16,6 +16,7 @@ import {
   shouldUseOllamaTextProvider,
   toPublicTextChatError,
 } from "../lib/ai/runtime";
+import { OllamaProvider } from "../lib/ai/providers/ollama";
 
 class FakeStreamProvider implements AIProvider {
   readonly providerId = "fake-ollama";
@@ -558,6 +559,61 @@ describe("runtime controlado do chat com Ollama", () => {
       },
     ]);
     expect(events.some((event) => event.type === "done")).toBe(false);
+  });
+
+  it("violacao pos-finish do provider nao persiste e nao emite done", async () => {
+    let persisted = false;
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  "{\"message\":{\"content\":\"ok\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}\n{\"message\":{\"content\":\"extra\"},\"done\":false}\n",
+                ),
+              );
+              controller.close();
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+    });
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider,
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-post-finish",
+      requestId: "r-post-finish",
+      mode: "ollama",
+      onComplete: async () => {
+        persisted = true;
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-post-finish",
+        mode: "ollama",
+        requestId: "r-post-finish",
+      },
+      { type: "delta", delta: "ok" },
+      {
+        type: "error",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
+        requestId: "r-post-finish",
+      },
+    ]);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(persisted).toBe(false);
   });
 
   it("mapeia erro de persistencia para mensagem segura", () => {

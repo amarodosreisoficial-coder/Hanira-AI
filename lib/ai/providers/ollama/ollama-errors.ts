@@ -14,7 +14,6 @@ interface OllamaErrorLike {
 export interface OllamaProviderErrorContext {
   provider?: string;
   model?: string;
-  timedOut?: boolean;
   statusCode?: number;
   metadata?: Record<string, unknown>;
 }
@@ -37,15 +36,6 @@ function getErrorCode(
   const rawMessage = String(error.message ?? "").toLowerCase();
   const metadataReason = String(context.metadata?.reason ?? "").toLowerCase();
 
-  if (context.timedOut) return "timeout";
-  if (error.name === "AbortError") return "cancelled";
-  if (error.status === 400) return "invalid_request";
-  if (error.status === 401) return "authentication";
-  if (error.status === 403) return "authorization";
-  if (error.status === 404) return "model_not_found";
-  if (error.status === 408) return "timeout";
-  if (error.status !== undefined && error.status >= 500) return "unavailable";
-
   if (
     includesAny(rawMessage, [
       "not found, try pulling it first",
@@ -56,11 +46,24 @@ function getErrorCode(
     return "model_not_found";
   }
 
+  if (error.name === "AbortError") return "cancelled";
+  if (error.status === 400) return "invalid_request";
+  if (error.status === 401) return "authentication";
+  if (error.status === 403) return "authorization";
+  if (error.status === 404) {
+    return metadataReason === "http-error" ? "unavailable" : "model_not_found";
+  }
+  if (error.status === 408) return "timeout";
+  if (error.status === 429) return "rate_limit";
+  if (error.status !== undefined && error.status >= 500) return "unavailable";
+
   if (
     includesAny(rawMessage, [
       "econnrefused",
       "fetch failed",
       "failed to fetch",
+      "enotfound",
+      "eai_again",
       "connect",
       "connection refused",
       "networkerror",
@@ -70,12 +73,31 @@ function getErrorCode(
   }
 
   if (
+    includesAny(rawMessage, [
+      "socket hang up",
+      "other side closed",
+      "connection closed",
+      "terminated",
+    ])
+  ) {
+    return "provider_error";
+  }
+
+  if (
+    metadataReason === "connect-timeout" ||
+    metadataReason === "request-timeout" ||
     metadataReason === "body-missing" ||
     metadataReason === "invalid-json" ||
     metadataReason === "unexpected-format" ||
+    metadataReason === "unexpected-content-type" ||
+    metadataReason === "stream-without-finish" ||
+    metadataReason === "post-finish-data" ||
+    metadataReason === "provider-stream-error" ||
     metadataReason === "http-error"
   ) {
-    return "provider_error";
+    return metadataReason === "connect-timeout" || metadataReason === "request-timeout"
+      ? "timeout"
+      : "provider_error";
   }
 
   return "unknown";
@@ -114,12 +136,22 @@ export function toOllamaProviderError(
                 ? "A operacao com o Ollama foi cancelada."
                 : code === "unavailable"
                   ? "O servidor Ollama esta indisponivel no momento."
+                  : code === "rate_limit"
+                    ? "O Ollama recusou temporariamente novas requisicoes."
                   : context.metadata?.reason === "body-missing"
                     ? "O Ollama respondeu sem body para esta operacao."
                     : context.metadata?.reason === "invalid-json"
                       ? "O Ollama retornou JSON invalido no streaming."
-                      : context.metadata?.reason === "unexpected-format"
-                        ? "O Ollama retornou um formato inesperado."
+                      : context.metadata?.reason === "unexpected-content-type"
+                        ? "O Ollama retornou um content-type inesperado."
+                        : context.metadata?.reason === "stream-without-finish"
+                          ? "O stream do Ollama terminou sem conclusao valida."
+                          : context.metadata?.reason === "post-finish-data"
+                            ? "O Ollama retornou dados extras apos a conclusao do stream."
+                          : context.metadata?.reason === "provider-stream-error"
+                            ? "O Ollama retornou um erro no stream."
+                        : context.metadata?.reason === "unexpected-format"
+                          ? "O Ollama retornou um formato inesperado."
                         : extractMessage(
                             candidate,
                             "O Ollama retornou um erro inesperado.",
