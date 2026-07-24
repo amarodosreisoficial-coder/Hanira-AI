@@ -3,70 +3,106 @@
 ## Estado atual
 
 - O chat textual principal continua em Ollama.
-- Nao existe fallback.
+- OpenAI segue fora do runtime textual principal.
+- Nao existe fallback de provider.
 - Nao existe Model Router.
-- OpenAI legado permanece desconectado do runtime principal.
-- Nao foi adicionado RAG novo, embeddings novos ou multimodal.
+- Nao foi adicionado RAG, embeddings novos, vector database ou multimodal.
 
-## Resolucao do projeto ativo
+## Modelo relacional
 
-- O fluxo do chat resolve um `ProjectChatContext` interno antes de chamar o provider.
-- O `projectId` e inferido de `conversation.metadata.projectId`.
-- Quando `metadata.projectId` nao existe, o servidor deriva o escopo legado estavel `legacy-conversation:${conversationId}`.
-- Conversas novas tambem nascem com escopo proprio derivado da propria conversa.
+```text
+User
+  └── Project
+       ├── Conversations
+       ├── Personality
+       └── Memories
+```
 
-## Autorizacao e escopo
+- `projects` pertence a `auth.users` por `user_id`.
+- `conversations.project_id` e a fonte canonica do projeto.
+- `personalities.project_id` escopa personalidade a um unico projeto.
+- `memories.project_id` escopa memoria nova ao projeto relacional.
+- `source_conversation_id` permanece preservado para auditoria e filtros adicionais.
 
-- A conversa e validada por `conversation_id + user_id` antes de gerar resposta.
-- Nenhum evento SSE `start` do provider e emitido antes da resolucao obrigatoria do contexto.
-- Replay idempotente continua restrito a `user_id + conversation_id + request_id`.
-- Reuso de `requestId` em outra conversa nao gera replay cruzado.
+## Projects
 
-## Historico
+- Cada usuario possui apenas os proprios projetos via RLS.
+- Existe no maximo um projeto padrao ativo por usuario.
+- O projeto padrao real e `Meu projeto`.
+- O servico `ensureDefaultProjectForUser` cria o padrao de forma idempotente.
+- Exclusao de projeto usa `RESTRICT` nas FKs e ainda bloqueia exclusao com conversas vinculadas.
 
-- O historico usa somente mensagens `user` e `assistant`.
-- Roles invalidos, conteudo vazio e entradas incompletas ficam fora do prompt.
-- A ordenacao e deterministica por `created_at` e `id`.
-- Resposta parcial nunca entra no historico porque so persiste apos `finish` valido.
+## Personalities
+
+- `personalities` e uma entidade dedicada.
+- Cada personalidade pertence a um unico projeto.
+- Apenas uma personalidade ativa por projeto e permitida.
+- Instrucoes vazias continuam validas para preservar fallback ao comportamento atual.
+- Instrucoes nunca entram em logs.
+
+## Resolucao canonica de contexto
+
+- O chat resolve `conversation_id + user_id` antes de chamar o provider.
+- Se `conversation.project_id` existe, ele vence qualquer valor legado em metadata.
+- Durante rollout, conversas sem `project_id` continuam suportadas pelo escopo tecnico `legacy-conversation:${conversationId}`.
+- `metadata.projectId` permanece apenas como compatibilidade de leitura e diagnostico controlado.
+- O provider so recebe contexto depois da validacao de ownership, projeto, personalidade, memoria e historico.
+
+## Criacao de conversa
+
+- Conversa nova sempre recebe `project_id`.
+- Se o cliente nao informa projeto, o servidor resolve o projeto padrao do usuario.
+- Se o cliente informa `projectId`, o servidor valida ownership relacional antes de criar a conversa.
+- `metadata.projectId` pode continuar sendo escrito para compatibilidade temporaria, mas nao e a fonte canonica.
 
 ## Memoria
 
-- Leituras de memoria agora filtram por projeto via `source_conversation_id`.
-- Memorias sem conversa de origem nao entram no fluxo principal.
-- Escritas de memoria exigem `projectId` validado e conversa validada no mesmo escopo.
-- Timeout, cancelamento, erro de provider e replay nao salvam memoria nova.
-- Falha de memoria nao expande o erro publico nem derruba uma resposta ja persistida.
+- Leituras novas priorizam `memories.project_id`.
+- Conversas legadas continuam isoladas por `legacy-conversation:${conversationId}` quando necessario.
+- Escritas novas exigem conversa autorizada e `conversation.project_id` valido.
+- Memorias sem `source_conversation_id` continuam excluidas do fluxo principal.
+- Replay, erro e cancelamento nao salvam memoria novamente.
 
-## Personalidade
+## Personalizacao e system prompt
 
-- O repositorio nao possui entidade dedicada de `personality` neste momento.
-- O bloco de personalizacao validada usa somente `preferred_name` e `response_style` de `user_settings`.
-- Esse bloco nao e persistido como mensagem e nao e registrado em logs.
+- A ordem do prompt e deterministica:
+  1. regras fixas da aplicacao;
+  2. contexto do projeto real;
+  3. personalidade ativa relacional;
+  4. memorias relevantes;
+  5. historico da conversa.
+- `preferred_name` e `response_style` continuam como fallback quando o projeto nao possui personalidade ativa.
+- Memoria entra como contexto, nao como instrucao privilegiada.
+- O prompt completo nao vai para logs nem para o frontend.
 
-## System Prompt
+## Replay e idempotencia
 
-- A montagem foi centralizada em helper puro.
-- A ordem e fixa: regras da aplicacao, contexto do projeto, personalizacao validada, memorias relevantes.
-- Memorias entram como contexto delimitado, nao como instrucao privilegiada.
-- O prompt completo nao e devolvido ao frontend nem registrado em logs.
+- Replay continua preso a `user_id + conversation_id + request_id`.
+- Reuso de `requestId` em outro projeto ou conversa nao reaproveita resposta.
+- Replay nao chama o provider de novo.
+- Replay nao grava memoria de novo.
 
-## Logs e observabilidade
+## Logs e dados proibidos
 
-- Eventos de contexto e memoria usam apenas o logger existente.
-- Os logs podem incluir `requestId`, `projectId`, `conversationId`, `providerId`, `modelId`, `durationMs`, `stage` e `errorCode`.
-- Os logs nao incluem mensagem, resposta, prompt, memoria, personalidade, cookies ou headers completos.
+- Campos permitidos: `requestId`, `userId`, `projectId`, `conversationId`, `personalityId`, `durationMs`, `errorCode`, `legacyScopeUsed`, `replayed`.
+- Campos proibidos: mensagens, memorias, prompt, resposta, descricao de projeto, instrucoes de personalidade, cookies, `Authorization` e headers completos.
 
-## Checklist de Isolamento
+## Estrategia de migracao
 
-- Usuario A nao acessa conversa de usuario B.
-- Projeto A nao recebe memoria de projeto B dentro do fluxo principal.
-- Conversa A nao inclui mensagens da conversa B.
-- `requestId` nao produz replay fora da mesma conversa.
-- Erros publicos nao revelam existencia de recurso fora do escopo.
+- A migration cria `projects` e `personalities`.
+- `conversations.project_id` nasce nullable, e preenchido com o projeto padrao real do dono.
+- `metadata.projectId` arbitrario nao vira PK.
+- `memories.project_id` e preenchido a partir de `source_conversation_id -> conversations.project_id`.
+- Depois do backfill, `conversations.project_id` vira obrigatorio.
 
-## Limitacoes atuais
+## Rollback
 
-- O banco ainda nao tem tabela dedicada de `projects`.
-- O banco ainda nao tem entidade dedicada de `personality`.
-- Sem migration, o isolamento por projeto depende de `conversation.metadata.projectId` ou do escopo legado derivado por conversa, alem de `source_conversation_id` nas memorias.
-- Memorias legadas sem conversa de origem ficam deliberadamente fora do fluxo principal para evitar vazamento.
+- O rollback operacional deve remover primeiro o trafego das rotas novas.
+- Depois, revertendo schema, preservar os dados de `projects`, `personalities`, `conversations.project_id` e `memories.project_id` em backup SQL.
+- Conversas ja migradas ainda podem ser atendidas temporariamente pelo escopo legado se o campo relacional ficar indisponivel durante rollback controlado.
+
+## Limitacoes restantes
+
+- Conversas ja migradas para o projeto padrao nao sao reagrupadas automaticamente por nomes logicos antigos em metadata.
+- A busca de personalidade por ID ainda e resolvida por ownership de projeto, sem rota de consulta publica.
+- Memoria legada sem `project_id` e sem `source_conversation_id` permanece fora do fluxo principal para evitar vazamento.

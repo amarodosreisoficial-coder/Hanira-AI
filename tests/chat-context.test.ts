@@ -50,6 +50,16 @@ describe("chat context isolation helpers", () => {
     expect(scope).not.toBe("hanira-app");
   });
 
+  it("project_id relacional tem prioridade sobre metadata legada", () => {
+    expect(
+      resolveConversationProjectScope({
+        conversationId: "conv-a",
+        metadata: { projectId: "legacy-conversation:conv-a" },
+        relationalProjectId: "11111111-1111-1111-1111-111111111111",
+      }),
+    ).toBe("11111111-1111-1111-1111-111111111111");
+  });
+
   it("projectId cru do body nao altera o escopo derivado no servidor", () => {
     const bodyProjectId = "projeto-injetado-pelo-cliente";
     const scope = resolveConversationProjectScope({

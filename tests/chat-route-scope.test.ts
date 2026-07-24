@@ -7,9 +7,10 @@ function read(relativePath: string) {
 }
 
 describe("chat route scope guards", () => {
-  it("nao usa projectId cru do body", () => {
+  it("projectId do body entra apenas na resolucao canonica do servidor", () => {
     const source = read("app/api/chat/route.ts");
-    expect(source).not.toContain("payload.projectId");
+    expect(source).toContain("projectId: payload.projectId");
+    expect(source).not.toContain("metadata: { projectId: payload.projectId }");
   });
 
   it("replay continua preso a conversation_id e request_id", () => {

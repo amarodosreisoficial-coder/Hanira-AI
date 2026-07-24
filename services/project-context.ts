@@ -19,7 +19,11 @@ export function deriveLegacyConversationScope(conversationId: string) {
 export function resolveConversationProjectScope(options: {
   conversationId: string;
   metadata: unknown;
+  relationalProjectId?: unknown;
 }) {
+  const relationalProjectId = normalizeProjectId(options.relationalProjectId);
+  if (relationalProjectId) return relationalProjectId;
+
   const metadataRecord =
     options.metadata && typeof options.metadata === "object" && !Array.isArray(options.metadata)
       ? (options.metadata as Record<string, unknown>)
@@ -41,4 +45,8 @@ export function buildConversationMetadata(options: {
 
 export function describeProject(projectId: string) {
   return projectId;
+}
+
+export function isLegacyConversationScope(projectId: string) {
+  return projectId.startsWith(LEGACY_CONVERSATION_SCOPE_PREFIX);
 }

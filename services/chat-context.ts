@@ -1,11 +1,25 @@
 import "server-only";
 import type { TextChatContextMessage } from "@/lib/ai/runtime";
+import {
+  logConversationProjectResolved,
+  logPersonalityLoaded,
+  logPersonalityNotConfigured,
+  logProjectAccessDenied,
+  logProjectDefaultResolved,
+  logPersonalityScopeMismatch,
+} from "@/lib/logging/project-events";
 import { getRelevantMemories } from "@/services/memory";
 import {
-  buildConversationMetadata,
   describeProject,
+  isLegacyConversationScope,
   resolveConversationProjectScope,
 } from "@/services/project-context";
+import {
+  findProjectByIdForUser,
+  ProjectServiceError,
+  resolveProjectForConversationCreation,
+} from "@/services/project-service";
+import { findActivePersonalityByProject } from "@/services/personality-service";
 
 const MAX_CONTEXT_MESSAGES = 20;
 
@@ -46,11 +60,13 @@ export interface ProjectChatContext {
   projectId: string;
   projectName: string;
   conversationId: string;
+  personalityId?: string;
   systemInstructions: string;
   relevantMemories: string[];
   conversationMessages: TextChatContextMessage[];
   personalityInstructions?: string;
   historyMessageCount: number;
+  legacyScopeUsed: boolean;
 }
 
 function isValidChatRole(value: unknown): value is TextChatContextMessage["role"] {
@@ -105,35 +121,54 @@ export function sanitizeConversationMessages(
     );
 }
 
-function extractProjectId(conversation: Record<string, unknown> | null | undefined) {
-  const conversationId =
-    conversation && typeof conversation.id === "string" ? conversation.id : "";
-  return resolveConversationProjectScope({
-    conversationId,
-    metadata: conversation?.metadata,
-  });
-}
-
 async function createConversation(options: {
   supabase: unknown;
+  requestId: string;
   userId: string;
   title: string;
   projectId?: string;
 }) {
   const supabase = options.supabase as SupabaseQuerySurface;
-  const conversationId = crypto.randomUUID();
+  let project;
+  try {
+    project = await resolveProjectForConversationCreation(
+      supabase,
+      options.userId,
+      options.projectId,
+    );
+  } catch (error) {
+    if (error instanceof ProjectServiceError) {
+      logProjectAccessDenied({
+        requestId: options.requestId,
+        route: "/api/chat",
+        userId: options.userId,
+        projectId: options.projectId,
+        errorCode: error.code,
+        status: error.status,
+      });
+      throw new ChatContextError(error.code, error.message, error.status);
+    }
+    throw error;
+  }
+
+  if (!options.projectId) {
+    logProjectDefaultResolved({
+      requestId: options.requestId,
+      route: "/api/chat",
+      userId: options.userId,
+      projectId: project.id,
+    });
+  }
+
   const { data, error } = await supabase
     .from("conversations")
     .insert({
-      id: conversationId,
       user_id: options.userId,
+      project_id: project.id,
       title: options.title,
-      metadata: buildConversationMetadata({
-        conversationId,
-        projectId: options.projectId,
-      }),
+      metadata: { projectId: project.id },
     })
-    .select("id,metadata")
+    .select("id")
     .single();
 
   if (error || !isRecord(data) || typeof data.id !== "string") {
@@ -142,19 +177,22 @@ async function createConversation(options: {
 
   return {
     id: data.id,
-    projectId: extractProjectId(data),
+    projectId: project.id,
+    projectName: project.name,
+    legacyScopeUsed: false,
   };
 }
 
 async function loadConversation(options: {
   supabase: unknown;
+  requestId: string;
   userId: string;
   conversationId: string;
 }) {
   const supabase = options.supabase as SupabaseQuerySurface;
   const { data, error } = await supabase
     .from("conversations")
-    .select("id,title,metadata")
+    .select("id,title,metadata,project_id")
     .eq("id", options.conversationId)
     .eq("user_id", options.userId)
     .maybeSingle();
@@ -163,10 +201,22 @@ async function loadConversation(options: {
     throw new ChatContextError("conversation_not_found", "Conversa nao encontrada.", 404);
   }
 
+  const projectId = resolveConversationProjectScope({
+    conversationId: data.id,
+    metadata: data.metadata,
+    relationalProjectId: data.project_id,
+  });
+  const project =
+    typeof data.project_id === "string"
+      ? await findProjectByIdForUser(options.supabase, options.userId, data.project_id)
+      : null;
+
   return {
     id: data.id,
     title: normalizeText(data.title),
-    projectId: extractProjectId(data),
+    projectId,
+    projectName: project?.name ?? describeProject(projectId),
+    legacyScopeUsed: isLegacyConversationScope(projectId),
   };
 }
 
@@ -176,23 +226,39 @@ export async function resolveProjectChatContext(options: {
   userId: string;
   conversationId?: string;
   userMessage: string;
+  projectId?: string;
 }) {
   const supabase = options.supabase as SupabaseQuerySurface;
   const title = options.userMessage.slice(0, 60) || "Analise de midia";
   const conversation = options.conversationId
     ? await loadConversation({
         supabase,
+        requestId: options.requestId,
         userId: options.userId,
         conversationId: options.conversationId,
       })
     : await createConversation({
         supabase,
+        requestId: options.requestId,
         userId: options.userId,
         title,
+        projectId: options.projectId,
       });
 
-  const [{ data: messages, error: messagesError }, { data: settings, error: settingsError }, memories] =
+  logConversationProjectResolved({
+    requestId: options.requestId,
+    route: "/api/chat",
+    userId: options.userId,
+    projectId: conversation.projectId,
+    conversationId: conversation.id,
+    legacyScopeUsed: conversation.legacyScopeUsed,
+  });
+
+  const [activePersonality, { data: messages, error: messagesError }, { data: settings, error: settingsError }, memories] =
     await Promise.all([
+      isLegacyConversationScope(conversation.projectId)
+        ? Promise.resolve(null)
+        : findActivePersonalityByProject(supabase, conversation.projectId),
       supabase
         .from("messages")
         .select("id,role,content,created_at")
@@ -221,18 +287,56 @@ export async function resolveProjectChatContext(options: {
       ? (messages as Array<Record<string, unknown>>)
       : undefined,
   );
-  const personalityInstructions = buildPersonalityInstructions(settings ?? {});
+  if (activePersonality && activePersonality.projectId !== conversation.projectId) {
+    logPersonalityScopeMismatch({
+      requestId: options.requestId,
+      route: "/api/chat",
+      userId: options.userId,
+      projectId: conversation.projectId,
+      conversationId: conversation.id,
+      personalityId: activePersonality.id,
+      errorCode: "personality_scope_mismatch",
+    });
+    throw new ChatContextError(
+      "personality_scope_mismatch",
+      "Personalidade invalida.",
+      409,
+    );
+  }
+  if (activePersonality) {
+    logPersonalityLoaded({
+      requestId: options.requestId,
+      route: "/api/chat",
+      userId: options.userId,
+      projectId: conversation.projectId,
+      conversationId: conversation.id,
+      personalityId: activePersonality.id,
+    });
+  } else {
+    logPersonalityNotConfigured({
+      requestId: options.requestId,
+      route: "/api/chat",
+      userId: options.userId,
+      projectId: conversation.projectId,
+      conversationId: conversation.id,
+    });
+  }
+  const fallbackPersonalityInstructions = buildPersonalityInstructions(settings ?? {});
+  const personalityInstructions =
+    activePersonality?.instructions.trim() || fallbackPersonalityInstructions;
 
   return {
     requestId: options.requestId,
     userId: options.userId,
     projectId: conversation.projectId,
-    projectName: describeProject(conversation.projectId),
+    projectName: conversation.projectName,
     conversationId: conversation.id,
+    personalityId: activePersonality?.id,
     systemInstructions: "",
     relevantMemories: memories,
     conversationMessages,
     personalityInstructions: personalityInstructions || undefined,
     historyMessageCount: conversationMessages.length,
+    legacyScopeUsed: conversation.legacyScopeUsed,
   } satisfies ProjectChatContext;
 }

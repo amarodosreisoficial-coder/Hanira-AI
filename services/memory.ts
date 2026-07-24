@@ -1,9 +1,12 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { resolveConversationProjectScope } from "@/services/project-context";
+import {
+  isLegacyConversationScope,
+  resolveConversationProjectScope,
+} from "@/services/project-context";
 
 const SENSITIVE_PATTERN =
-  /\b(cpf|rg|cartÃ£o|senha|diagnÃ³stico|doenÃ§a|medicamento|conta bancÃ¡ria|chave pix|telefone|endereÃ§o|e-mail)\b/i;
+  /\b(cpf|rg|cartÃƒÂ£o|senha|diagnÃƒÂ³stico|doenÃƒÂ§a|medicamento|conta bancÃƒÂ¡ria|chave pix|telefone|endereÃƒÂ§o|e-mail)\b/i;
 
 interface QueryResult {
   data?: unknown;
@@ -29,8 +32,6 @@ interface MemoryRow {
   id?: unknown;
   content: string;
   importance: number;
-  created_at?: string;
-  source_conversation_id?: string | null;
 }
 
 async function getSupabaseClient(supabase?: unknown) {
@@ -49,7 +50,7 @@ async function listProjectConversationIds(options: {
   const supabase = options.supabase as SupabaseQuerySurface;
   const { data, error } = await supabase
     .from("conversations")
-    .select("id,metadata")
+    .select("id,metadata,project_id")
     .eq("user_id", options.userId)
     .order("created_at", { ascending: false })
     .limit(500);
@@ -63,6 +64,7 @@ async function listProjectConversationIds(options: {
         resolveConversationProjectScope({
           conversationId: conversation.id,
           metadata: conversation.metadata,
+          relationalProjectId: conversation.project_id,
         }) === options.projectId,
     )
     .map((conversation: Record<string, unknown>) => conversation.id as string);
@@ -106,6 +108,22 @@ export async function listProjectMemories(options: {
     .maybeSingle();
   if (!isRecord(settings) || !settings.memory_enabled) return [];
 
+  if (!isLegacyConversationScope(options.projectId)) {
+    const { data, error } = await db
+      .from("memories")
+      .select("id,content,category,importance,created_at,source_conversation_id,project_id")
+      .eq("user_id", options.userId)
+      .eq("project_id", options.projectId)
+      .eq("is_active", true)
+      .in("source_conversation_id", await listProjectConversationIds({
+        supabase,
+        userId: options.userId,
+        projectId: options.projectId,
+      }));
+    if (error) throw error;
+    return (data ?? []) as Array<Record<string, unknown>>;
+  }
+
   const conversationIds = await listProjectConversationIds({
     supabase,
     userId: options.userId,
@@ -115,7 +133,7 @@ export async function listProjectMemories(options: {
 
   const { data, error } = await db
     .from("memories")
-    .select("id,content,category,importance,created_at,source_conversation_id")
+    .select("id,content,category,importance,created_at,source_conversation_id,project_id")
     .eq("user_id", options.userId)
     .eq("is_active", true)
     .in("source_conversation_id", conversationIds);
@@ -180,15 +198,15 @@ export async function saveExplicitMemory(options: {
     category: string;
     importance: number;
   }> = [
-    { regex: /\bmeu nome Ã©\s+(.+)/i, category: "identidade", importance: 5 },
+    { regex: /\bmeu nome ÃƒÂ©\s+(.+)/i, category: "identidade", importance: 5 },
     {
       regex: /\b(?:lembre que|guarde (?:isso:?\s*|que\s*))(.+)/i,
-      category: "explÃ­cita",
+      category: "explÃƒÂ­cita",
       importance: 4,
     },
-    { regex: /\beu prefiro\s+(.+)/i, category: "preferÃªncia", importance: 3 },
-    { regex: /\bprefiro\s+(.+)/i, category: "preferÃªncia", importance: 3 },
-    { regex: /\bnÃ£o gosto de\s+(.+)/i, category: "preferÃªncia", importance: 3 },
+    { regex: /\beu prefiro\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
+    { regex: /\bprefiro\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
+    { regex: /\bnÃƒÂ£o gosto de\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
   ];
   const match = patterns
     .map((pattern) => ({ pattern, match: normalized.match(pattern.regex) }))
@@ -210,7 +228,7 @@ export async function saveExplicitMemory(options: {
 
   const { data: conversation } = await db
     .from("conversations")
-    .select("id,metadata")
+    .select("id,metadata,project_id")
     .eq("id", options.conversationId)
     .eq("user_id", options.userId)
     .maybeSingle();
@@ -220,15 +238,21 @@ export async function saveExplicitMemory(options: {
     resolveConversationProjectScope({
       conversationId: conversation.id,
       metadata: conversation.metadata,
+      relationalProjectId: conversation.project_id,
     }) !== options.projectId
   ) {
     return { status: "skipped", reason: "context_mismatch" } as const;
+  }
+
+  if (typeof conversation.project_id !== "string") {
+    return { status: "skipped", reason: "legacy_project_unavailable" } as const;
   }
 
   const { data, error } = await db
     .from("memories")
     .insert({
       user_id: options.userId,
+      project_id: conversation.project_id,
       content,
       category: match.pattern.category,
       importance: match.pattern.importance,

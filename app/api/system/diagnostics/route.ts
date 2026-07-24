@@ -11,6 +11,8 @@ import { getAIModelConfig } from "@/lib/ai/models";
 
 const REQUIRED_TABLES = [
   "profiles",
+  "projects",
+  "personalities",
   "conversations",
   "messages",
   "memories",
@@ -126,7 +128,7 @@ export async function GET(request: Request) {
     modelAvailable,
     tables,
     migrationsExpected:
-      schemaVersion === "004" && REQUIRED_TABLES.every((table) => tables[table]),
+      schemaVersion === "005" && REQUIRED_TABLES.every((table) => tables[table]),
     schemaVersion,
     appUrl: env.NEXT_PUBLIC_APP_URL,
     appVersion: env.NEXT_PUBLIC_APP_VERSION,

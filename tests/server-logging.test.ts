@@ -61,6 +61,7 @@ describe("server logging", () => {
     expect(JSON.stringify(payload)).not.toContain("authorization");
     expect(JSON.stringify(payload)).not.toContain("cookie");
     expect(JSON.stringify(payload)).not.toContain("set-cookie");
+    expect(JSON.stringify(payload)).not.toContain("instructions");
     expect(serialized).toContain(userSecret);
     expect(serialized).toContain(assistantSecret);
     expect(JSON.stringify(payload)).not.toContain(userSecret);

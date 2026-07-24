@@ -9,15 +9,19 @@ export interface ServerLogEntry {
   event: string;
   status: number;
   durationMs: number;
+  userId?: string;
   errorType?: string;
   projectId?: string;
   conversationId?: string;
+  personalityId?: string;
   providerId?: string;
   modelId?: string;
   errorCode?: string;
   stage?: string;
   statusCode?: number;
   cancelledByClient?: boolean;
+  legacyScopeUsed?: boolean;
+  replayed?: boolean;
 }
 
 export function createRequestId(request?: Request) {
@@ -39,8 +43,10 @@ export function logServerEvent(entry: ServerLogEntry) {
     event: entry.event,
     status: entry.status,
     durationMs: Math.max(0, Math.round(entry.durationMs)),
+    ...(entry.userId && { userId: entry.userId }),
     ...(entry.projectId && { projectId: entry.projectId }),
     ...(entry.conversationId && { conversationId: entry.conversationId }),
+    ...(entry.personalityId && { personalityId: entry.personalityId }),
     ...(entry.providerId && { providerId: entry.providerId }),
     ...(entry.modelId && { modelId: entry.modelId }),
     ...(entry.errorCode && { errorCode: entry.errorCode }),
@@ -49,6 +55,10 @@ export function logServerEvent(entry: ServerLogEntry) {
     ...(typeof entry.cancelledByClient === "boolean" && {
       cancelledByClient: entry.cancelledByClient,
     }),
+    ...(typeof entry.legacyScopeUsed === "boolean" && {
+      legacyScopeUsed: entry.legacyScopeUsed,
+    }),
+    ...(typeof entry.replayed === "boolean" && { replayed: entry.replayed }),
     ...(entry.errorType && { errorType: entry.errorType }),
   });
 

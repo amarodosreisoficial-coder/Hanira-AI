@@ -16,6 +16,7 @@ import {
   createRequestId,
   logServerEvent,
 } from "@/lib/logging/server";
+import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validation/chat";
@@ -213,6 +214,7 @@ async function createChatStream(
   userId: string,
   payload: {
     conversationId?: string;
+    projectId?: string;
     message: string;
     requestId?: string;
     retry?: boolean;
@@ -240,6 +242,7 @@ async function createChatStream(
     userId,
     conversationId: payload.conversationId,
     userMessage: payload.message,
+    projectId: payload.projectId,
   });
   const conversationId = chatContext.conversationId;
 
@@ -253,7 +256,20 @@ async function createChatStream(
     status: 200,
     durationMs: Date.now() - startedAt,
     stage: "context_resolution",
+    ...(chatContext.legacyScopeUsed ? { legacyScopeUsed: true } : {}),
   });
+
+  if (chatContext.legacyScopeUsed) {
+    logLegacyConversationScopeUsed({
+      requestId,
+      route: "/api/chat",
+      userId,
+      projectId: chatContext.projectId,
+      conversationId,
+      durationMs: Date.now() - startedAt,
+      legacyScopeUsed: true,
+    });
+  }
 
   const { data: existingRequest } = await supabase
     .from("messages")
@@ -593,6 +609,7 @@ function createStoredResponseStream(
         event: "idempotent_replay",
         status: 200,
         durationMs: Date.now() - startedAt,
+        replayed: true,
       });
     },
   });

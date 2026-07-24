@@ -11,7 +11,7 @@ async function resolveOwnedConversationScope(userId: string, conversationId: str
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase!
     .from("conversations")
-    .select("id,metadata")
+    .select("id,metadata,project_id")
     .eq("id", conversationId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -23,6 +23,7 @@ async function resolveOwnedConversationScope(userId: string, conversationId: str
   return resolveConversationProjectScope({
     conversationId: data.id,
     metadata: data.metadata,
+    relationalProjectId: data.project_id,
   });
 }
 
