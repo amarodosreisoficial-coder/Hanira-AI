@@ -1,21 +1,50 @@
 import { apiErrorResponse } from "@/lib/api/errors";
 import { requireSessionUser } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  deleteProjectMemory,
+  listProjectMemories,
+} from "@/services/memory";
+import { resolveConversationProjectScope } from "@/services/project-context";
 
-export async function GET() {
+async function resolveOwnedConversationScope(userId: string, conversationId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase!
+    .from("conversations")
+    .select("id,metadata")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data?.id || typeof data.id !== "string") {
+    return null;
+  }
+
+  return resolveConversationProjectScope({
+    conversationId: data.id,
+    metadata: data.metadata,
+  });
+}
+
+export async function GET(request: Request) {
   try {
     const user = await requireSessionUser();
     if (user.demo) return Response.json({ memories: [], mode: "demo" });
 
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase!
-      .from("memories")
-      .select("id,content,category,importance,created_at")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("importance", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) throw error;
+    const conversationId = new URL(request.url).searchParams.get("conversationId");
+    if (!conversationId) {
+      return Response.json({ error: "Conversa invalida." }, { status: 400 });
+    }
+
+    const projectId = await resolveOwnedConversationScope(user.id, conversationId);
+    if (!projectId) {
+      return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
+    }
+
+    const data = await listProjectMemories({
+      userId: user.id,
+      projectId,
+    });
 
     return Response.json({
       mode: "supabase",
@@ -37,12 +66,23 @@ export async function DELETE(request: Request) {
     const user = await requireSessionUser();
     if (user.demo) return Response.json({ ok: true });
 
-    const id = new URL(request.url).searchParams.get("id");
-    const supabase = await createSupabaseServerClient();
-    let query = supabase!.from("memories").delete().eq("user_id", user.id);
-    if (id) query = query.eq("id", id);
-    const { error } = await query;
-    if (error) throw error;
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    const conversationId = url.searchParams.get("conversationId");
+    if (!conversationId) {
+      return Response.json({ error: "Conversa invalida." }, { status: 400 });
+    }
+
+    const projectId = await resolveOwnedConversationScope(user.id, conversationId);
+    if (!projectId) {
+      return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
+    }
+
+    await deleteProjectMemory({
+      userId: user.id,
+      projectId,
+      id: id ?? undefined,
+    });
     return Response.json({ ok: true });
   } catch (error) {
     return apiErrorResponse(error);

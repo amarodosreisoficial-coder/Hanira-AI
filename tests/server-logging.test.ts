@@ -22,6 +22,7 @@ describe("server logging", () => {
     logServerEvent({
       level: "error",
       requestId: "req-12345678",
+      projectId: "legacy-conversation:conv-1",
       conversationId: "conv-1",
       providerId: "ollama",
       modelId: "qwen2.5:latest",
@@ -39,6 +40,7 @@ describe("server logging", () => {
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]));
     expect(payload).toMatchObject({
       requestId: "req-12345678",
+      projectId: "legacy-conversation:conv-1",
       conversationId: "conv-1",
       providerId: "ollama",
       modelId: "qwen2.5:latest",

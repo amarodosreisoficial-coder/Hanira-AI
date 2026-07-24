@@ -6,36 +6,91 @@ import { ArrowLeft, BrainCircuit, Trash2 } from "lucide-react";
 import { HaniraMark } from "@/components/brand/hanira-mark";
 import type { Memory } from "@/types/settings";
 
-export function MemoryPage() {
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+interface MemoryViewState {
+  conversationId: string;
+  memories: Memory[];
+  error: string;
+}
+
+export function MemoryPage(props: { conversationId?: string }) {
+  const [state, setState] = useState<MemoryViewState | null>(null);
+  const conversationId = props.conversationId ?? null;
 
   useEffect(() => {
-    fetch("/api/memories")
+    if (!conversationId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(`/api/memories?conversationId=${encodeURIComponent(conversationId)}`)
       .then(async (response) => {
         if (!response.ok) throw new Error();
         return response.json() as Promise<{ memories: Memory[] }>;
       })
-      .then((data) => setMemories(data.memories))
-      .catch(() => setError("Não foi possível carregar as memórias."))
-      .finally(() => setLoading(false));
-  }, []);
+      .then((data) => {
+        if (cancelled) return;
+        setState({
+          conversationId,
+          memories: data.memories,
+          error: "",
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setState({
+          conversationId,
+          memories: [],
+          error: "Nao foi possivel carregar as memorias.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
 
   async function remove(id?: string) {
     const message = id
-      ? "Apagar esta memória?"
-      : "Apagar todas as memórias? Esta ação é permanente.";
+      ? "Apagar esta memoria?"
+      : "Apagar todas as memorias? Esta acao e permanente.";
     if (!window.confirm(message)) return;
-    const response = await fetch(`/api/memories${id ? `?id=${id}` : ""}`, {
+    if (!conversationId) {
+      return;
+    }
+
+    const params = new URLSearchParams({ conversationId });
+    if (id) params.set("id", id);
+    const response = await fetch(`/api/memories?${params.toString()}`, {
       method: "DELETE",
     });
     if (!response.ok) {
-      setError("Não foi possível apagar agora.");
+      setState({
+        conversationId,
+        memories: state?.conversationId === conversationId ? state.memories : [],
+        error: "Nao foi possivel apagar agora.",
+      });
       return;
     }
-    setMemories((items) => (id ? items.filter((item) => item.id !== id) : []));
+
+    setState((current) => ({
+      conversationId,
+      memories:
+        id && current?.conversationId === conversationId
+          ? current.memories.filter((item) => item.id !== id)
+          : [],
+      error: "",
+    }));
   }
+
+  const loading = Boolean(conversationId) && state?.conversationId !== conversationId;
+  const memories =
+    state?.conversationId === conversationId ? state.memories : [];
+  const error = !conversationId
+    ? "Selecione uma conversa para ver as memorias desse contexto."
+    : state?.conversationId === conversationId
+      ? state.error
+      : "";
 
   return (
     <main className="min-h-screen bg-[#09080a] px-5 py-8 text-zinc-100">
@@ -47,7 +102,7 @@ export function MemoryPage() {
             className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white"
           >
             <ArrowLeft className="size-4" />
-            Configurações
+            Configuracoes
           </Link>
         </div>
         <div className="mt-16">
@@ -55,19 +110,19 @@ export function MemoryPage() {
             <BrainCircuit className="size-5" />
           </span>
           <h1 className="mt-6 text-3xl font-medium tracking-[-0.04em]">
-            Memórias da Hanira
+            Memorias da Hanira
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
-            Você controla o que fica salvo. A Hanira usa somente poucas memórias
+            Voce controla o que fica salvo. A Hanira usa somente poucas memorias
             relevantes em cada conversa.
           </p>
         </div>
         <div className="mt-8 space-y-2">
           {loading && <p className="text-sm text-zinc-600">Carregando...</p>}
           {error && <p className="text-sm text-rose-300">{error}</p>}
-          {!loading && memories.length === 0 && (
+          {!loading && memories.length === 0 && !error && (
             <div className="rounded-2xl border border-dashed border-white/[0.09] p-10 text-center text-sm text-zinc-600">
-              Nenhuma memória salva ainda.
+              Nenhuma memoria salva ainda.
             </div>
           )}
           {memories.map((memory) => (
@@ -80,13 +135,13 @@ export function MemoryPage() {
                   {memory.content}
                 </p>
                 <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-700">
-                  {memory.category ?? "geral"} · importância {memory.importance}
+                  {memory.category ?? "geral"} | importancia {memory.importance}
                 </p>
               </div>
               <button
                 onClick={() => void remove(memory.id)}
                 className="p-2 text-zinc-700 hover:text-rose-300"
-                aria-label="Apagar memória"
+                aria-label="Apagar memoria"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -99,7 +154,7 @@ export function MemoryPage() {
             className="mt-6 inline-flex items-center gap-2 text-xs text-rose-300/70"
           >
             <Trash2 className="size-3.5" />
-            Apagar todas as memórias
+            Apagar todas as memorias
           </button>
         )}
       </div>

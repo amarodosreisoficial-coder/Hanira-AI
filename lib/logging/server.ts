@@ -10,6 +10,7 @@ export interface ServerLogEntry {
   status: number;
   durationMs: number;
   errorType?: string;
+  projectId?: string;
   conversationId?: string;
   providerId?: string;
   modelId?: string;
@@ -38,6 +39,7 @@ export function logServerEvent(entry: ServerLogEntry) {
     event: entry.event,
     status: entry.status,
     durationMs: Math.max(0, Math.round(entry.durationMs)),
+    ...(entry.projectId && { projectId: entry.projectId }),
     ...(entry.conversationId && { conversationId: entry.conversationId }),
     ...(entry.providerId && { providerId: entry.providerId }),
     ...(entry.modelId && { modelId: entry.modelId }),

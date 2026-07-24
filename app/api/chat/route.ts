@@ -2,14 +2,15 @@ import { headers } from "next/headers";
 import { ZodError } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
 import {
-  createTextChatRuntime,
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
+  createTextChatRuntime,
   shouldUseOllamaTextProvider,
   streamEvent,
   streamHeaders,
   toPublicAIError,
 } from "@/lib/ai/runtime";
+import { buildSystemPrompt } from "@/lib/ai/runtime/system-prompt";
 import { AIProviderError } from "@/lib/ai/types";
 import {
   createRequestId,
@@ -19,9 +20,12 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validation/chat";
 import { getOwnedAttachments } from "@/services/attachments";
-import { getRelevantMemories, saveExplicitMemory } from "@/services/memory";
+import {
+  ChatContextError,
+  resolveProjectChatContext,
+} from "@/services/chat-context";
+import { saveExplicitMemory } from "@/services/memory";
 
-const MAX_CONTEXT_MESSAGES = 20;
 const SYSTEM_PROMPT =
   "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
 
@@ -96,6 +100,25 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Faca login para conversar.", requestId },
         { status: 401, headers: { "X-Request-ID": requestId } },
+      );
+    }
+
+    if (error instanceof ChatContextError) {
+      logServerEvent({
+        level: error.status >= 500 ? "error" : "warn",
+        requestId,
+        route: "/api/chat",
+        event: "context_resolution_failed",
+        status: error.status,
+        durationMs: Date.now() - startedAt,
+        errorType: error.code,
+      });
+      return Response.json(
+        { error: error.message, requestId },
+        {
+          status: error.status,
+          headers: { "X-Request-ID": requestId },
+        },
       );
     }
 
@@ -201,34 +224,36 @@ async function createChatStream(
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("UNAUTHENTICATED");
 
-  let conversationId = payload.conversationId;
-  if (conversationId) {
-    const { data } = await supabase
-      .from("conversations")
-      .select("id,title")
-      .eq("id", conversationId)
-      .eq("user_id", userId)
-      .maybeSingle();
+  logServerEvent({
+    level: "info",
+    requestId,
+    route: "/api/chat",
+    event: "context_resolution_started",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    stage: "context_resolution",
+  });
 
-    if (!data) {
-      return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
-    }
-  } else {
-    const { data, error } = await supabase
-      .from("conversations")
-      .insert({
-        user_id: userId,
-        title: payload.message.slice(0, 60) || "Analise de midia",
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    conversationId = data.id;
-  }
+  const chatContext = await resolveProjectChatContext({
+    supabase,
+    requestId,
+    userId,
+    conversationId: payload.conversationId,
+    userMessage: payload.message,
+  });
+  const conversationId = chatContext.conversationId;
 
-  if (!conversationId) {
-    throw new Error("Conversa nao inicializada.");
-  }
+  logServerEvent({
+    level: "info",
+    requestId,
+    projectId: chatContext.projectId,
+    conversationId,
+    route: "/api/chat",
+    event: "context_resolution_completed",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    stage: "context_resolution",
+  });
 
   const { data: existingRequest } = await supabase
     .from("messages")
@@ -242,6 +267,7 @@ async function createChatStream(
 
   if (existingAssistant) {
     return createStoredResponseStream(
+      chatContext.projectId,
       conversationId,
       requestId,
       existingAssistant.content,
@@ -322,37 +348,6 @@ async function createChatStream(
     .eq("user_id", userId)
     .eq("title", "Uma nova conversa");
 
-  const [{ data: messages }, { data: settings }, memories] = await Promise.all([
-    supabase
-      .from("messages")
-      .select("role,content")
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(MAX_CONTEXT_MESSAGES),
-    supabase
-      .from("user_settings")
-      .select("preferred_name,response_style")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    getRelevantMemories(userId, payload.message || "midia enviada"),
-  ]);
-
-  const context = [...(messages ?? [])].reverse();
-  const personalization = [
-    settings?.preferred_name
-      ? `O nome preferido do usuario e ${settings.preferred_name}.`
-      : "",
-    settings?.response_style
-      ? `Estilo de resposta solicitado: ${settings.response_style}.`
-      : "",
-    memories.length
-      ? `Memorias relevantes, use somente se ajudarem:\n- ${memories.join("\n- ")}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   const runtime = createTextChatRuntime();
   const eligible = shouldUseOllamaTextProvider({
     ollamaEnabled: true,
@@ -373,6 +368,7 @@ async function createChatStream(
   logServerEvent({
     level: "info",
     requestId,
+    projectId: chatContext.projectId,
     conversationId,
     providerId: runtime.providerId,
     modelId: runtime.model,
@@ -388,14 +384,19 @@ async function createChatStream(
     provider: runtime.provider,
     providerRequest: {
       ...buildTextChatProviderRequest({
-        systemPrompt: SYSTEM_PROMPT,
-        personalization,
-        context,
+        systemPrompt: buildSystemPrompt({
+          baseInstructions: SYSTEM_PROMPT,
+          personalityInstructions: chatContext.personalityInstructions,
+          projectLabel: chatContext.projectName,
+          relevantMemories: chatContext.relevantMemories,
+        }),
+        context: chatContext.conversationMessages,
         model: runtime.model,
       }),
       signal: request.signal,
       timeoutMs: runtime.requestTimeoutMs,
       metadata: {
+        projectId: chatContext.projectId,
         conversationId,
         requestId,
         userId,
@@ -410,12 +411,15 @@ async function createChatStream(
         conversationId,
         userId,
         requestId,
+        projectId: chatContext.projectId,
         assistantContent,
         userMessage: payload.message,
+        startedAt,
       });
       logServerEvent({
         level: "info",
         requestId,
+        projectId: chatContext.projectId,
         conversationId,
         providerId: runtime.providerId,
         modelId: runtime.model,
@@ -447,6 +451,7 @@ async function createChatStream(
       logServerEvent({
         level: isTimeout ? "warn" : "error",
         requestId,
+        projectId: chatContext.projectId,
         conversationId,
         providerId: runtime.providerId,
         modelId: runtime.model,
@@ -464,6 +469,7 @@ async function createChatStream(
       logServerEvent({
         level: "info",
         requestId,
+        projectId: chatContext.projectId,
         conversationId,
         providerId: runtime.providerId,
         modelId: runtime.model,
@@ -483,8 +489,10 @@ async function persistAssistantResponse(options: {
   conversationId: string;
   userId: string;
   requestId: string;
+  projectId: string;
   assistantContent: string;
   userMessage: string;
+  startedAt: number;
 }) {
   if (!options.assistantContent) return;
 
@@ -512,15 +520,47 @@ async function persistAssistantResponse(options: {
     .eq("user_id", options.userId);
 
   if (options.userMessage) {
-    await saveExplicitMemory(
-      options.userId,
-      options.conversationId,
-      options.userMessage,
-    );
+    try {
+      const result = await saveExplicitMemory({
+        supabase: options.supabase,
+        userId: options.userId,
+        projectId: options.projectId,
+        conversationId: options.conversationId,
+        message: options.userMessage,
+      });
+      logServerEvent({
+        level: "info",
+        requestId: options.requestId,
+        projectId: options.projectId,
+        conversationId: options.conversationId,
+        route: "/api/chat",
+        event:
+          result.status === "saved"
+            ? "memory_save_completed"
+            : "memory_save_skipped",
+        status: 200,
+        durationMs: Date.now() - options.startedAt,
+        stage: result.reason,
+      });
+    } catch {
+      logServerEvent({
+        level: "warn",
+        requestId: options.requestId,
+        projectId: options.projectId,
+        conversationId: options.conversationId,
+        route: "/api/chat",
+        event: "memory_save_skipped",
+        status: 200,
+        durationMs: Date.now() - options.startedAt,
+        stage: "memory_unavailable",
+        errorCode: "memory_unavailable",
+      });
+    }
   }
 }
 
 function createStoredResponseStream(
+  projectId: string,
   conversationId: string,
   requestId: string,
   content: string,
@@ -547,6 +587,8 @@ function createStoredResponseStream(
       logServerEvent({
         level: "info",
         requestId,
+        projectId,
+        conversationId,
         route: "/api/chat",
         event: "idempotent_replay",
         status: 200,
