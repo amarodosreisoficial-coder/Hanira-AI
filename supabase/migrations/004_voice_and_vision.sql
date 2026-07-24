@@ -1,5 +1,5 @@
 create table if not exists public.attachments (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   message_id uuid references public.messages(id) on delete cascade,
@@ -111,3 +111,4 @@ insert into public.system_metadata (key, value, updated_at)
 values ('schema_version', '004', now())
 on conflict (key)
 do update set value = excluded.value, updated_at = excluded.updated_at;
+

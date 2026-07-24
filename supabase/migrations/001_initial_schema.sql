@@ -10,7 +10,7 @@ create table if not exists public.profiles (
 );
 
 create table if not exists public.conversations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null default 'Uma nova conversa',
   metadata jsonb not null default '{}'::jsonb,
@@ -19,7 +19,7 @@ create table if not exists public.conversations (
 );
 
 create table if not exists public.messages (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   role text not null check (role in ('user', 'assistant', 'system')),
   content text not null,
@@ -28,7 +28,7 @@ create table if not exists public.messages (
 );
 
 create table if not exists public.memories (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   content text not null,
   category text,
@@ -74,3 +74,4 @@ create index if not exists messages_conversation_created_idx
 
 create index if not exists memories_user_active_idx
   on public.memories(user_id, is_active);
+

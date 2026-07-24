@@ -1,5 +1,5 @@
 create table if not exists public.projects (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (btrim(name) <> ''),
   slug text not null check (btrim(slug) <> ''),
@@ -27,7 +27,7 @@ create policy "projects_own_data" on public.projects
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create table if not exists public.personalities (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete restrict,
   name text not null check (btrim(name) <> ''),
   instructions text not null default '',
@@ -134,3 +134,4 @@ drop trigger if exists personalities_set_updated_at on public.personalities;
 create trigger personalities_set_updated_at
   before update on public.personalities
   for each row execute function public.set_updated_at();
+

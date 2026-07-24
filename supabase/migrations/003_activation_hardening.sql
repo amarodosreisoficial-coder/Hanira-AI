@@ -2,7 +2,7 @@ alter table public.messages
   add column if not exists request_id uuid;
 
 update public.messages
-set request_id = uuid_generate_v4()
+set request_id = gen_random_uuid()
 where request_id is null;
 
 alter table public.messages
@@ -43,3 +43,4 @@ drop trigger if exists system_metadata_set_updated_at on public.system_metadata;
 create trigger system_metadata_set_updated_at
   before update on public.system_metadata
   for each row execute function public.set_updated_at();
+
