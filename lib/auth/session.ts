@@ -1,4 +1,5 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -18,7 +19,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient({
+    persistSessionCookies: false,
+  });
   if (!supabase) return null;
   const {
     data: { user },
@@ -37,6 +40,16 @@ export async function requireSessionUser() {
   const user = await getSessionUser();
   if (!user) {
     throw new Error("UNAUTHENTICATED");
+  }
+  return user;
+}
+
+export async function requirePageSessionUser(nextPath = "/chat") {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect(
+      `/login?next=${encodeURIComponent(nextPath)}&error=session_expired`,
+    );
   }
   return user;
 }

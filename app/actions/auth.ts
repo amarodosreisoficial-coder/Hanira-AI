@@ -39,17 +39,20 @@ export async function loginAction(
     password: formData.get("password"),
   });
   if (!parsed.success) return validationError(parsed.error);
-  if (isDemoMode()) redirect("/chat");
+  if (isDemoMode()) return { status: "success", redirectTo: "/chat" };
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) return authError();
   try {
-    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+    const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
     if (error) return authError(error.message);
+    if (!data.session?.access_token || !data.session?.refresh_token) {
+      return authError("Sessão de autenticação não foi persistida.");
+    }
   } catch (error) {
     return unknownAuthError(error);
   }
-  redirect("/chat");
+  return { status: "success", redirectTo: "/chat" };
 }
 
 export async function signupAction(

@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { MemoryPage } from "@/components/settings/memory-page";
-import { requireSessionUser } from "@/lib/auth/session";
+import { requirePageSessionUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "Memorias" };
 
 export default async function SettingsMemoryPage(props: {
   searchParams?: Promise<{ conversationId?: string | string[] }>;
 }) {
-  await requireSessionUser();
+  await requirePageSessionUser("/settings/memory");
   const searchParams = await props.searchParams;
   const rawConversationId = searchParams?.conversationId;
   const conversationId =

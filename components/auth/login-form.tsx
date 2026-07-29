@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -15,10 +16,17 @@ export function LoginForm({
   notice?: string;
 }) {
   const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
   const [state, action, pending] = useActionState(
     loginAction,
     INITIAL_AUTH_STATE,
   );
+
+  useEffect(() => {
+    if (state.status === "success" && state.redirectTo) {
+      router.replace(state.redirectTo);
+    }
+  }, [router, state.redirectTo, state.status]);
 
   return (
     <>

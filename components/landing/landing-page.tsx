@@ -64,12 +64,12 @@ export function LandingPage() {
           >
             Entrar
           </Link>
-          <Link
+          <a
             className="hidden rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-violet-100 sm:block"
             href="/chat"
           >
             Iniciar conversa
-          </Link>
+          </a>
         </div>
       </header>
 
@@ -107,13 +107,13 @@ export function LandingPage() {
           transition={{ duration: 0.7, delay: 0.3 }}
           className="mt-10 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row"
         >
-          <Link
+          <a
             href="/chat"
             className="group inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-black transition hover:-translate-y-0.5 hover:bg-violet-100"
           >
             Começar agora
             <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-          </Link>
+          </a>
           <a
             href="#sobre"
             className="inline-flex h-13 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] px-6 text-sm text-zinc-200 transition hover:border-white/20 hover:bg-white/[0.06]"
@@ -229,13 +229,13 @@ export function LandingPage() {
               ),
             )}
           </div>
-          <Link
+          <a
             href="/chat"
             className="mt-10 inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-violet-100"
           >
             Conversar com Hanira
             <ArrowRight className="size-4" />
-          </Link>
+          </a>
         </div>
       </section>
 
