@@ -9,5 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    include: ["tests/**/*.test.{ts,mts,cts,tsx,js,mjs,cjs,jsx}"],
+    exclude: ["tests/e2e/**"],
   },
 });

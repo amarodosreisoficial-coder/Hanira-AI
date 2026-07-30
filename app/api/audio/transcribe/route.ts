@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import OpenAI from "openai";
 import { z } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
-import { getAIModelConfig } from "@/lib/ai/models";
+import { getOpenAIVoiceConfig } from "@/lib/ai/models";
 import { classifyOpenAIError } from "@/lib/openai/errors";
 import { createRequestId, logServerEvent } from "@/lib/logging/server";
 import { checkRateLimit } from "@/lib/security/rate-limit";
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       const transcription = await getOpenAIClient().audio.transcriptions.create(
         {
           file: audio,
-          model: getAIModelConfig().transcription,
+          model: getOpenAIVoiceConfig().transcription,
           language: "pt",
           response_format: "json",
         },

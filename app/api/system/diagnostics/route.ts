@@ -1,4 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session";
+import { createTextChatRuntime } from "@/lib/ai/runtime";
 import { getServerEnv, isDemoMode } from "@/lib/env";
 import {
   createRequestId,
@@ -98,33 +99,48 @@ export async function GET(request: Request) {
   } | null;
   const schemaVersion = schemaMetadata?.value ?? null;
 
+  const openAIConfigured = Boolean(
+    env.OPENAI_API_KEY &&
+      (env.NEXT_PUBLIC_VISION_ENABLED || env.NEXT_PUBLIC_VOICE_ENABLED),
+  );
+  const modelConfigured = Boolean(env.OLLAMA_MODEL);
+
   let modelAvailable = false;
   try {
-    const modelConfig = getAIModelConfig();
-    const modelIds = [
-      modelConfig.chat,
-      modelConfig.vision,
-      modelConfig.transcription,
-      modelConfig.speech,
-    ];
-    const models = await Promise.all(
-      [...new Set(modelIds)].map((model) =>
-        getOpenAIClient().models.retrieve(model),
-      ),
-    );
-    modelAvailable = models.length === new Set(modelIds).size;
+    modelAvailable = (await createTextChatRuntime().provider.healthCheck()).ok;
   } catch {
     modelAvailable = false;
+  }
+
+  if (openAIConfigured) {
+    try {
+      const modelConfig = getAIModelConfig();
+      const modelIds = [
+        env.NEXT_PUBLIC_VISION_ENABLED ? modelConfig.vision : null,
+        env.NEXT_PUBLIC_VOICE_ENABLED ? modelConfig.transcription : null,
+        env.NEXT_PUBLIC_VOICE_ENABLED ? modelConfig.speech : null,
+      ].filter((value): value is string => Boolean(value));
+
+      if (modelIds.length > 0) {
+        await Promise.all(
+          [...new Set(modelIds)].map((model) =>
+            getOpenAIClient().models.retrieve(model),
+          ),
+        );
+      }
+    } catch {
+      // Keep the diagnostics response available even if optional OpenAI checks fail.
+    }
   }
 
   const diagnostics: SystemDiagnostics = {
     mode: "production",
     supabaseConfigured: true,
-    openAIConfigured: true,
+    openAIConfigured,
     authenticated: true,
     databaseAccessible,
     streamingAvailable: true,
-    modelConfigured: Boolean(env.OPENAI_MODEL),
+    modelConfigured,
     modelAvailable,
     tables,
     migrationsExpected:

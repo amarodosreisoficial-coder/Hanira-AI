@@ -6,16 +6,11 @@ const REQUIRED_REAL = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL",
-  "OPENAI_VISION_MODEL",
-  "OPENAI_TRANSCRIPTION_MODEL",
-  "OPENAI_TTS_MODEL",
-  "OPENAI_TTS_VOICE",
+  "AI_ENGINE_OLLAMA_ENABLED",
+  "OLLAMA_BASE_URL",
+  "OLLAMA_MODEL",
   "NEXT_PUBLIC_MAX_IMAGE_SIZE_MB",
   "NEXT_PUBLIC_MAX_AUDIO_SIZE_MB",
-  "NEXT_PUBLIC_VOICE_ENABLED",
-  "NEXT_PUBLIC_VISION_ENABLED",
 ];
 
 export function parseEnvFile(contents) {
@@ -41,7 +36,9 @@ export function parseEnvFile(contents) {
 function validUrl(value, { supabase = false } = {}) {
   try {
     const url = new URL(value);
-    const validProtocol = url.protocol === "https:" || url.hostname === "localhost" ||
+    const validProtocol =
+      url.protocol === "https:" ||
+      url.hostname === "localhost" ||
       url.hostname === "127.0.0.1";
     return (
       validProtocol &&
@@ -67,7 +64,7 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
     envFileExists ? "ok" : "error",
     envFileExists
       ? "Arquivo .env.local encontrado"
-      : "Arquivo .env.local não foi encontrado",
+      : "Arquivo .env.local nao foi encontrado",
   );
 
   const demoValue = values.HANIRA_DEMO_MODE;
@@ -75,26 +72,24 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
   add(
     validDemo ? "ok" : "error",
     validDemo
-      ? "HANIRA_DEMO_MODE possui valor válido"
+      ? "HANIRA_DEMO_MODE possui valor valido"
       : "HANIRA_DEMO_MODE deve ser true ou false",
   );
   const demo = demoValue === "true";
-  if (validDemo && demo) add("warning", "HANIRA_DEMO_MODE está ativado");
+  if (validDemo && demo) add("warning", "HANIRA_DEMO_MODE esta ativado");
 
   add(
+    validUrl(values.NEXT_PUBLIC_APP_URL ?? "") ? "ok" : "error",
     validUrl(values.NEXT_PUBLIC_APP_URL ?? "")
-      ? "ok"
-      : "error",
-    validUrl(values.NEXT_PUBLIC_APP_URL ?? "")
-      ? "NEXT_PUBLIC_APP_URL é válida"
-      : "NEXT_PUBLIC_APP_URL está ausente ou inválida",
+      ? "NEXT_PUBLIC_APP_URL e valida"
+      : "NEXT_PUBLIC_APP_URL esta ausente ou invalida",
   );
 
   add(
     Boolean(values.NEXT_PUBLIC_APP_VERSION?.trim()) ? "ok" : "error",
     values.NEXT_PUBLIC_APP_VERSION?.trim()
-      ? "Versão da aplicação definida"
-      : "NEXT_PUBLIC_APP_VERSION não foi definida",
+      ? "Versao da aplicacao definida"
+      : "NEXT_PUBLIC_APP_VERSION nao foi definida",
   );
 
   for (const name of [
@@ -105,19 +100,22 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
     add(
       Number.isFinite(size) && size > 0 && size <= 100 ? "ok" : "error",
       Number.isFinite(size) && size > 0 && size <= 100
-        ? `${name} possui limite válido`
-        : `${name} deve ser um número entre 0 e 100`,
+        ? `${name} possui limite valido`
+        : `${name} deve ser um numero entre 0 e 100`,
     );
   }
 
   for (const name of [
     "NEXT_PUBLIC_VOICE_ENABLED",
     "NEXT_PUBLIC_VISION_ENABLED",
+    "AI_ENGINE_OLLAMA_ENABLED",
   ]) {
-    const valid = values[name] === "true" || values[name] === "false";
+    const rawValue = values[name];
+    const valid =
+      rawValue === undefined || rawValue === "true" || rawValue === "false";
     add(
       valid ? "ok" : "error",
-      valid ? `${name} possui valor válido` : `${name} deve ser true ou false`,
+      valid ? `${name} possui valor valido` : `${name} deve ser true ou false`,
     );
   }
 
@@ -128,57 +126,82 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
   ];
   const supabaseCount = supabaseValues.filter(Boolean).length;
   if (supabaseCount === 0 && demo) {
-    add("warning", "Supabase não configurado (permitido no modo demonstração)");
+    add("warning", "Supabase nao configurado (permitido no modo demonstracao)");
   } else if (supabaseCount !== supabaseValues.length) {
-    add("error", "Configuração do Supabase está incompleta");
+    add("error", "Configuracao do Supabase esta incompleta");
   } else {
     const urlOk = validUrl(values.NEXT_PUBLIC_SUPABASE_URL, { supabase: true });
     const anon = values.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
     const service = values.SUPABASE_SERVICE_ROLE_KEY ?? "";
     const anonOk = jwtLike(anon) || anon.startsWith("sb_publishable_");
     const serviceOk = jwtLike(service) || service.startsWith("sb_secret_");
-    add(urlOk && anonOk && serviceOk ? "ok" : "error",
+    add(
+      urlOk && anonOk && serviceOk ? "ok" : "error",
       urlOk && anonOk && serviceOk
-        ? "Supabase configurado com formato plausível"
-        : "URL ou chaves do Supabase possuem formato inesperado");
+        ? "Supabase configurado com formato plausivel"
+        : "URL ou chaves do Supabase possuem formato inesperado",
+    );
   }
 
+  const ollamaEnabled = values.AI_ENGINE_OLLAMA_ENABLED === "true";
+  if (!demo) {
+    add(
+      ollamaEnabled ? "ok" : "error",
+      ollamaEnabled
+        ? "Runtime principal Ollama esta habilitado"
+        : "AI_ENGINE_OLLAMA_ENABLED deve estar true no modo real atual",
+    );
+  }
+
+  for (const [name, value] of [
+    ["OLLAMA_BASE_URL", values.OLLAMA_BASE_URL?.trim()],
+    ["OLLAMA_MODEL", values.OLLAMA_MODEL?.trim()],
+  ]) {
+    add(
+      value ? "ok" : demo ? "warning" : "error",
+      value
+        ? `${name} foi definido`
+        : demo
+          ? `${name} nao foi definido (permitido no modo demonstracao)`
+          : `${name} nao foi definido`,
+    );
+  }
+
+  const voiceEnabled = values.NEXT_PUBLIC_VOICE_ENABLED === "true";
+  const visionEnabled = values.NEXT_PUBLIC_VISION_ENABLED === "true";
   const openAIKey = values.OPENAI_API_KEY ?? "";
-  const openAIModel = values.OPENAI_MODEL?.trim() ?? "";
-  const mediaModels = [
-    ["OPENAI_VISION_MODEL", values.OPENAI_VISION_MODEL?.trim()],
-    ["OPENAI_TRANSCRIPTION_MODEL", values.OPENAI_TRANSCRIPTION_MODEL?.trim()],
-    ["OPENAI_TTS_MODEL", values.OPENAI_TTS_MODEL?.trim()],
-    ["OPENAI_TTS_VOICE", values.OPENAI_TTS_VOICE?.trim()],
-  ];
-  if (
-    !openAIKey &&
-    !openAIModel &&
-    mediaModels.every(([, value]) => !value) &&
-    demo
-  ) {
-    add("warning", "OpenAI não configurada (permitido no modo demonstração)");
+  const openAIChecks = [];
+
+  if (visionEnabled) {
+    openAIChecks.push(["OPENAI_VISION_MODEL", values.OPENAI_VISION_MODEL?.trim()]);
+  }
+
+  if (voiceEnabled) {
+    openAIChecks.push(
+      ["OPENAI_TRANSCRIPTION_MODEL", values.OPENAI_TRANSCRIPTION_MODEL?.trim()],
+      ["OPENAI_TTS_MODEL", values.OPENAI_TTS_MODEL?.trim()],
+      ["OPENAI_TTS_VOICE", values.OPENAI_TTS_VOICE?.trim()],
+    );
+  }
+
+  if (openAIChecks.length === 0) {
+    add("ok", "OpenAI nao e obrigatoria com voz e visao desativadas");
   } else {
     add(
       openAIKey.startsWith("sk-") && openAIKey.length >= 20 ? "ok" : "error",
       openAIKey.startsWith("sk-") && openAIKey.length >= 20
-        ? "Chave da OpenAI possui formato plausível"
-        : "OPENAI_API_KEY está ausente ou possui formato inesperado",
+        ? "Chave da OpenAI possui formato plausivel"
+        : "OPENAI_API_KEY esta ausente ou possui formato inesperado",
     );
-    add(
-      Boolean(openAIModel) ? "ok" : "error",
-      openAIModel
-        ? "OPENAI_MODEL foi definido"
-        : "OPENAI_MODEL não foi definido",
-    );
-    for (const [name, value] of mediaModels) {
+
+    for (const [name, value] of openAIChecks) {
       add(
         Boolean(value) ? "ok" : demo ? "warning" : "error",
         value
           ? `${name} foi definido`
           : demo
-            ? `${name} não foi definido (permitido no modo demonstração)`
-            : `${name} não foi definido`,
+            ? `${name} nao foi definido (permitido no modo demonstracao)`
+            : `${name} nao foi definido`,
       );
     }
   }
@@ -192,25 +215,26 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
     leakedPrivate.length === 0 ? "ok" : "error",
     leakedPrivate.length === 0
       ? "Nenhum segredo conhecido usa prefixo NEXT_PUBLIC_"
-      : "Uma variável privada está usando prefixo NEXT_PUBLIC_",
+      : "Uma variavel privada esta usando prefixo NEXT_PUBLIC_",
   );
 
   if (!demo) {
     const missing = REQUIRED_REAL.filter((key) => !values[key]?.trim());
     if (missing.length) {
-      add("error", "Modo real exige todas as credenciais obrigatórias");
+      add("error", "Modo real exige todas as credenciais obrigatorias");
     } else {
-      add("ok", "Modo real possui todas as variáveis obrigatórias");
+      add("ok", "Modo real possui todas as variaveis obrigatorias");
     }
   } else if (
     supabaseCount === 3 ||
     openAIKey ||
-    openAIModel ||
-    mediaModels.some(([, value]) => value)
+    openAIChecks.some(([, value]) => value) ||
+    values.OLLAMA_BASE_URL ||
+    values.OLLAMA_MODEL
   ) {
     add(
       "warning",
-      "Há credenciais preenchidas, mas o modo demonstração continua ativo",
+      "Ha credenciais preenchidas, mas o modo demonstracao continua ativo",
     );
   }
 
@@ -232,14 +256,13 @@ export function runDoctor(cwd = process.cwd()) {
 
   console.log("\nHanira Doctor\n");
   for (const check of result.checks) {
-    const symbol =
-      check.level === "ok" ? "✓" : check.level === "warning" ? "⚠" : "✗";
+    const symbol = check.level === "ok" ? "OK" : check.level === "warning" ? "!" : "X";
     console.log(`${symbol} ${check.message}`);
   }
   console.log(
     result.hasErrors
-      ? "\nDiagnóstico concluído com erros.\n"
-      : "\nDiagnóstico concluído sem erros bloqueantes.\n",
+      ? "\nDiagnostico concluido com erros.\n"
+      : "\nDiagnostico concluido sem erros bloqueantes.\n",
   );
   return result.hasErrors ? 1 : 0;
 }
