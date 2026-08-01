@@ -38,6 +38,15 @@ export async function POST(request: Request) {
     const user = await requireSessionUser();
     const payload = chatRequestSchema.parse(await request.json());
     requestId = payload.requestId ?? requestId;
+    logServerEvent({
+      level: "info",
+      requestId,
+      route: "/api/chat",
+      event: "chat_request_received",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      stage: "request_received",
+    });
     const headerStore = await headers();
     const ip =
       headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -365,19 +374,64 @@ async function createChatStream(
     .eq("title", "Uma nova conversa");
 
   const runtime = createTextChatRuntime();
+  logServerEvent({
+    level: "info",
+    requestId,
+    projectId: chatContext.projectId,
+    conversationId,
+    providerId: runtime.providerId,
+    modelId: runtime.model,
+    route: "/api/chat",
+    event: "runtime_created",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    stage: "runtime_created",
+    details: {
+      baseUrl: runtime.baseUrl,
+      connectTimeoutMs: runtime.connectTimeoutMs,
+      firstTokenTimeoutMs: runtime.firstTokenTimeoutMs,
+      idleTimeoutMs: runtime.idleTimeoutMs,
+      requestTimeoutMs: runtime.requestTimeoutMs,
+    },
+  });
   const eligible = shouldUseOllamaTextProvider({
     ollamaEnabled: true,
     attachmentCount: attachments.length,
     imageAttachmentCount: imageAttachments.length,
   });
+  logServerEvent({
+    level: eligible ? "info" : "warn",
+    requestId,
+    projectId: chatContext.projectId,
+    conversationId,
+    providerId: runtime.providerId,
+    modelId: runtime.model,
+    route: "/api/chat",
+    event: eligible ? "ollama_eligibility_confirmed" : "ollama_eligibility_blocked",
+    status: eligible ? 200 : 400,
+    durationMs: Date.now() - startedAt,
+    stage: "provider_selection",
+    details: {
+      attachmentCount: attachments.length,
+      imageAttachmentCount: imageAttachments.length,
+      hasMessage: Boolean(payload.message.trim()),
+    },
+  });
 
   if (!eligible) {
     throw new AIProviderError({
       code: "unsupported_capability",
-      message: "O runtime principal atual aceita apenas chat textual simples.",
+      message:
+        attachments.length > 0
+          ? "O runtime principal atual aceita apenas chat textual sem anexos."
+          : "O runtime principal atual aceita apenas chat textual simples.",
       provider: runtime.provider.providerId,
       model: runtime.model,
       retryable: false,
+      metadata: {
+        attachmentCount: attachments.length,
+        imageAttachmentCount: imageAttachments.length,
+      },
     });
   }
 
@@ -416,6 +470,14 @@ async function createChatStream(
         conversationId,
         requestId,
         userId,
+        generationStartedAtMs: Date.now(),
+        diagnostics: {
+          baseUrl: runtime.baseUrl,
+          connectTimeoutMs: runtime.connectTimeoutMs,
+          firstTokenTimeoutMs: runtime.firstTokenTimeoutMs,
+          idleTimeoutMs: runtime.idleTimeoutMs,
+          requestTimeoutMs: runtime.requestTimeoutMs,
+        },
       },
     },
     conversationId,

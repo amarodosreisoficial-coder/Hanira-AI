@@ -18,7 +18,9 @@ describe("createTextChatRuntime", () => {
     process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434/";
     process.env.OLLAMA_MODEL = "qwen2.5:latest";
     process.env.OLLAMA_CONNECT_TIMEOUT_MS = "2000";
-    process.env.OLLAMA_REQUEST_TIMEOUT_MS = "45000";
+    process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS = "45000";
+    process.env.OLLAMA_IDLE_TIMEOUT_MS = "15000";
+    process.env.OLLAMA_REQUEST_TIMEOUT_MS = "120000";
 
     const runtime = createTextChatRuntime();
 
@@ -26,7 +28,9 @@ describe("createTextChatRuntime", () => {
     expect(runtime.baseUrl).toBe("http://127.0.0.1:11434");
     expect(runtime.provider.providerId).toBe("ollama");
     expect(runtime.connectTimeoutMs).toBe(2000);
-    expect(runtime.requestTimeoutMs).toBe(45000);
+    expect(runtime.firstTokenTimeoutMs).toBe(45000);
+    expect(runtime.idleTimeoutMs).toBe(15000);
+    expect(runtime.requestTimeoutMs).toBe(120000);
   });
 
   it("falha quando o Ollama esta desativado", () => {
@@ -51,10 +55,14 @@ describe("createTextChatRuntime", () => {
     process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434";
     process.env.OLLAMA_MODEL = "qwen2.5:latest";
     delete process.env.OLLAMA_CONNECT_TIMEOUT_MS;
+    delete process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS;
+    delete process.env.OLLAMA_IDLE_TIMEOUT_MS;
     delete process.env.OLLAMA_REQUEST_TIMEOUT_MS;
 
     expect(resolveOllamaRuntimeConfig()).toMatchObject({
       connectTimeoutMs: OLLAMA_RUNTIME_TIMEOUT_LIMITS.connect.fallback,
+      firstTokenTimeoutMs: OLLAMA_RUNTIME_TIMEOUT_LIMITS.firstToken.fallback,
+      idleTimeoutMs: OLLAMA_RUNTIME_TIMEOUT_LIMITS.idle.fallback,
       requestTimeoutMs: OLLAMA_RUNTIME_TIMEOUT_LIMITS.request.fallback,
     });
   });
@@ -64,9 +72,16 @@ describe("createTextChatRuntime", () => {
     ["OLLAMA_CONNECT_TIMEOUT_MS", "1.5"],
     ["OLLAMA_CONNECT_TIMEOUT_MS", "0"],
     ["OLLAMA_CONNECT_TIMEOUT_MS", "-1"],
+    ["OLLAMA_FIRST_TOKEN_TIMEOUT_MS", "abc"],
+    ["OLLAMA_FIRST_TOKEN_TIMEOUT_MS", "1.5"],
+    ["OLLAMA_FIRST_TOKEN_TIMEOUT_MS", "0"],
+    ["OLLAMA_FIRST_TOKEN_TIMEOUT_MS", "-1"],
+    ["OLLAMA_IDLE_TIMEOUT_MS", "abc"],
+    ["OLLAMA_IDLE_TIMEOUT_MS", "1.5"],
+    ["OLLAMA_IDLE_TIMEOUT_MS", "0"],
+    ["OLLAMA_IDLE_TIMEOUT_MS", "-1"],
     ["OLLAMA_REQUEST_TIMEOUT_MS", "abc"],
     ["OLLAMA_REQUEST_TIMEOUT_MS", "1.5"],
-    ["OLLAMA_REQUEST_TIMEOUT_MS", "0"],
     ["OLLAMA_REQUEST_TIMEOUT_MS", "-1"],
   ] as const)("rejeita timeout invalido em %s=%s", (name, value) => {
     process.env.AI_ENGINE_OLLAMA_ENABLED = "true";
@@ -77,7 +92,7 @@ describe("createTextChatRuntime", () => {
     expect(() => resolveOllamaRuntimeConfig()).toThrowError(AIProviderError);
   });
 
-  it("rejeita timeout fora do limite e request menor que connect", () => {
+  it("rejeita timeout fora do limite e relacoes invalidas entre timeouts", () => {
     process.env.AI_ENGINE_OLLAMA_ENABLED = "true";
     process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434";
     process.env.OLLAMA_MODEL = "qwen2.5:latest";
@@ -86,7 +101,11 @@ describe("createTextChatRuntime", () => {
     expect(() => resolveOllamaRuntimeConfig()).toThrowError(AIProviderError);
 
     process.env.OLLAMA_CONNECT_TIMEOUT_MS = "5000";
-    process.env.OLLAMA_REQUEST_TIMEOUT_MS = "4000";
+    process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS = "4000";
+    expect(() => resolveOllamaRuntimeConfig()).toThrowError(AIProviderError);
+
+    process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS = "10000";
+    process.env.OLLAMA_REQUEST_TIMEOUT_MS = "9000";
     expect(() => resolveOllamaRuntimeConfig()).toThrowError(AIProviderError);
   });
 

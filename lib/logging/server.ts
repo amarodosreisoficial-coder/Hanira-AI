@@ -22,6 +22,7 @@ export interface ServerLogEntry {
   cancelledByClient?: boolean;
   legacyScopeUsed?: boolean;
   replayed?: boolean;
+  details?: Record<string, unknown>;
 }
 
 export function createRequestId(request?: Request) {
@@ -60,6 +61,7 @@ export function logServerEvent(entry: ServerLogEntry) {
     }),
     ...(typeof entry.replayed === "boolean" && { replayed: entry.replayed }),
     ...(entry.errorType && { errorType: entry.errorType }),
+    ...(entry.details && { details: entry.details }),
   });
 
   if (entry.level === "error") console.error(payload);

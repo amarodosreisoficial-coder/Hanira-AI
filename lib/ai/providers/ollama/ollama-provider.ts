@@ -26,23 +26,90 @@ import {
 
 export type OllamaFetch = typeof fetch;
 
+interface OllamaDiagnosticContext {
+  requestId?: string;
+  model: string;
+  baseUrl: string;
+  startedAtMs: number;
+}
+
+function isDiagnosticMetadata(
+  value: unknown,
+): value is {
+  requestId?: string;
+  generationStartedAtMs?: number;
+  diagnostics?: {
+    baseUrl?: string;
+    connectTimeoutMs?: number;
+    firstTokenTimeoutMs?: number;
+    idleTimeoutMs?: number;
+    requestTimeoutMs?: number;
+  };
+} {
+  return typeof value === "object" && value !== null;
+}
+
+function createOllamaDiagnosticContext(
+  request: AIChatRequest,
+  model: string,
+  baseUrl: string,
+): OllamaDiagnosticContext {
+  const metadata = isDiagnosticMetadata(request.metadata) ? request.metadata : undefined;
+  return {
+    requestId: metadata?.requestId,
+    model,
+    baseUrl,
+    startedAtMs:
+      typeof metadata?.generationStartedAtMs === "number"
+        ? metadata.generationStartedAtMs
+        : Date.now(),
+  };
+}
+
+function logOllamaDiagnostic(
+  context: OllamaDiagnosticContext,
+  event: string,
+  stage: string,
+  details: Record<string, unknown> = {},
+) {
+  console.info(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      requestId: context.requestId,
+      providerId: OLLAMA_PROVIDER_ID,
+      modelId: context.model,
+      baseUrl: context.baseUrl,
+      event,
+      stage,
+      elapsedMs: Math.max(0, Date.now() - context.startedAtMs),
+      ...details,
+    }),
+  );
+}
+
 export interface OllamaProviderOptions {
   fetch?: OllamaFetch;
   baseUrl?: string;
   defaultModel?: string;
   connectTimeoutMs?: number;
+  firstTokenTimeoutMs?: number;
+  idleTimeoutMs?: number;
   requestTimeoutMs?: number;
   baseUrlResolver?: () => string;
   defaultModelResolver?: () => string;
   connectTimeoutResolver?: () => number;
+  firstTokenTimeoutResolver?: () => number;
+  idleTimeoutResolver?: () => number;
   requestTimeoutResolver?: () => number;
 }
 
 interface RequestExecutionContext {
   signal: AbortSignal;
   markConnected: () => void;
+  markChunkReceived: () => void;
   cleanup: () => void;
   timedOutStage: () => "connect" | "request" | null;
+  timedOutPhase: () => "connect" | "first_token" | "idle" | "total" | null;
   cancelledByClient: () => boolean;
 }
 
@@ -50,14 +117,25 @@ function createRequestExecutionContext(
   request: AIChatRequest,
   options: {
     connectTimeoutMs: number;
-    requestTimeoutMs: number;
+    firstTokenTimeoutMs?: number;
+    idleTimeoutMs?: number;
+    totalTimeoutMs?: number;
+    onDiagnostic?: (
+      event: string,
+      stage: string,
+      details?: Record<string, unknown>,
+    ) => void;
   },
 ): RequestExecutionContext {
   const controller = new AbortController();
   let timeoutStage: "connect" | "request" | null = null;
+  let timeoutPhase: "connect" | "first_token" | "idle" | "total" | null = null;
   let cancelledByClient = false;
   let connected = false;
+  let firstChunkReceived = false;
   const listeners: Array<() => void> = [];
+  let firstTokenTimeout: ReturnType<typeof setTimeout> | null = null;
+  let idleTimeout: ReturnType<typeof setTimeout> | null = null;
 
   if (request.signal) {
     if (request.signal.aborted) {
@@ -66,6 +144,7 @@ function createRequestExecutionContext(
     } else {
       const onAbort = () => {
         cancelledByClient = true;
+        options.onDiagnostic?.("client_abort_received", "abort", {});
         controller.abort();
       };
       request.signal.addEventListener("abort", onAbort, { once: true });
@@ -73,24 +152,107 @@ function createRequestExecutionContext(
     }
   }
 
-  const requestTimeoutMs =
+  const totalTimeoutMs =
     typeof request.timeoutMs === "number" && request.timeoutMs > 0
       ? request.timeoutMs
-      : options.requestTimeoutMs;
+      : options.totalTimeoutMs;
+
+  const abortForTimeout = (
+    stage: "connect" | "request",
+    phase: "connect" | "first_token" | "idle" | "total",
+  ) => {
+    if (controller.signal.aborted || timeoutStage !== null) {
+      return;
+    }
+
+    timeoutStage = stage;
+    timeoutPhase = phase;
+    options.onDiagnostic?.("timeout_triggered", stage, {
+      timerName: phase,
+    });
+    controller.abort();
+  };
+
+  const clearFirstTokenTimeout = () => {
+    if (firstTokenTimeout) {
+      clearTimeout(firstTokenTimeout);
+      firstTokenTimeout = null;
+    }
+  };
+
+  const clearIdleTimeout = () => {
+    if (idleTimeout) {
+      clearTimeout(idleTimeout);
+      idleTimeout = null;
+    }
+  };
+
+  const armFirstTokenTimeout = () => {
+    clearFirstTokenTimeout();
+    if (
+      !connected ||
+      firstChunkReceived ||
+      controller.signal.aborted ||
+      typeof options.firstTokenTimeoutMs !== "number" ||
+      options.firstTokenTimeoutMs <= 0
+    ) {
+      return;
+    }
+
+    firstTokenTimeout = setTimeout(() => {
+      if (!firstChunkReceived) {
+        abortForTimeout("request", "first_token");
+      }
+    }, options.firstTokenTimeoutMs);
+    options.onDiagnostic?.("timer_started", "request", {
+      timerName: "first_token",
+      timeoutMs: options.firstTokenTimeoutMs,
+    });
+  };
+
+  const armIdleTimeout = () => {
+    clearIdleTimeout();
+    if (
+      !connected ||
+      !firstChunkReceived ||
+      controller.signal.aborted ||
+      typeof options.idleTimeoutMs !== "number" ||
+      options.idleTimeoutMs <= 0
+    ) {
+      return;
+    }
+
+    idleTimeout = setTimeout(() => {
+      abortForTimeout("request", "idle");
+    }, options.idleTimeoutMs);
+    options.onDiagnostic?.("timer_started", "request", {
+      timerName: "idle",
+      timeoutMs: options.idleTimeoutMs,
+    });
+  };
 
   const connectTimeout = setTimeout(() => {
-    if (!connected && !controller.signal.aborted && timeoutStage === null) {
-      timeoutStage = "connect";
-      controller.abort();
+    if (!connected) {
+      abortForTimeout("connect", "connect");
     }
   }, options.connectTimeoutMs);
+  options.onDiagnostic?.("timer_started", "connect", {
+    timerName: "connect",
+    timeoutMs: options.connectTimeoutMs,
+  });
 
-  const requestTimeout = setTimeout(() => {
-    if (!controller.signal.aborted && timeoutStage === null) {
-      timeoutStage = connected ? "request" : "connect";
-      controller.abort();
-    }
-  }, requestTimeoutMs);
+  const totalTimeout =
+    typeof totalTimeoutMs === "number" && totalTimeoutMs > 0
+      ? setTimeout(() => {
+          abortForTimeout(connected ? "request" : "connect", "total");
+        }, totalTimeoutMs)
+      : null;
+  if (typeof totalTimeoutMs === "number" && totalTimeoutMs > 0) {
+    options.onDiagnostic?.("timer_started", "request", {
+      timerName: "total",
+      timeoutMs: totalTimeoutMs,
+    });
+  }
 
   return {
     signal: controller.signal,
@@ -98,28 +260,68 @@ function createRequestExecutionContext(
       if (connected) return;
       connected = true;
       clearTimeout(connectTimeout);
+      options.onDiagnostic?.("timer_cleared", "connect", {
+        timerName: "connect",
+      });
+      armFirstTokenTimeout();
+    },
+    markChunkReceived: () => {
+      if (!connected) return;
+      if (!firstChunkReceived) {
+        firstChunkReceived = true;
+        clearFirstTokenTimeout();
+        options.onDiagnostic?.("timer_cleared", "request", {
+          timerName: "first_token",
+        });
+      }
+      armIdleTimeout();
     },
     cleanup: () => {
       clearTimeout(connectTimeout);
-      clearTimeout(requestTimeout);
+      options.onDiagnostic?.("timer_cleared", "connect", {
+        timerName: "connect",
+      });
+      clearFirstTokenTimeout();
+      options.onDiagnostic?.("timer_cleared", "request", {
+        timerName: "first_token",
+      });
+      clearIdleTimeout();
+      options.onDiagnostic?.("timer_cleared", "request", {
+        timerName: "idle",
+      });
+      if (totalTimeout) {
+        clearTimeout(totalTimeout);
+        options.onDiagnostic?.("timer_cleared", "request", {
+          timerName: "total",
+        });
+      }
       for (const remove of listeners) remove();
     },
     timedOutStage: () => timeoutStage,
+    timedOutPhase: () => timeoutPhase,
     cancelledByClient: () => cancelledByClient,
   };
 }
 
-function createTimeoutError(model: string, stage: "connect" | "request") {
+function createTimeoutError(
+  model: string,
+  stage: "connect" | "request",
+  phase: "connect" | "first_token" | "idle" | "total",
+) {
   return new AIProviderError({
     code: "timeout",
     message:
-      stage === "connect"
+      phase === "connect"
         ? "O Ollama demorou mais que o permitido para aceitar a conexao."
-        : "O Ollama demorou mais que o permitido para responder.",
+        : phase === "first_token"
+          ? "O Ollama demorou mais que o permitido para iniciar o streaming."
+          : phase === "idle"
+            ? "O streaming do Ollama ficou inativo por mais tempo que o permitido."
+            : "O Ollama demorou mais que o permitido para responder.",
     provider: OLLAMA_PROVIDER_ID,
     model,
     retryable: true,
-    metadata: { stage },
+    metadata: { stage, phase },
   });
 }
 
@@ -197,6 +399,7 @@ async function throwForHttpError(
   context: {
     provider: string;
     model?: string;
+    onDiagnostic?: (details: Record<string, unknown>) => void;
   },
 ): Promise<void> {
   if (response.ok) return;
@@ -216,6 +419,11 @@ async function throwForHttpError(
       // Ignore body parsing fallback errors and keep status-based message.
     }
   }
+
+  context.onDiagnostic?.({
+    statusCode: response.status,
+    sanitizedMessage: message.slice(0, 200),
+  });
 
   throw toOllamaProviderError(
     { status: response.status, message },
@@ -246,6 +454,9 @@ function createPostFinishStreamError(model: string) {
 async function* parseNdjsonStream(
   body: ReadableStream<Uint8Array>,
   model: string,
+  options?: {
+    onChunk?: (chunk: Uint8Array) => void;
+  },
 ): AsyncIterable<OllamaChatResponseLike> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -270,6 +481,9 @@ async function* parseNdjsonStream(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      if (value) {
+        options?.onChunk?.(value);
+      }
 
       buffer += decoder.decode(value, { stream: true });
 
@@ -338,6 +552,8 @@ export class OllamaProvider implements AIProvider {
   private readonly baseUrlResolver: () => string;
   private readonly defaultModelResolver: () => string;
   private readonly connectTimeoutResolver: () => number;
+  private readonly firstTokenTimeoutResolver: () => number;
+  private readonly idleTimeoutResolver: () => number;
   private readonly requestTimeoutResolver: () => number;
 
   constructor(options: OllamaProviderOptions = {}) {
@@ -351,9 +567,15 @@ export class OllamaProvider implements AIProvider {
     this.connectTimeoutResolver =
       options.connectTimeoutResolver ??
       (() => options.connectTimeoutMs ?? 5_000);
+    this.firstTokenTimeoutResolver =
+      options.firstTokenTimeoutResolver ??
+      (() => options.firstTokenTimeoutMs ?? 45_000);
+    this.idleTimeoutResolver =
+      options.idleTimeoutResolver ??
+      (() => options.idleTimeoutMs ?? 30_000);
     this.requestTimeoutResolver =
       options.requestTimeoutResolver ??
-      (() => options.requestTimeoutMs ?? 45_000);
+      (() => options.requestTimeoutMs ?? 0);
   }
 
   supports(capability: AIProviderCapability): boolean {
@@ -362,26 +584,43 @@ export class OllamaProvider implements AIProvider {
 
   async generate(request: AIChatRequest): Promise<AIChatResponse> {
     const model = getRequestedModel(request, this.defaultModelResolver());
+    const baseUrl = this.baseUrlResolver();
+    const diagnostics = createOllamaDiagnosticContext(request, model, baseUrl);
     const execution = createRequestExecutionContext(request, {
       connectTimeoutMs: this.connectTimeoutResolver(),
-      requestTimeoutMs: this.requestTimeoutResolver(),
+      totalTimeoutMs: this.requestTimeoutResolver(),
+      onDiagnostic: (event, stage, details) =>
+        logOllamaDiagnostic(diagnostics, event, stage, details),
     });
 
     try {
+      logOllamaDiagnostic(diagnostics, "provider_request_started", "provider_request", {});
+      logOllamaDiagnostic(diagnostics, "provider_request_shape", "provider_request", {
+        method: "POST",
+        endpoint: `${baseUrl}/api/chat`,
+        payloadKeys: Object.keys(buildOllamaChatBody(request, model, false)).sort(),
+      });
+      logOllamaDiagnostic(diagnostics, "ollama_fetch_started", "provider_request", {});
+      const requestBody = buildOllamaChatBody(request, model, false);
       const response = await this.fetchImpl(
-        `${this.baseUrlResolver()}/api/chat`,
+        `${baseUrl}/api/chat`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildOllamaChatBody(request, model, false)),
+          body: JSON.stringify(requestBody),
           signal: execution.signal,
         },
       );
       execution.markConnected();
+      logOllamaDiagnostic(diagnostics, "ollama_headers_received", "connect", {
+        statusCode: response.status,
+      });
 
       await throwForHttpError(response, {
         provider: this.providerId,
         model,
+        onDiagnostic: (details) =>
+          logOllamaDiagnostic(diagnostics, "provider_error", "provider_request", details),
       });
       assertJsonLikeContentType(response, {
         provider: this.providerId,
@@ -393,6 +632,7 @@ export class OllamaProvider implements AIProvider {
         provider: this.providerId,
         model,
       });
+      logOllamaDiagnostic(diagnostics, "generation_completed", "generate", {});
 
       if (!parsed.message || typeof parsed.message.content !== "string") {
         throw createUnexpectedFormatError(
@@ -409,9 +649,13 @@ export class OllamaProvider implements AIProvider {
         finishReason: mapFinishReason(parsed.done_reason),
       };
     } catch (error) {
+      logOllamaDiagnostic(diagnostics, "provider_error", "generate", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
       const timeoutStage = execution.timedOutStage();
-      if (timeoutStage) {
-        throw createTimeoutError(model, timeoutStage);
+      const timeoutPhase = execution.timedOutPhase();
+      if (timeoutStage && timeoutPhase) {
+        throw createTimeoutError(model, timeoutStage, timeoutPhase);
       }
 
       if (execution.cancelledByClient()) {
@@ -429,32 +673,57 @@ export class OllamaProvider implements AIProvider {
         model,
       });
     } finally {
+      logOllamaDiagnostic(diagnostics, "response_stream_closed", "generate", {});
       execution.cleanup();
     }
   }
 
   async *stream(request: AIChatRequest): AsyncIterable<AIStreamEvent> {
     const model = getRequestedModel(request, this.defaultModelResolver());
+    const baseUrl = this.baseUrlResolver();
+    const diagnostics = createOllamaDiagnosticContext(request, model, baseUrl);
+    let sawFirstChunk = false;
+    let sawFirstToken = false;
     const execution = createRequestExecutionContext(request, {
       connectTimeoutMs: this.connectTimeoutResolver(),
-      requestTimeoutMs: this.requestTimeoutResolver(),
+      firstTokenTimeoutMs: this.firstTokenTimeoutResolver(),
+      idleTimeoutMs: this.idleTimeoutResolver(),
+      totalTimeoutMs: this.requestTimeoutResolver(),
+      onDiagnostic: (event, stage, details) =>
+        logOllamaDiagnostic(diagnostics, event, stage, details),
     });
 
     try {
+      logOllamaDiagnostic(diagnostics, "provider_request_started", "provider_stream", {});
+      const requestBody = buildOllamaChatBody(request, model, true);
+      logOllamaDiagnostic(diagnostics, "provider_request_shape", "provider_stream", {
+        method: "POST",
+        endpoint: `${baseUrl}/api/chat`,
+        payloadKeys: Object.keys(requestBody).sort(),
+        messageRoles: requestBody.messages.map((message) => message.role),
+        hasOptions: Boolean(requestBody.options),
+        optionKeys: requestBody.options ? Object.keys(requestBody.options).sort() : [],
+      });
+      logOllamaDiagnostic(diagnostics, "ollama_fetch_started", "provider_stream", {});
       const response = await this.fetchImpl(
-        `${this.baseUrlResolver()}/api/chat`,
+        `${baseUrl}/api/chat`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildOllamaChatBody(request, model, true)),
+          body: JSON.stringify(requestBody),
           signal: execution.signal,
         },
       );
       execution.markConnected();
+      logOllamaDiagnostic(diagnostics, "ollama_headers_received", "connect", {
+        statusCode: response.status,
+      });
 
       await throwForHttpError(response, {
         provider: this.providerId,
         model,
+        onDiagnostic: (details) =>
+          logOllamaDiagnostic(diagnostics, "provider_error", "provider_stream", details),
       });
       assertJsonLikeContentType(response, {
         provider: this.providerId,
@@ -470,6 +739,7 @@ export class OllamaProvider implements AIProvider {
           metadata: { reason: "body-missing" },
         });
       }
+      logOllamaDiagnostic(diagnostics, "stream_reader_created", "provider_stream", {});
 
       yield {
         type: "start",
@@ -480,7 +750,23 @@ export class OllamaProvider implements AIProvider {
       let finishEvent: Extract<AIStreamEvent, { type: "finish" }> | null = null;
       let usageEvent: Extract<AIStreamEvent, { type: "usage" }> | null = null;
 
-      for await (const event of parseNdjsonStream(response.body, model)) {
+      for await (const event of parseNdjsonStream(response.body, model, {
+        onChunk: (chunk) => {
+          if (!sawFirstChunk) {
+            sawFirstChunk = true;
+            logOllamaDiagnostic(diagnostics, "first_chunk_received", "provider_stream", {
+              byteLength: chunk.byteLength,
+            });
+            return;
+          }
+
+          logOllamaDiagnostic(diagnostics, "chunk_received", "provider_stream", {
+            byteLength: chunk.byteLength,
+          });
+        },
+      })) {
+        execution.markChunkReceived();
+
         if (finishEvent) {
           throw createPostFinishStreamError(model);
         }
@@ -497,6 +783,10 @@ export class OllamaProvider implements AIProvider {
         }
 
         if (typeof event.message?.content === "string" && event.message.content) {
+          if (!sawFirstToken) {
+            sawFirstToken = true;
+            logOllamaDiagnostic(diagnostics, "first_token_received", "provider_stream", {});
+          }
           yield {
             type: "text-delta",
             textDelta: event.message.content,
@@ -525,6 +815,7 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (finishEvent) {
+        logOllamaDiagnostic(diagnostics, "stream_completed", "provider_stream", {});
         yield finishEvent;
         return;
       }
@@ -535,9 +826,13 @@ export class OllamaProvider implements AIProvider {
         metadata: { reason: "stream-without-finish" },
       });
     } catch (error) {
+      logOllamaDiagnostic(diagnostics, "provider_error", "provider_stream", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
       const timeoutStage = execution.timedOutStage();
-      if (timeoutStage) {
-        throw createTimeoutError(model, timeoutStage);
+      const timeoutPhase = execution.timedOutPhase();
+      if (timeoutStage && timeoutPhase) {
+        throw createTimeoutError(model, timeoutStage, timeoutPhase);
       }
 
       if (execution.cancelledByClient()) {
@@ -555,6 +850,7 @@ export class OllamaProvider implements AIProvider {
         model,
       });
     } finally {
+      logOllamaDiagnostic(diagnostics, "response_stream_closed", "provider_stream", {});
       execution.cleanup();
     }
   }
@@ -563,7 +859,7 @@ export class OllamaProvider implements AIProvider {
     const request: AIChatRequest = { messages: [{ role: "user", text: "ping" }] };
     const execution = createRequestExecutionContext(request, {
       connectTimeoutMs: this.connectTimeoutResolver(),
-      requestTimeoutMs: this.requestTimeoutResolver(),
+      totalTimeoutMs: this.requestTimeoutResolver(),
     });
     const model = this.defaultModelResolver();
 
@@ -598,8 +894,10 @@ export class OllamaProvider implements AIProvider {
         },
       };
     } catch (error) {
-      const normalized = execution.timedOutStage()
-        ? createTimeoutError(model, execution.timedOutStage() as "connect" | "request")
+      const timeoutStage = execution.timedOutStage();
+      const timeoutPhase = execution.timedOutPhase();
+      const normalized = timeoutStage && timeoutPhase
+        ? createTimeoutError(model, timeoutStage, timeoutPhase)
         : toOllamaProviderError(error, {
             provider: this.providerId,
             model,

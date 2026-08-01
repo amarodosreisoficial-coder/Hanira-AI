@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider } from "../lib/ai/provider";
 import type { AIStreamEvent } from "../lib/ai/types";
 import {
@@ -78,7 +78,10 @@ function createFetchDouble(
   };
 }
 
-async function collectStream(provider: OllamaProvider, request = {
+async function collectStream(provider: OllamaProvider, request: {
+  messages: Array<{ role: "user"; text: string }>;
+  signal?: AbortSignal;
+} = {
   messages: [{ role: "user" as const, text: "teste" }],
 }) {
   const events: AIStreamEvent[] = [];
@@ -89,6 +92,10 @@ async function collectStream(provider: OllamaProvider, request = {
 }
 
 describe("OllamaProvider", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("satisfaz o contrato base e anuncia capacidades textuais", () => {
     const provider: AIProvider = new OllamaProvider({
       fetch: async () => createJsonResponse({ models: [] }),
@@ -560,6 +567,175 @@ describe("OllamaProvider", () => {
       code: "cancelled",
       provider: "ollama",
     });
+  });
+
+  it("tolera cold start acima de 5 segundos quando o primeiro token chega dentro do prazo", async () => {
+    vi.useFakeTimers();
+
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              setTimeout(() => {
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    "{\"message\":{\"content\":\"funcionando\"},\"done\":false}\n",
+                  ),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    "{\"done\":true,\"done_reason\":\"stop\"}\n",
+                  ),
+                );
+                controller.close();
+              }, 6_000);
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+      connectTimeoutMs: 1_000,
+      firstTokenTimeoutMs: 20_000,
+      idleTimeoutMs: 5_000,
+    });
+
+    const streamPromise = collectStream(provider);
+    await vi.advanceTimersByTimeAsync(6_100);
+
+    await expect(streamPromise).resolves.toEqual([
+      { type: "start", provider: "ollama", model: DEFAULT_OLLAMA_MODEL },
+      { type: "text-delta", textDelta: "funcionando" },
+      { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
+  it("aplica timeout antes do primeiro token em streaming", async () => {
+    vi.useFakeTimers();
+
+    const provider = new OllamaProvider({
+      fetch: async (_input, init) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => {
+                  controller.error(new DOMException("aborted", "AbortError"));
+                },
+                { once: true },
+              );
+              // Mantem a conexao aberta sem enviar chunks.
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+      connectTimeoutMs: 1_000,
+      firstTokenTimeoutMs: 5,
+      idleTimeoutMs: 5_000,
+    });
+
+    const streamPromise = collectStream(provider);
+    const rejection = expect(streamPromise).rejects.toMatchObject({
+      code: "timeout",
+      provider: "ollama",
+      metadata: expect.objectContaining({
+        stage: "request",
+        phase: "first_token",
+      }),
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
+  });
+
+  it("aplica timeout por inatividade entre chunks", async () => {
+    vi.useFakeTimers();
+
+    const provider = new OllamaProvider({
+      fetch: async (_input, init) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => {
+                  controller.error(new DOMException("aborted", "AbortError"));
+                },
+                { once: true },
+              );
+              controller.enqueue(
+                new TextEncoder().encode(
+                  "{\"message\":{\"content\":\"parcial\"},\"done\":false}\n",
+                ),
+              );
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+      connectTimeoutMs: 1_000,
+      firstTokenTimeoutMs: 50,
+      idleTimeoutMs: 5,
+    });
+
+    const streamPromise = collectStream(provider);
+    const rejection = expect(streamPromise).rejects.toMatchObject({
+      code: "timeout",
+      provider: "ollama",
+      metadata: expect.objectContaining({
+        stage: "request",
+        phase: "idle",
+      }),
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
+  });
+
+  it("limpa os timers quando o cliente cancela o streaming", async () => {
+    vi.useFakeTimers();
+
+    const controller = new AbortController();
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+    const provider = new OllamaProvider({
+      fetch: async (_input, init) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(streamController) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => {
+                  streamController.error(new DOMException("aborted", "AbortError"));
+                },
+                { once: true },
+              );
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+      connectTimeoutMs: 1_000,
+      firstTokenTimeoutMs: 10_000,
+      idleTimeoutMs: 10_000,
+      requestTimeoutMs: 20_000,
+    });
+
+    const streamPromise = collectStream(provider, {
+      messages: [{ role: "user" as const, text: "teste" }],
+      signal: controller.signal,
+    });
+    const rejection = expect(streamPromise).rejects.toMatchObject({
+      code: "cancelled",
+      provider: "ollama",
+    });
+    controller.abort();
+    await vi.runAllTimersAsync();
+    await rejection;
+    expect(clearTimeoutSpy).toHaveBeenCalled();
   });
 
   it("faz healthCheck pelo endpoint de tags e lista modelos ordenados", async () => {

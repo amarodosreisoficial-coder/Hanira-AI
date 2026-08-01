@@ -4,16 +4,24 @@ import { AIProviderError } from "@/lib/ai/types";
 
 const MIN_CONNECT_TIMEOUT_MS = 250;
 const MAX_CONNECT_TIMEOUT_MS = 30_000;
-const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
-const MIN_REQUEST_TIMEOUT_MS = 1_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
+const MIN_FIRST_TOKEN_TIMEOUT_MS = 1_000;
+const MAX_FIRST_TOKEN_TIMEOUT_MS = 600_000;
+const DEFAULT_FIRST_TOKEN_TIMEOUT_MS = 90_000;
+const MIN_IDLE_TIMEOUT_MS = 1_000;
+const MAX_IDLE_TIMEOUT_MS = 600_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+const MIN_REQUEST_TIMEOUT_MS = 0;
 const MAX_REQUEST_TIMEOUT_MS = 600_000;
-const DEFAULT_REQUEST_TIMEOUT_MS = 45_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 0;
 
 export interface OllamaRuntimeConfig {
   enabled: true;
   baseUrl: string;
   model: string;
   connectTimeoutMs: number;
+  firstTokenTimeoutMs: number;
+  idleTimeoutMs: number;
   requestTimeoutMs: number;
 }
 
@@ -22,6 +30,8 @@ export interface TextChatRuntimeConfig {
   model: string;
   baseUrl: string;
   connectTimeoutMs: number;
+  firstTokenTimeoutMs: number;
+  idleTimeoutMs: number;
   requestTimeoutMs: number;
   providerId: string;
 }
@@ -53,7 +63,11 @@ function readRequiredEnv(name: "OLLAMA_BASE_URL" | "OLLAMA_MODEL") {
 }
 
 function parseBoundedIntegerEnv(options: {
-  name: "OLLAMA_CONNECT_TIMEOUT_MS" | "OLLAMA_REQUEST_TIMEOUT_MS";
+  name:
+    | "OLLAMA_CONNECT_TIMEOUT_MS"
+    | "OLLAMA_FIRST_TOKEN_TIMEOUT_MS"
+    | "OLLAMA_IDLE_TIMEOUT_MS"
+    | "OLLAMA_REQUEST_TIMEOUT_MS";
   min: number;
   max: number;
   fallback: number;
@@ -129,6 +143,18 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
     max: MAX_CONNECT_TIMEOUT_MS,
     fallback: DEFAULT_CONNECT_TIMEOUT_MS,
   });
+  const firstTokenTimeoutMs = parseBoundedIntegerEnv({
+    name: "OLLAMA_FIRST_TOKEN_TIMEOUT_MS",
+    min: MIN_FIRST_TOKEN_TIMEOUT_MS,
+    max: MAX_FIRST_TOKEN_TIMEOUT_MS,
+    fallback: DEFAULT_FIRST_TOKEN_TIMEOUT_MS,
+  });
+  const idleTimeoutMs = parseBoundedIntegerEnv({
+    name: "OLLAMA_IDLE_TIMEOUT_MS",
+    min: MIN_IDLE_TIMEOUT_MS,
+    max: MAX_IDLE_TIMEOUT_MS,
+    fallback: DEFAULT_IDLE_TIMEOUT_MS,
+  });
   const requestTimeoutMs = parseBoundedIntegerEnv({
     name: "OLLAMA_REQUEST_TIMEOUT_MS",
     min: MIN_REQUEST_TIMEOUT_MS,
@@ -136,12 +162,22 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
     fallback: DEFAULT_REQUEST_TIMEOUT_MS,
   });
 
-  if (requestTimeoutMs < connectTimeoutMs) {
+  if (firstTokenTimeoutMs < connectTimeoutMs) {
+    throw createInvalidConfigError(
+      "A configuracao de timeout do Ollama e invalida.",
+      {
+        env: "OLLAMA_FIRST_TOKEN_TIMEOUT_MS",
+        relatedEnv: "OLLAMA_CONNECT_TIMEOUT_MS",
+      },
+    );
+  }
+
+  if (requestTimeoutMs > 0 && requestTimeoutMs < firstTokenTimeoutMs) {
     throw createInvalidConfigError(
       "A configuracao de timeout do Ollama e invalida.",
       {
         env: "OLLAMA_REQUEST_TIMEOUT_MS",
-        relatedEnv: "OLLAMA_CONNECT_TIMEOUT_MS",
+        relatedEnv: "OLLAMA_FIRST_TOKEN_TIMEOUT_MS",
       },
     );
   }
@@ -151,6 +187,8 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
     baseUrl,
     model,
     connectTimeoutMs,
+    firstTokenTimeoutMs,
+    idleTimeoutMs,
     requestTimeoutMs,
   };
 }
@@ -161,6 +199,8 @@ export function createTextChatRuntime(): TextChatRuntimeConfig {
     baseUrl: config.baseUrl,
     defaultModel: config.model,
     connectTimeoutMs: config.connectTimeoutMs,
+    firstTokenTimeoutMs: config.firstTokenTimeoutMs,
+    idleTimeoutMs: config.idleTimeoutMs,
     requestTimeoutMs: config.requestTimeoutMs,
   });
 
@@ -169,6 +209,8 @@ export function createTextChatRuntime(): TextChatRuntimeConfig {
     model: config.model,
     baseUrl: config.baseUrl,
     connectTimeoutMs: config.connectTimeoutMs,
+    firstTokenTimeoutMs: config.firstTokenTimeoutMs,
+    idleTimeoutMs: config.idleTimeoutMs,
     requestTimeoutMs: config.requestTimeoutMs,
     providerId: provider.providerId,
   };
@@ -179,6 +221,16 @@ export const OLLAMA_RUNTIME_TIMEOUT_LIMITS = {
     min: MIN_CONNECT_TIMEOUT_MS,
     max: MAX_CONNECT_TIMEOUT_MS,
     fallback: DEFAULT_CONNECT_TIMEOUT_MS,
+  },
+  firstToken: {
+    min: MIN_FIRST_TOKEN_TIMEOUT_MS,
+    max: MAX_FIRST_TOKEN_TIMEOUT_MS,
+    fallback: DEFAULT_FIRST_TOKEN_TIMEOUT_MS,
+  },
+  idle: {
+    min: MIN_IDLE_TIMEOUT_MS,
+    max: MAX_IDLE_TIMEOUT_MS,
+    fallback: DEFAULT_IDLE_TIMEOUT_MS,
   },
   request: {
     min: MIN_REQUEST_TIMEOUT_MS,

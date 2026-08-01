@@ -1,4 +1,7 @@
+import { loadEnvConfig } from "@next/env";
 import { defineConfig, devices } from "@playwright/test";
+
+loadEnvConfig(process.cwd());
 
 const hasRealCredentials = Boolean(
   process.env.HANIRA_TEST_EMAIL && process.env.HANIRA_TEST_PASSWORD,
@@ -55,9 +58,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `powershell -Command "$env:HANIRA_DEMO_MODE='${selectedTarget.demoMode ? "true" : "false"}'; $env:NEXT_PUBLIC_APP_URL='${baseURL}'; npx.cmd next dev --webpack --port ${selectedTarget.port}"`,
+    command: `npx.cmd next dev --webpack --port ${selectedTarget.port}`,
     url: `${baseURL}${selectedTarget.entryUrl}`,
     timeout: 120_000,
     reuseExistingServer: true,
+    env: {
+      ...process.env,
+      HANIRA_DEMO_MODE: selectedTarget.demoMode ? "true" : "false",
+      NEXT_PUBLIC_APP_URL: baseURL,
+    },
   },
 });
