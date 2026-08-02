@@ -23,6 +23,14 @@ import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
+  CHAT_MESSAGE_LENGTH_ERROR,
+  CHAT_MESSAGE_MAX_LENGTH,
+  getChatMessageLength,
+  getRemainingChatMessageCharacters,
+  isChatMessageTooLong,
+  willExceedChatMessageLimit,
+} from "@/lib/chat/message-limits";
+import {
   MAX_IMAGES_PER_MESSAGE,
   mediaConfig,
 } from "@/lib/media/config";
@@ -55,6 +63,18 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const { ref, resize } = useAutoResize();
   const store = useChatStore();
+  const messageLength = getChatMessageLength(store.draft);
+  const remainingCharacters = getRemainingChatMessageCharacters(store.draft);
+
+  function showMessageLengthError() {
+    setError(CHAT_MESSAGE_LENGTH_ERROR);
+  }
+
+  function clearMessageLengthError() {
+    setError((current) =>
+      current === CHAT_MESSAGE_LENGTH_ERROR ? "" : current,
+    );
+  }
 
   async function ensureConversation() {
     if (!store.activeConversation()) await store.newConversation();
@@ -103,7 +123,12 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     retry = false,
     attachmentOverride?: Attachment[],
   ) {
-    const content = (contentOverride ?? store.draft).trim();
+    const rawContent = contentOverride ?? store.draft;
+    if (isChatMessageTooLong(rawContent)) {
+      showMessageLengthError();
+      return;
+    }
+    const content = rawContent.trim();
     const hasMedia = pendingMedia.length > 0 || Boolean(attachmentOverride?.length);
     if ((!content && !hasMedia) || store.isThinking || uploading) return;
     const conversation = await ensureConversation();
@@ -257,6 +282,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     }
     function voiceSubmit(event: Event) {
       const detail = (event as CustomEvent<{ content: string }>).detail;
+      if (isChatMessageTooLong(detail.content)) {
+        showMessageLengthError();
+        return;
+      }
       store.setDraft(detail.content);
       void submit(detail.content);
     }
@@ -274,9 +303,42 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   });
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const target = event.currentTarget;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void submit();
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      event.shiftKey &&
+      willExceedChatMessageLimit(
+        target.value,
+        "\n",
+        target.selectionStart,
+        target.selectionEnd,
+      )
+    ) {
+      event.preventDefault();
+      showMessageLengthError();
+      return;
+    }
+
+    if (
+      event.key.length === 1 &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      willExceedChatMessageLimit(
+        target.value,
+        event.key,
+        target.selectionStart,
+        target.selectionEnd,
+      )
+    ) {
+      event.preventDefault();
+      showMessageLengthError();
     }
   }
 
@@ -287,6 +349,21 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     if (images.length) {
       event.preventDefault();
       void addImages(images);
+      return;
+    }
+
+    const pastedText = event.clipboardData.getData("text");
+    if (
+      pastedText &&
+      willExceedChatMessageLimit(
+        event.currentTarget.value,
+        pastedText,
+        event.currentTarget.selectionStart,
+        event.currentTarget.selectionEnd,
+      )
+    ) {
+      event.preventDefault();
+      showMessageLengthError();
     }
   }
 
@@ -356,6 +433,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               onCancel={() => setRecorderOpen(false)}
               onComplete={({ text, attachment, localFile, simulated }) => {
                 const previewUrl = URL.createObjectURL(localFile);
+                const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();
                 setPendingMedia((value) => [
                   ...value,
                   {
@@ -366,9 +444,12 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                     attachment: attachment ?? undefined,
                   },
                 ]);
-                store.setDraft(
-                  `${store.draft}${store.draft ? " " : ""}${text}`.trim(),
-                );
+                if (isChatMessageTooLong(nextDraft)) {
+                  showMessageLengthError();
+                } else {
+                  clearMessageLengthError();
+                  store.setDraft(nextDraft);
+                }
                 if (simulated) {
                   setError(
                     "Transcrição simulada no modo demonstração. Revise antes de enviar.",
@@ -419,13 +500,17 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             ref={ref}
             value={store.draft}
             rows={1}
-            maxLength={8_000}
+            maxLength={CHAT_MESSAGE_MAX_LENGTH}
             aria-label="Mensagem para Hanira"
+            aria-describedby="chat-message-length"
             placeholder={
               pendingMedia.length ? "Pergunte sobre o arquivo..." : "Converse com Hanira..."
             }
             onChange={(event) => {
-              store.setDraft(event.target.value);
+              const nextValue = event.target.value;
+              store.setDraft(nextValue);
+              if (isChatMessageTooLong(nextValue)) showMessageLengthError();
+              else clearMessageLengthError();
               resize();
             }}
             onPaste={handlePaste}
@@ -495,30 +580,42 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 <Mic className="size-[18px]" />
               </button>
             </div>
-            {store.isThinking ? (
-              <button
-                type="button"
-                onClick={() => abortRef.current?.abort()}
-                aria-label="Interromper resposta"
-                className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-rose-100"
+            <div className="flex items-center gap-3">
+              <span
+                id="chat-message-length"
+                className={`text-[10px] ${
+                  remainingCharacters <= 200
+                    ? "text-amber-300"
+                    : "text-zinc-600"
+                }`}
               >
-                <Square className="size-3.5 fill-current" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={!canSend}
-                aria-label="Enviar mensagem"
-                className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-violet-100 disabled:bg-white/[0.07] disabled:text-zinc-700"
-              >
-                {uploading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="size-4" />
-                )}
-              </button>
-            )}
+                {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
+              </span>
+              {store.isThinking ? (
+                <button
+                  type="button"
+                  onClick={() => abortRef.current?.abort()}
+                  aria-label="Interromper resposta"
+                  className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-rose-100"
+                >
+                  <Square className="size-3.5 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void submit()}
+                  disabled={!canSend}
+                  aria-label="Enviar mensagem"
+                  className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-violet-100 disabled:bg-white/[0.07] disabled:text-zinc-700"
+                >
+                  {uploading ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="size-4" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <p className="mt-2.5 text-center text-[10px] text-zinc-700">

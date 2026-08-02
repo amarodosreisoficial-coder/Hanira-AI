@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  chatRequestSchema,
-  MAX_MESSAGE_LENGTH,
-} from "../lib/validation/chat";
+  CHAT_MESSAGE_LENGTH_ERROR,
+  CHAT_MESSAGE_MAX_LENGTH,
+} from "../lib/chat/message-limits";
+import { chatRequestSchema } from "../lib/validation/chat";
 
 describe("validação do chat", () => {
   it("rejeita mensagem vazia", () => {
@@ -11,12 +12,29 @@ describe("validação do chat", () => {
     ).toBe(false);
   });
 
+  it("aceita mensagem exatamente no limite", () => {
+    expect(
+      chatRequestSchema.safeParse({
+        message: "a".repeat(CHAT_MESSAGE_MAX_LENGTH),
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejeita mensagem acima do limite", () => {
     expect(
       chatRequestSchema.safeParse({
-        message: "a".repeat(MAX_MESSAGE_LENGTH + 1),
+        message: "a".repeat(CHAT_MESSAGE_MAX_LENGTH + 1),
       }).success,
     ).toBe(false);
+  });
+
+  it("retorna erro claro acima do limite", () => {
+    const parsed = chatRequestSchema.safeParse({
+      message: "a".repeat(CHAT_MESSAGE_MAX_LENGTH + 1),
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toBe(CHAT_MESSAGE_LENGTH_ERROR);
   });
 
   it("aceita payload idempotente e retry", () => {

@@ -1,7 +1,9 @@
 import { z } from "zod";
+import {
+  CHAT_MESSAGE_LENGTH_ERROR,
+  CHAT_MESSAGE_MAX_LENGTH,
+} from "@/lib/chat/message-limits";
 import { TTS_VOICES } from "@/lib/media/config";
-
-export const MAX_MESSAGE_LENGTH = 8_000;
 
 export const chatRequestSchema = z.object({
   conversationId: z.uuid().optional(),
@@ -21,10 +23,10 @@ export const chatRequestSchema = z.object({
     )
     .max(4)
     .optional(),
-  message: z.string().trim().max(
-    MAX_MESSAGE_LENGTH,
-    `A mensagem pode ter no máximo ${MAX_MESSAGE_LENGTH} caracteres.`,
-  ),
+  message: z
+    .string()
+    .max(CHAT_MESSAGE_MAX_LENGTH, CHAT_MESSAGE_LENGTH_ERROR)
+    .transform((value) => value.trim()),
 }).refine(
   (data) =>
     Boolean(data.message) ||
