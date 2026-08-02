@@ -114,6 +114,7 @@ OLLAMA_MODEL=qwen2.5:7b
 NEXT_PUBLIC_APP_URL=http://localhost:3002
 NEXT_PUBLIC_MAX_IMAGE_SIZE_MB=10
 NEXT_PUBLIC_MAX_AUDIO_SIZE_MB=25
+NEXT_PUBLIC_ATTACHMENTS_ENABLED=false
 NEXT_PUBLIC_VOICE_ENABLED=false
 NEXT_PUBLIC_VISION_ENABLED=false
 HANIRA_DEMO_MODE=false
@@ -144,6 +145,7 @@ API.
 
 Defina apenas os modelos compativeis com os recursos que voce vai ativar:
 
+- `NEXT_PUBLIC_ATTACHMENTS_ENABLED=true` para habilitar upload de imagens no chat;
 - `OPENAI_VISION_MODEL` para visao;
 - `OPENAI_TRANSCRIPTION_MODEL`, `OPENAI_TTS_MODEL` e `OPENAI_TTS_VOICE` para voz.
 
