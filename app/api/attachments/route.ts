@@ -2,12 +2,16 @@ import { headers } from "next/headers";
 import { ZodError, z } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
 import { createRequestId, logServerEvent } from "@/lib/logging/server";
-import { MAX_IMAGES_PER_MESSAGE } from "@/lib/media/config";
+import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  mediaConfig,
+} from "@/lib/media/config";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { storeAttachment } from "@/services/attachments";
-import { deleteOwnedAttachment } from "@/services/attachments";
-import { mediaConfig } from "@/lib/media/config";
-import { validateMediaFile } from "@/lib/validation/media";
+import {
+  inferAttachmentTypeFromMimeType,
+  validateMediaFile,
+} from "@/lib/validation/media";
+import { deleteOwnedAttachment, storeAttachment } from "@/services/attachments";
 
 const conversationSchema = z.uuid();
 
@@ -15,15 +19,16 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
   try {
-    if (!mediaConfig.attachmentsEnabled || !mediaConfig.visionEnabled) {
+    if (!mediaConfig.attachmentsEnabled) {
       return Response.json(
         {
-          error: "O envio de imagens nao esta habilitado nesta instancia.",
+          error: "O envio de anexos nao esta habilitado nesta instancia.",
           requestId,
         },
         { status: 409, headers: { "X-Request-ID": requestId } },
       );
     }
+
     const user = await requireSessionUser();
     const headerStore = await headers();
     const ip =
@@ -43,9 +48,14 @@ export async function POST(request: Request) {
         },
       );
     }
+
     const contentLength = Number(headerStore.get("content-length") ?? 0);
-    const maxTotal = mediaConfig.maxImageSizeBytes * MAX_IMAGES_PER_MESSAGE;
-    if (contentLength > maxTotal + 1_000_000) {
+    const maxSingle = Math.max(
+      mediaConfig.maxImageSizeBytes,
+      mediaConfig.maxAudioSizeBytes,
+      mediaConfig.maxDocumentSizeBytes,
+    );
+    if (contentLength > maxSingle * MAX_ATTACHMENTS_PER_MESSAGE + 1_000_000) {
       return Response.json(
         { error: "O conjunto de arquivos excede o limite permitido.", requestId },
         { status: 413, headers: { "X-Request-ID": requestId } },
@@ -53,52 +63,59 @@ export async function POST(request: Request) {
     }
 
     const formData = await request.formData();
-    const conversationId = conversationSchema.parse(
-      formData.get("conversationId"),
-    );
+    const conversationId = conversationSchema.parse(formData.get("conversationId"));
     const files = formData
       .getAll("files")
       .filter((value): value is File => value instanceof File);
-    if (!files.length || files.length > MAX_IMAGES_PER_MESSAGE) {
+    if (!files.length || files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
       return Response.json(
-        { error: `Envie de 1 a ${MAX_IMAGES_PER_MESSAGE} arquivos.`, requestId },
+        {
+          error: `Envie de 1 a ${MAX_ATTACHMENTS_PER_MESSAGE} arquivos por mensagem.`,
+          requestId,
+        },
         { status: 400, headers: { "X-Request-ID": requestId } },
-      );
-    }
-    if (files.reduce((total, file) => total + file.size, 0) > maxTotal) {
-      return Response.json(
-        { error: "O conjunto de arquivos excede o limite permitido.", requestId },
-        { status: 413, headers: { "X-Request-ID": requestId } },
       );
     }
 
     if (user.demo) {
+      const attachments = [];
       for (const file of files) {
-        await validateMediaFile(
-          file,
-          file.type.startsWith("image/") ? "image" : "audio",
-        );
+        const type = inferAttachmentTypeFromMimeType(file.type);
+        if (!type) {
+          throw new Error("Use imagem, audio ou documento suportado.");
+        }
+        await validateMediaFile(file, type);
+        attachments.push({
+          id: crypto.randomUUID(),
+          type,
+          originalName: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          url: "",
+        });
       }
       return Response.json(
-        {
-          mode: "demo",
-          attachments: files.map((file) => ({
-            id: crypto.randomUUID(),
-            type: file.type.startsWith("image/") ? "image" : "audio",
-            originalName: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-            url: "",
-          })),
-        },
+        { mode: "demo", attachments },
         { headers: { "X-Request-ID": requestId } },
       );
     }
 
+    logServerEvent({
+      level: "info",
+      requestId,
+      route: "/api/attachments",
+      event: "attachment_upload_started",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+    });
+
     const attachments = [];
     try {
       for (const file of files) {
-        const type = file.type.startsWith("image/") ? "image" : "audio";
+        const type = inferAttachmentTypeFromMimeType(file.type);
+        if (!type) {
+          throw new Error("Use imagem, audio ou documento suportado.");
+        }
         attachments.push(
           await storeAttachment({
             userId: user.id,
@@ -110,17 +127,16 @@ export async function POST(request: Request) {
       }
     } catch (error) {
       await Promise.allSettled(
-        attachments.map((attachment) =>
-          deleteOwnedAttachment(user.id, attachment.id),
-        ),
+        attachments.map((attachment) => deleteOwnedAttachment(user.id, attachment.id)),
       );
       throw error;
     }
+
     logServerEvent({
       level: "info",
       requestId,
       route: "/api/attachments",
-      event: "attachment_uploaded",
+      event: "attachment_upload_completed",
       status: 201,
       durationMs: Date.now() - startedAt,
     });
@@ -131,28 +147,20 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof ZodError
-        ? "A conversa informada é inválida."
+        ? "A conversa informada e invalida."
         : error instanceof Error &&
-            [
-              "CONVERSATION_NOT_FOUND",
-              "ATTACHMENT_NOT_SAVED",
-            ].includes(error.message)
-          ? "Não foi possível associar o arquivo à conversa."
-          : error instanceof Error &&
-              (error.message.includes("arquivo") ||
-                error.message.includes("imagem") ||
-                error.message.includes("áudio") ||
-                error.message.includes("extensão") ||
-                error.message.includes("limite"))
+            ["CONVERSATION_NOT_FOUND", "ATTACHMENT_NOT_SAVED"].includes(error.message)
+          ? "Nao foi possivel associar o arquivo a conversa."
+          : error instanceof Error
             ? error.message
-            : "Não foi possível enviar o arquivo.";
+            : "Nao foi possivel enviar o arquivo.";
     const status =
       error instanceof Error && error.message === "UNAUTHENTICATED" ? 401 : 400;
     logServerEvent({
       level: "warn",
       requestId,
       route: "/api/attachments",
-      event: "attachment_validation_failed",
+      event: "attachment_upload_failed",
       status,
       durationMs: Date.now() - startedAt,
       errorType: error instanceof Error ? error.name : "UnknownError",

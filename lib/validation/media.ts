@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
   ACCEPTED_AUDIO_MIME_TYPES,
+  ACCEPTED_DOCUMENT_MIME_TYPES,
   ACCEPTED_IMAGE_MIME_TYPES,
+  MAX_DOCUMENT_CONTEXT_CHARACTERS,
   mediaConfig,
   TTS_VOICES,
 } from "@/lib/media/config";
@@ -16,20 +18,45 @@ const extensionByMime: Record<string, readonly string[]> = {
   "audio/mpeg": ["mp3", "mpeg", "mpga"],
   "audio/mp4": ["m4a", "mp4"],
   "audio/x-m4a": ["m4a"],
+  "application/pdf": ["pdf"],
+  "text/plain": ["txt", "text"],
+  "text/markdown": ["md", "markdown"],
 };
+
+const acceptedMimeTypesByKind = {
+  image: ACCEPTED_IMAGE_MIME_TYPES,
+  audio: ACCEPTED_AUDIO_MIME_TYPES,
+  document: ACCEPTED_DOCUMENT_MIME_TYPES,
+} as const;
 
 export const speechRequestSchema = z.object({
   text: z
     .string()
     .trim()
-    .min(1, "Não há texto para reproduzir.")
-    .max(4_096, "A resposta é muito longa para leitura em voz alta."),
+    .min(1, "Nao ha texto para reproduzir.")
+    .max(4_096, "A resposta e muito longa para leitura em voz alta."),
   voice: z.enum(TTS_VOICES).optional(),
   speed: z.number().min(0.5).max(2).default(1),
 });
 
 export function extensionForMime(mimeType: string) {
   return extensionByMime[mimeType]?.[0] ?? null;
+}
+
+export function inferAttachmentTypeFromMimeType(
+  mimeType: string,
+): "image" | "audio" | "document" | null {
+  const normalized = mimeType.split(";")[0].toLowerCase();
+  if ((ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(normalized)) {
+    return "image";
+  }
+  if ((ACCEPTED_AUDIO_MIME_TYPES as readonly string[]).includes(normalized)) {
+    return "audio";
+  }
+  if ((ACCEPTED_DOCUMENT_MIME_TYPES as readonly string[]).includes(normalized)) {
+    return "document";
+  }
+  return null;
 }
 
 function fileExtension(name: string) {
@@ -59,6 +86,7 @@ function isValidPng(bytes: Uint8Array) {
   ) {
     return false;
   }
+
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let offset = 8;
   let hasHeader = false;
@@ -98,6 +126,7 @@ function isValidJpeg(bytes: Uint8Array) {
   ) {
     return false;
   }
+
   let offset = 2;
   let dimensionsFound = false;
   while (offset + 4 < bytes.length - 2) {
@@ -116,8 +145,8 @@ function isValidJpeg(bytes: Uint8Array) {
     if (length < 2 || offset + length > bytes.length) return false;
     if (
       [
-        0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb,
-        0xcd, 0xce, 0xcf,
+        0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd,
+        0xce, 0xcf,
       ].includes(marker)
     ) {
       if (length < 7) return false;
@@ -131,12 +160,8 @@ function isValidJpeg(bytes: Uint8Array) {
 }
 
 function hasValidImageSignature(mimeType: string, bytes: Uint8Array) {
-  if (mimeType === "image/png") {
-    return isValidPng(bytes);
-  }
-  if (mimeType === "image/jpeg") {
-    return isValidJpeg(bytes);
-  }
+  if (mimeType === "image/png") return isValidPng(bytes);
+  if (mimeType === "image/jpeg") return isValidJpeg(bytes);
   if (mimeType === "image/webp") {
     const declaredSize =
       bytes.length >= 8
@@ -173,45 +198,92 @@ function hasValidAudioSignature(mimeType: string, bytes: Uint8Array) {
   return false;
 }
 
+function hasValidDocumentSignature(mimeType: string, bytes: Uint8Array) {
+  if (mimeType === "application/pdf") {
+    return new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-";
+  }
+
+  if (mimeType === "text/plain" || mimeType === "text/markdown") {
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    const controlCharacters = [...text].filter((char) => {
+      const code = char.charCodeAt(0);
+      return code < 32 && ![9, 10, 13].includes(code);
+    });
+    return controlCharacters.length < Math.max(4, text.length * 0.05);
+  }
+
+  return false;
+}
+
+export function sanitizeExtractedDocumentText(value: string) {
+  return value
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+export function truncateDocumentText(text: string) {
+  const truncated = text.length > MAX_DOCUMENT_CONTEXT_CHARACTERS;
+  return {
+    text: truncated ? text.slice(0, MAX_DOCUMENT_CONTEXT_CHARACTERS) : text,
+    truncated,
+  };
+}
+
 export async function validateMediaFile(
   file: File,
-  type: "image" | "audio",
+  type: "image" | "audio" | "document",
 ) {
-  if (!file.size) throw new Error("O arquivo está vazio.");
-  const accepted =
-    type === "image" ? ACCEPTED_IMAGE_MIME_TYPES : ACCEPTED_AUDIO_MIME_TYPES;
+  if (!file.size) throw new Error("O arquivo esta vazio.");
+  const accepted = acceptedMimeTypesByKind[type];
   const mimeType = file.type.split(";")[0].toLowerCase();
   if (!(accepted as readonly string[]).includes(mimeType)) {
     throw new Error(
       type === "image"
         ? "Use uma imagem PNG, JPEG ou WEBP."
-        : "Use áudio WEBM, OGG, WAV, MP3 ou M4A.",
+        : type === "audio"
+          ? "Use audio WEBM, OGG, WAV, MP3 ou M4A."
+          : "Use um documento TXT, MD ou PDF textual.",
     );
   }
+
   const max =
     type === "image"
       ? mediaConfig.maxImageSizeBytes
-      : mediaConfig.maxAudioSizeBytes;
+      : type === "audio"
+        ? mediaConfig.maxAudioSizeBytes
+        : mediaConfig.maxDocumentSizeBytes;
   if (file.size > max) {
     throw new Error(
       `O arquivo excede o limite de ${Math.round(max / 1024 / 1024)} MB.`,
     );
   }
+
   const extension = fileExtension(file.name);
   if (!extensionByMime[mimeType]?.includes(extension)) {
-    throw new Error("A extensão não corresponde ao conteúdo informado.");
+    throw new Error("A extensao/extensão nao corresponde ao conteudo informado.");
   }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   const valid =
     type === "image"
       ? hasValidImageSignature(mimeType, bytes)
-      : hasValidAudioSignature(mimeType, bytes);
+      : type === "audio"
+        ? hasValidAudioSignature(mimeType, bytes)
+        : hasValidDocumentSignature(mimeType, bytes);
   if (!valid) {
     throw new Error(
       type === "image"
-        ? "A imagem está corrompida ou possui conteúdo inválido."
-        : "O áudio está corrompido ou possui conteúdo inválido.",
+        ? "A imagem esta corrompida ou possui conteudo invalido."
+        : type === "audio"
+          ? "O audio esta corrompido ou possui conteudo invalido."
+          : "O documento esta corrompido ou possui conteudo invalido.",
     );
   }
+
   return { extension, bytes, mimeType };
 }

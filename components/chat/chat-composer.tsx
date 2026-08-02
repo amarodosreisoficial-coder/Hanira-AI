@@ -13,9 +13,11 @@ import {
   ArrowUp,
   Camera,
   FileAudio,
+  FileText,
   ImagePlus,
   LoaderCircle,
   Mic,
+  Paperclip,
   Square,
   X,
 } from "lucide-react";
@@ -31,23 +33,32 @@ import {
   willExceedChatMessageLimit,
 } from "@/lib/chat/message-limits";
 import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_DOCUMENTS_PER_MESSAGE,
   MAX_IMAGES_PER_MESSAGE,
   mediaConfig,
 } from "@/lib/media/config";
 import { useChatStore } from "@/lib/stores/chat-store";
-import { validateMediaFile } from "@/lib/validation/media";
+import {
+  inferAttachmentTypeFromMimeType,
+  validateMediaFile,
+} from "@/lib/validation/media";
 import { streamChatMessage } from "@/services/chat-service";
 import { uploadMediaFiles } from "@/services/media-service";
 import type { ChatMessage } from "@/types/chat";
-import type { Attachment } from "@/types/media";
+import type { Attachment, AttachmentType } from "@/types/media";
 import type { UserSettings } from "@/types/settings";
 
 interface PendingMedia {
   id: string;
   file: File;
-  type: "image" | "audio";
+  type: AttachmentType;
   previewUrl: string;
   attachment?: Attachment;
+}
+
+function previewUrlForFile(file: File, type: AttachmentType) {
+  return type === "image" || type === "audio" ? URL.createObjectURL(file) : "";
 }
 
 export function ChatComposer({ settings }: { settings: UserSettings }) {
@@ -55,12 +66,13 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [recorderOpen, setRecorderOpen] = useState(false);
-  const [privacyKind, setPrivacyKind] = useState<
-    "camera" | "microphone" | null
-  >(null);
+  const [privacyKind, setPrivacyKind] = useState<"camera" | "microphone" | null>(
+    null,
+  );
   const abortRef = useRef<AbortController | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const { ref, resize } = useAutoResize();
   const store = useChatStore();
   const messageLength = getChatMessageLength(store.draft);
@@ -71,9 +83,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   }
 
   function clearMessageLengthError() {
-    setError((current) =>
-      current === CHAT_MESSAGE_LENGTH_ERROR ? "" : current,
-    );
+    setError((current) => (current === CHAT_MESSAGE_LENGTH_ERROR ? "" : current));
   }
 
   async function ensureConversation() {
@@ -81,42 +91,59 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     return useChatStore.getState().activeConversation();
   }
 
-  async function addImages(files: File[]) {
+  async function addFiles(files: File[]) {
     setError("");
-    if (!mediaConfig.visionEnabled) {
-      setError("A visão está desativada na configuração do produto.");
-      return;
-    }
     if (!mediaConfig.attachmentsEnabled) {
       setError("Os anexos estao desativados nesta instancia.");
       return;
     }
-    const currentImages = pendingMedia.filter(
-      (item) => item.type === "image",
-    ).length;
-    const available = MAX_IMAGES_PER_MESSAGE - currentImages;
-    if (files.length > available) {
-      setError(`Você pode enviar até ${MAX_IMAGES_PER_MESSAGE} imagens.`);
-      files = files.slice(0, Math.max(0, available));
+
+    const nextImages =
+      pendingMedia.filter((item) => item.type === "image").length +
+      files.filter((file) => file.type.startsWith("image/")).length;
+    const nextDocuments =
+      pendingMedia.filter((item) => item.type === "document").length +
+      files.filter((file) =>
+        ["application/pdf", "text/plain", "text/markdown"].includes(
+          file.type.split(";")[0].toLowerCase(),
+        ),
+      ).length;
+    if (nextImages > MAX_IMAGES_PER_MESSAGE) {
+      setError(`Voce pode enviar ate ${MAX_IMAGES_PER_MESSAGE} imagens.`);
+      return;
     }
+    if (nextDocuments > MAX_DOCUMENTS_PER_MESSAGE) {
+      setError(`Voce pode enviar ate ${MAX_DOCUMENTS_PER_MESSAGE} documentos.`);
+      return;
+    }
+    if (pendingMedia.length + files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      setError(`Voce pode enviar ate ${MAX_ATTACHMENTS_PER_MESSAGE} anexos.`);
+      return;
+    }
+
     const accepted: PendingMedia[] = [];
     for (const file of files) {
       try {
-        await validateMediaFile(file, "image");
-        if ("createImageBitmap" in window) {
+        const type = inferAttachmentTypeFromMimeType(file.type);
+        if (!type) {
+          throw new Error("Use imagem, audio ou documento suportado.");
+        }
+        if (type === "image" && !mediaConfig.visionEnabled) {
+          throw new Error("A visao esta desativada na configuracao do produto.");
+        }
+        await validateMediaFile(file, type);
+        if (type === "image" && "createImageBitmap" in window) {
           const bitmap = await createImageBitmap(file);
           bitmap.close();
         }
         accepted.push({
           id: crypto.randomUUID(),
           file,
-          type: "image",
-          previewUrl: URL.createObjectURL(file),
+          type,
+          previewUrl: previewUrlForFile(file, type),
         });
       } catch (caught) {
-        setError(
-          caught instanceof Error ? caught.message : "Imagem inválida.",
-        );
+        setError(caught instanceof Error ? caught.message : "Arquivo invalido.");
       }
     }
     setPendingMedia((value) => [...value, ...accepted]);
@@ -155,11 +182,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             .filter((item) => !item.attachment)
             .map((item) => item.file);
           const uploaded = filesToUpload.length
-            ? await uploadMediaFiles(
-                conversation.id,
-                filesToUpload,
-                abortController.signal,
-              )
+            ? await uploadMediaFiles(conversation.id, filesToUpload, abortController.signal)
             : [];
           attachments = [...alreadyStored, ...uploaded];
         } else {
@@ -221,10 +244,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         {
           onStart: (serverConversationId) => {
             if (serverConversationId !== conversation.id) {
-              store.replaceConversationId(
-                conversation.id,
-                serverConversationId,
-              );
+              store.replaceConversationId(conversation.id, serverConversationId);
             }
           },
           onDelta: (delta) => {
@@ -259,9 +279,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         return;
       }
       const message =
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível enviar sua mensagem.";
+        caught instanceof Error ? caught.message : "Nao foi possivel enviar sua mensagem.";
       setError(message);
       if (assistantId) store.markMessageFailed(assistantId);
       window.dispatchEvent(new Event("hanira:response-error"));
@@ -352,7 +370,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     );
     if (images.length) {
       event.preventDefault();
-      void addImages(images);
+      void addFiles(images);
       return;
     }
 
@@ -373,10 +391,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    const images = Array.from(event.dataTransfer.files).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-    if (images.length) void addImages(images);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length) void addFiles(files);
   }
 
   async function dismissPrivacy(dismiss: boolean) {
@@ -408,7 +424,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         method: "DELETE",
       }).catch(() => undefined);
     }
-    URL.revokeObjectURL(item.previewUrl);
+    if (item.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
     setPendingMedia((value) => value.filter((entry) => entry.id !== item.id));
   }
 
@@ -455,9 +473,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   store.setDraft(nextDraft);
                 }
                 if (simulated) {
-                  setError(
-                    "Transcrição simulada no modo demonstração. Revise antes de enviar.",
-                  );
+                  setError("Transcricao simulada no modo demonstracao. Revise antes de enviar.");
                 }
                 setRecorderOpen(false);
               }}
@@ -480,9 +496,16 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                       unoptimized
                       className="object-cover"
                     />
-                  ) : (
+                  ) : item.type === "audio" ? (
                     <div className="grid h-full place-items-center text-violet-300">
                       <FileAudio className="size-5" />
+                      <span className="absolute bottom-2 max-w-20 truncate text-[9px] text-zinc-500">
+                        {item.file.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid h-full place-items-center text-amber-300">
+                      <FileText className="size-5" />
                       <span className="absolute bottom-2 max-w-20 truncate text-[9px] text-zinc-500">
                         {item.file.name}
                       </span>
@@ -528,7 +551,18 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             multiple
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => {
-              void addImages(Array.from(event.target.files ?? []));
+              void addFiles(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={documentInputRef}
+            type="file"
+            hidden
+            multiple
+            accept="application/pdf,text/plain,text/markdown,.txt,.md,.markdown,.pdf"
+            onChange={(event) => {
+              void addFiles(Array.from(event.target.files ?? []));
               event.target.value = "";
             }}
           />
@@ -539,12 +573,22 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             accept="image/png,image/jpeg,image/webp"
             capture="environment"
             onChange={(event) => {
-              void addImages(Array.from(event.target.files ?? []));
+              void addFiles(Array.from(event.target.files ?? []));
               event.target.value = "";
             }}
           />
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="flex items-center">
+              <button
+                type="button"
+                disabled={!mediaConfig.attachmentsEnabled}
+                onClick={() => documentInputRef.current?.click()}
+                aria-label="Adicionar documento"
+                title="Adicionar documento"
+                className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-amber-300 disabled:text-zinc-700"
+              >
+                <Paperclip className="size-[18px]" />
+              </button>
               <button
                 type="button"
                 disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
@@ -574,11 +618,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 }
                 onClick={() => void requestMediaAccess("microphone")}
                 aria-label="Gravar voz"
-                title={
-                  settings.voiceEnabled
-                    ? "Gravar voz"
-                    : "Ative a voz nas configurações"
-                }
+                title={settings.voiceEnabled ? "Gravar voz" : "Ative a voz nas configuracoes"}
                 className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-violet-300 disabled:text-zinc-700"
               >
                 <Mic className="size-[18px]" />
@@ -587,11 +627,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             <div className="flex items-center gap-3">
               <span
                 id="chat-message-length"
-                className={`text-[10px] ${
-                  remainingCharacters <= 200
-                    ? "text-amber-300"
-                    : "text-zinc-600"
-                }`}
+                className={`text-[10px] ${remainingCharacters <= 200 ? "text-amber-300" : "text-zinc-600"}`}
               >
                 {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
               </span>
@@ -623,7 +659,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           </div>
         </div>
         <p className="mt-2.5 text-center text-[10px] text-zinc-700">
-          Hanira pode cometer erros. Considere verificar informações importantes.
+          Hanira pode cometer erros. Considere verificar informacoes importantes.
         </p>
       </div>
       <PrivacyDialog

@@ -446,14 +446,16 @@ async function createChatStream(
       : routed.providerRequest;
   const eligibility = getOllamaTextProviderEligibility({
     ollamaEnabled: routed.capability === "text",
-    attachmentCount: routed.attachmentCount,
+    attachmentCount:
+      routed.capability === "text" && routed.imageAttachmentCount === 0 ? 0 : routed.attachmentCount,
     imageAttachmentCount: routed.imageAttachmentCount,
     request: providerRequest,
     supportedCapabilities: routed.provider.capabilities.supported,
   });
   const eligible = shouldUseOllamaTextProvider({
     ollamaEnabled: routed.capability === "text",
-    attachmentCount: routed.attachmentCount,
+    attachmentCount:
+      routed.capability === "text" && routed.imageAttachmentCount === 0 ? 0 : routed.attachmentCount,
     imageAttachmentCount: routed.imageAttachmentCount,
     request: providerRequest,
     supportedCapabilities: routed.provider.capabilities.supported,

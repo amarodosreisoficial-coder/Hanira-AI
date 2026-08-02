@@ -2,7 +2,7 @@ import { apiErrorResponse } from "@/lib/api/errors";
 import { requireSessionUser } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { conversationUpdateSchema } from "@/lib/validation/chat";
-import { attachmentFromRow } from "@/services/attachments";
+import { ATTACHMENT_BUCKETS, attachmentFromRow } from "@/services/attachments";
 import { resolveProjectForConversationCreation } from "@/services/project-service";
 
 type Context = { params: Promise<{ id: string }> };
@@ -36,7 +36,7 @@ export async function GET(_request: Request, { params }: Context) {
     const { data: attachments, error: attachmentsError } = await supabase!
       .from("attachments")
       .select(
-        "id,message_id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
+        "id,user_id,conversation_id,message_id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
       )
       .eq("conversation_id", id)
       .eq("user_id", user.id)
@@ -94,7 +94,7 @@ export async function PATCH(request: Request, { params }: Context) {
       .eq("conversation_id", id)
       .eq("user_id", user.id);
     if (attachmentsError) throw attachmentsError;
-    for (const bucket of ["chat-images", "chat-audio"]) {
+    for (const bucket of Object.values(ATTACHMENT_BUCKETS)) {
       const paths = (attachments ?? [])
         .filter((attachment) => attachment.storage_bucket === bucket)
         .map((attachment) => attachment.storage_path);

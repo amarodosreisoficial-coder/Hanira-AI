@@ -1,4 +1,5 @@
-export type AttachmentType = "image" | "audio";
+export type AttachmentType = "image" | "audio" | "document";
+export type AttachmentKind = AttachmentType;
 export type AttachmentStatus = "ready" | "uploading" | "processing" | "error";
 
 export interface Attachment {
@@ -10,6 +11,20 @@ export interface Attachment {
   url: string;
   metadata?: Record<string, unknown>;
   status?: AttachmentStatus;
+}
+
+export interface AttachmentDescriptor {
+  id: string;
+  type: AttachmentType;
+  storageBucket: string;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  userId: string;
+  conversationId: string;
+  messageId: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface UploadedAttachmentResponse {

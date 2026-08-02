@@ -4,11 +4,24 @@ import {
   extensionForMime,
   validateMediaFile,
 } from "@/lib/validation/media";
-import type { Attachment, AttachmentType } from "@/types/media";
+import type {
+  Attachment,
+  AttachmentDescriptor,
+  AttachmentType,
+} from "@/types/media";
 import { buildStoragePath } from "@/lib/media/storage-path";
+
+export const ATTACHMENT_BUCKETS = {
+  image: "chat-images",
+  audio: "chat-audio",
+  document: "chat-documents",
+} as const;
 
 interface AttachmentRow {
   id: string;
+  user_id: string;
+  conversation_id: string;
+  message_id: string | null;
   type: AttachmentType;
   storage_bucket: string;
   storage_path: string;
@@ -18,19 +31,41 @@ interface AttachmentRow {
   metadata: Record<string, unknown> | null;
 }
 
-export function attachmentFromRow(row: AttachmentRow): Attachment {
+export function attachmentDescriptorFromRow(row: AttachmentRow): AttachmentDescriptor {
   return {
     id: row.id,
     type: row.type,
+    storageBucket: row.storage_bucket,
+    storagePath: row.storage_path,
     originalName: row.original_name,
     mimeType: row.mime_type,
     sizeBytes: Number(row.size_bytes),
+    userId: row.user_id,
+    conversationId: row.conversation_id,
+    messageId: row.message_id,
     metadata: row.metadata ?? {},
-    url: `/api/attachments/${row.id}/content`,
   };
 }
 
-export async function storeAttachment({
+export function attachmentFromDescriptor(
+  descriptor: AttachmentDescriptor,
+): Attachment {
+  return {
+    id: descriptor.id,
+    type: descriptor.type,
+    originalName: descriptor.originalName,
+    mimeType: descriptor.mimeType,
+    sizeBytes: descriptor.sizeBytes,
+    metadata: descriptor.metadata,
+    url: `/api/attachments/${descriptor.id}/content`,
+  };
+}
+
+export function attachmentFromRow(row: AttachmentRow): Attachment {
+  return attachmentFromDescriptor(attachmentDescriptorFromRow(row));
+}
+
+export async function storeAttachmentDescriptor({
   userId,
   conversationId,
   file,
@@ -56,7 +91,7 @@ export async function storeAttachment({
   if (!conversation) throw new Error("CONVERSATION_NOT_FOUND");
 
   const id = crypto.randomUUID();
-  const bucket = type === "image" ? "chat-images" : "chat-audio";
+  const bucket = ATTACHMENT_BUCKETS[type];
   const storagePath = buildStoragePath({
     userId,
     conversationId,
@@ -88,7 +123,7 @@ export async function storeAttachment({
       metadata,
     })
     .select(
-      "id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
+      "id,user_id,conversation_id,message_id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
     )
     .single();
 
@@ -96,7 +131,18 @@ export async function storeAttachment({
     await supabase.storage.from(bucket).remove([storagePath]);
     throw error ?? new Error("ATTACHMENT_NOT_SAVED");
   }
-  return attachmentFromRow(data as AttachmentRow);
+
+  return attachmentDescriptorFromRow(data as AttachmentRow);
+}
+
+export async function storeAttachment(options: {
+  userId: string;
+  conversationId: string;
+  file: File;
+  type: AttachmentType;
+  metadata?: Record<string, unknown>;
+}) {
+  return attachmentFromDescriptor(await storeAttachmentDescriptor(options));
 }
 
 export async function getOwnedAttachments({
@@ -108,32 +154,38 @@ export async function getOwnedAttachments({
   conversationId: string;
   ids: string[];
 }) {
-  if (!ids.length) return [] as AttachmentRow[];
+  if (!ids.length) return [] as AttachmentDescriptor[];
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("UNAUTHENTICATED");
   const { data, error } = await supabase
     .from("attachments")
     .select(
-      "id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
+      "id,user_id,conversation_id,message_id,type,storage_bucket,storage_path,original_name,mime_type,size_bytes,metadata",
     )
     .eq("user_id", userId)
     .eq("conversation_id", conversationId)
     .in("id", ids);
   if (error) throw error;
   if ((data?.length ?? 0) !== ids.length) throw new Error("ATTACHMENT_NOT_FOUND");
-  return data as AttachmentRow[];
+  return (data as AttachmentRow[]).map(attachmentDescriptorFromRow);
 }
 
-export async function attachmentImageDataUrl(row: AttachmentRow) {
-  if (row.type !== "image") throw new Error("ATTACHMENT_NOT_IMAGE");
+export async function downloadAttachmentBytes(descriptor: AttachmentDescriptor) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("UNAUTHENTICATED");
   const { data, error } = await supabase.storage
-    .from(row.storage_bucket)
-    .download(row.storage_path);
-  if (error || !data) throw error ?? new Error("ATTACHMENT_DOWNLOAD_FAILED");
-  const bytes = Buffer.from(await data.arrayBuffer());
-  return `data:${row.mime_type};base64,${bytes.toString("base64")}`;
+    .from(descriptor.storageBucket)
+    .download(descriptor.storagePath);
+  if (error || !data) {
+    throw error ?? new Error("ATTACHMENT_DOWNLOAD_FAILED");
+  }
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+export async function attachmentImageDataUrl(descriptor: AttachmentDescriptor) {
+  if (descriptor.type !== "image") throw new Error("ATTACHMENT_NOT_IMAGE");
+  const bytes = Buffer.from(await downloadAttachmentBytes(descriptor));
+  return `data:${descriptor.mimeType};base64,${bytes.toString("base64")}`;
 }
 
 export async function deleteOwnedAttachment(userId: string, id: string) {
