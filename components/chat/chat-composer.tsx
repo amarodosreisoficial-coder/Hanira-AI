@@ -87,6 +87,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       setError("A visão está desativada na configuração do produto.");
       return;
     }
+    if (!mediaConfig.attachmentsEnabled) {
+      setError("Os anexos estao desativados nesta instancia.");
+      return;
+    }
     const currentImages = pendingMedia.filter(
       (item) => item.type === "image",
     ).length;
@@ -543,7 +547,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             <div className="flex items-center">
               <button
                 type="button"
-                disabled={!mediaConfig.visionEnabled}
+                disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
                 onClick={() => imageInputRef.current?.click()}
                 aria-label="Adicionar imagem"
                 title="Adicionar imagem"
@@ -553,7 +557,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               </button>
               <button
                 type="button"
-                disabled={!mediaConfig.visionEnabled}
+                disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
                 onClick={() => void requestMediaAccess("camera")}
                 aria-label="Tirar foto"
                 title="Tirar foto"

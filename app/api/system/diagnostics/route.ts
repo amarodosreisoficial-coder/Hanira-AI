@@ -1,5 +1,7 @@
 import { getSessionUser } from "@/lib/auth/session";
+import { getServerAICapabilities } from "@/lib/ai/capabilities";
 import { createTextChatRuntime } from "@/lib/ai/runtime";
+import { getAIModelConfig } from "@/lib/ai/models";
 import { getServerEnv, isDemoMode } from "@/lib/env";
 import {
   createRequestId,
@@ -8,7 +10,6 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOpenAIClient } from "@/services/openai";
 import type { SystemDiagnostics } from "@/types/diagnostics";
-import { getAIModelConfig } from "@/lib/ai/models";
 
 const REQUIRED_TABLES = [
   "profiles",
@@ -36,28 +37,28 @@ export async function GET(request: Request) {
       durationMs: Date.now() - startedAt,
     });
     return Response.json(
-      { error: "Faça login para executar o diagnóstico.", requestId },
+      { error: "Faca login para executar o diagnostico.", requestId },
       { status: 401, headers: { "X-Request-ID": requestId } },
     );
   }
 
   const demo = isDemoMode();
   if (demo) {
+    const capabilities = getServerAICapabilities();
     const diagnostics: SystemDiagnostics = {
       mode: "demo",
-      supabaseConfigured: false,
-      openAIConfigured: false,
       authenticated: false,
       databaseAccessible: false,
-      streamingAvailable: true,
-      modelConfigured: false,
-      modelAvailable: null,
+      text: capabilities.text,
+      vision: capabilities.vision,
+      transcription: capabilities.transcription,
+      speech: capabilities.speech,
+      attachments: capabilities.attachments,
       tables: Object.fromEntries(
         REQUIRED_TABLES.map((table) => [table, false]),
       ),
-      migrationsExpected: false,
       schemaVersion: null,
-      appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "não configurada",
+      appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "nao configurada",
       appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "unknown",
       checkedAt: new Date().toISOString(),
       requestId,
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
   }
 
   const env = getServerEnv();
+  const capabilities = getServerAICapabilities();
   const admin = createSupabaseAdminClient();
   const tableEntries = await Promise.all(
     REQUIRED_TABLES.map(async (table) => {
@@ -99,12 +101,6 @@ export async function GET(request: Request) {
   } | null;
   const schemaVersion = schemaMetadata?.value ?? null;
 
-  const openAIConfigured = Boolean(
-    env.OPENAI_API_KEY &&
-      (env.NEXT_PUBLIC_VISION_ENABLED || env.NEXT_PUBLIC_VOICE_ENABLED),
-  );
-  const modelConfigured = Boolean(env.OLLAMA_MODEL);
-
   let modelAvailable = false;
   try {
     modelAvailable = (await createTextChatRuntime().provider.healthCheck()).ok;
@@ -112,7 +108,12 @@ export async function GET(request: Request) {
     modelAvailable = false;
   }
 
-  if (openAIConfigured) {
+  if (capabilities.text.status === "available" && !modelAvailable) {
+    capabilities.text.status = "unavailable";
+    capabilities.text.reason = "Runtime textual configurado, mas indisponivel.";
+  }
+
+  if (env.OPENAI_API_KEY && (env.NEXT_PUBLIC_VISION_ENABLED || env.NEXT_PUBLIC_VOICE_ENABLED)) {
     try {
       const modelConfig = getAIModelConfig();
       const modelIds = [
@@ -129,22 +130,32 @@ export async function GET(request: Request) {
         );
       }
     } catch {
-      // Keep the diagnostics response available even if optional OpenAI checks fail.
+      if (capabilities.vision.status === "available") {
+        capabilities.vision.status = "unavailable";
+        capabilities.vision.reason = "Provider de visao nao respondeu.";
+      }
+      if (capabilities.transcription.status === "available") {
+        capabilities.transcription.status = "unavailable";
+        capabilities.transcription.reason =
+          "Provider de transcricao nao respondeu.";
+      }
+      if (capabilities.speech.status === "available") {
+        capabilities.speech.status = "unavailable";
+        capabilities.speech.reason = "Provider de voz nao respondeu.";
+      }
     }
   }
 
   const diagnostics: SystemDiagnostics = {
     mode: "production",
-    supabaseConfigured: true,
-    openAIConfigured,
     authenticated: true,
     databaseAccessible,
-    streamingAvailable: true,
-    modelConfigured,
-    modelAvailable,
+    text: capabilities.text,
+    vision: capabilities.vision,
+    transcription: capabilities.transcription,
+    speech: capabilities.speech,
+    attachments: capabilities.attachments,
     tables,
-    migrationsExpected:
-      schemaVersion === "005" && REQUIRED_TABLES.every((table) => tables[table]),
     schemaVersion,
     appUrl: env.NEXT_PUBLIC_APP_URL,
     appVersion: env.NEXT_PUBLIC_APP_VERSION,
@@ -153,10 +164,7 @@ export async function GET(request: Request) {
   };
 
   logServerEvent({
-    level:
-      diagnostics.migrationsExpected && diagnostics.modelAvailable
-        ? "info"
-        : "warn",
+    level: databaseAccessible && modelAvailable ? "info" : "warn",
     requestId,
     route: "/api/system/diagnostics",
     event: "diagnostics_completed",

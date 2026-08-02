@@ -4,13 +4,13 @@ import { requireSessionUser } from "@/lib/auth/session";
 import {
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
-  createTextChatRuntime,
   getOllamaTextProviderEligibility,
   shouldUseOllamaTextProvider,
   streamEvent,
   streamHeaders,
   toPublicAIError,
 } from "@/lib/ai/runtime";
+import { routeChatCapability } from "@/lib/ai/runtime/capability-router";
 import {
   logAIProviderErrorThrown,
   summarizeErrorStack,
@@ -400,61 +400,79 @@ async function createChatStream(
     .eq("user_id", userId)
     .eq("title", "Uma nova conversa");
 
-  const runtime = createTextChatRuntime();
+  const systemPrompt = buildSystemPrompt({
+    baseInstructions: SYSTEM_PROMPT,
+    personalityInstructions: chatContext.personalityInstructions,
+    projectLabel: chatContext.projectName,
+    relevantMemories: chatContext.relevantMemories,
+  });
+  const routed = await routeChatCapability({
+    systemPrompt,
+    context: chatContext.conversationMessages,
+    userMessage: payload.message,
+    attachments,
+  });
   logServerEvent({
     level: "info",
     requestId,
     projectId: chatContext.projectId,
     conversationId,
-    providerId: runtime.providerId,
-    modelId: runtime.model,
+    providerId: routed.providerId,
+    modelId: routed.model,
     route: "/api/chat",
     event: "runtime_created",
     status: 200,
     durationMs: Date.now() - startedAt,
     stage: "runtime_created",
     details: {
-      baseUrl: runtime.baseUrl,
-      connectTimeoutMs: runtime.connectTimeoutMs,
-      firstTokenTimeoutMs: runtime.firstTokenTimeoutMs,
-      idleTimeoutMs: runtime.idleTimeoutMs,
-      requestTimeoutMs: runtime.requestTimeoutMs,
+      baseUrl: routed.baseUrl,
+      connectTimeoutMs: routed.connectTimeoutMs,
+      firstTokenTimeoutMs: routed.firstTokenTimeoutMs,
+      idleTimeoutMs: routed.idleTimeoutMs,
+      requestTimeoutMs: routed.requestTimeoutMs,
+      capability: routed.capability,
     },
   });
-  const providerRequest = buildTextChatProviderRequest({
-    systemPrompt: buildSystemPrompt({
-      baseInstructions: SYSTEM_PROMPT,
-      personalityInstructions: chatContext.personalityInstructions,
-      projectLabel: chatContext.projectName,
-      relevantMemories: chatContext.relevantMemories,
-    }),
-    context: chatContext.conversationMessages,
-    model: runtime.model,
-  });
+  const providerRequest =
+    routed.capability === "text"
+      ? buildTextChatProviderRequest({
+          systemPrompt,
+          context: [
+            ...chatContext.conversationMessages,
+            { role: "user", content: payload.message },
+          ],
+          model: routed.model,
+        })
+      : routed.providerRequest;
   const eligibility = getOllamaTextProviderEligibility({
-    ollamaEnabled: true,
-    attachmentCount: attachments.length,
-    imageAttachmentCount: imageAttachments.length,
+    ollamaEnabled: routed.capability === "text",
+    attachmentCount: routed.attachmentCount,
+    imageAttachmentCount: routed.imageAttachmentCount,
     request: providerRequest,
-    supportedCapabilities: runtime.provider.capabilities.supported,
+    supportedCapabilities: routed.provider.capabilities.supported,
   });
   const eligible = shouldUseOllamaTextProvider({
-    ollamaEnabled: true,
-    attachmentCount: attachments.length,
-    imageAttachmentCount: imageAttachments.length,
+    ollamaEnabled: routed.capability === "text",
+    attachmentCount: routed.attachmentCount,
+    imageAttachmentCount: routed.imageAttachmentCount,
     request: providerRequest,
-    supportedCapabilities: runtime.provider.capabilities.supported,
+    supportedCapabilities: routed.provider.capabilities.supported,
   });
   logServerEvent({
     level: eligible ? "info" : "warn",
     requestId,
     projectId: chatContext.projectId,
     conversationId,
-    providerId: runtime.providerId,
-    modelId: runtime.model,
+    providerId: routed.providerId,
+    modelId: routed.model,
     route: "/api/chat",
-    event: eligible ? "ollama_eligibility_confirmed" : "ollama_eligibility_blocked",
-    status: eligible ? 200 : 400,
+    event:
+      routed.capability === "text"
+        ? eligible
+          ? "ollama_eligibility_confirmed"
+          : "ollama_eligibility_blocked"
+        : "capability_routing_selected",
+    status: routed.capability === "text" ? (eligible ? 200 : 400) : 200,
     durationMs: Date.now() - startedAt,
     stage: "provider_selection",
     details: {
@@ -473,7 +491,7 @@ async function createChatStream(
     },
   });
 
-  if (!eligible) {
+  if (routed.capability === "text" && !eligible) {
     logAIProviderErrorThrown({
       sourceFile: "app/api/chat/route.ts",
       sourceLine: 425,
@@ -489,8 +507,8 @@ async function createChatStream(
         attachments.length > 0
           ? "O runtime principal atual aceita apenas chat textual sem anexos."
           : "O runtime principal atual aceita apenas chat textual simples.",
-      provider: runtime.provider.providerId,
-      model: runtime.model,
+      provider: routed.provider.providerId,
+      model: routed.model,
       retryable: false,
       metadata: {
         attachmentCount: attachments.length,
@@ -504,8 +522,8 @@ async function createChatStream(
     requestId,
     projectId: chatContext.projectId,
     conversationId,
-    providerId: runtime.providerId,
-    modelId: runtime.model,
+    providerId: routed.providerId,
+    modelId: routed.model,
     route: "/api/chat",
     event: "generation_started",
     status: 200,
@@ -515,11 +533,11 @@ async function createChatStream(
 
   return createTextChatProviderResponse({
     request,
-    provider: runtime.provider,
+    provider: routed.provider,
     providerRequest: {
-      ...providerRequest,
+      ...routed.providerRequest,
       signal: request.signal,
-      timeoutMs: runtime.requestTimeoutMs,
+      timeoutMs: routed.requestTimeoutMs,
       metadata: {
         projectId: chatContext.projectId,
         conversationId,
@@ -527,17 +545,18 @@ async function createChatStream(
         userId,
         generationStartedAtMs: Date.now(),
         diagnostics: {
-          baseUrl: runtime.baseUrl,
-          connectTimeoutMs: runtime.connectTimeoutMs,
-          firstTokenTimeoutMs: runtime.firstTokenTimeoutMs,
-          idleTimeoutMs: runtime.idleTimeoutMs,
-          requestTimeoutMs: runtime.requestTimeoutMs,
+          baseUrl: routed.baseUrl,
+          connectTimeoutMs: routed.connectTimeoutMs,
+          firstTokenTimeoutMs: routed.firstTokenTimeoutMs,
+          idleTimeoutMs: routed.idleTimeoutMs,
+          requestTimeoutMs: routed.requestTimeoutMs,
+          capability: routed.capability,
         },
       },
     },
     conversationId,
     requestId,
-    mode: runtime.provider.providerId,
+    mode: routed.mode,
     onComplete: async ({ assistantContent }) => {
       await persistAssistantResponse({
         supabase,
@@ -554,8 +573,8 @@ async function createChatStream(
         requestId,
         projectId: chatContext.projectId,
         conversationId,
-        providerId: runtime.providerId,
-        modelId: runtime.model,
+        providerId: routed.providerId,
+        modelId: routed.model,
         route: "/api/chat",
         event: "generation_completed",
         status: 200,
@@ -586,8 +605,8 @@ async function createChatStream(
         requestId,
         projectId: chatContext.projectId,
         conversationId,
-        providerId: runtime.providerId,
-        modelId: runtime.model,
+        providerId: routed.providerId,
+        modelId: routed.model,
         route: "/api/chat",
         event,
         status: safeError.status,
@@ -604,8 +623,8 @@ async function createChatStream(
         requestId,
         projectId: chatContext.projectId,
         conversationId,
-        providerId: runtime.providerId,
-        modelId: runtime.model,
+        providerId: routed.providerId,
+        modelId: routed.model,
         route: "/api/chat",
         event: "generation_cancelled",
         status: 499,

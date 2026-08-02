@@ -11,6 +11,7 @@ export const mediaConfig = {
     publicNumber(process.env.NEXT_PUBLIC_MAX_IMAGE_SIZE_MB, 10) * 1024 * 1024,
   maxAudioSizeBytes:
     publicNumber(process.env.NEXT_PUBLIC_MAX_AUDIO_SIZE_MB, 25) * 1024 * 1024,
+  attachmentsEnabled: process.env.NEXT_PUBLIC_ATTACHMENTS_ENABLED === "true",
   voiceEnabled: process.env.NEXT_PUBLIC_VOICE_ENABLED === "true",
   visionEnabled: process.env.NEXT_PUBLIC_VISION_ENABLED === "true",
 } as const;

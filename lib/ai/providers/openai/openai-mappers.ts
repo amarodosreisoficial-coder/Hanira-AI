@@ -21,7 +21,12 @@ export interface OpenAIResponsesCreateParams {
   model: string;
   input: Array<{
     role: "user" | "assistant";
-    content: string;
+    content:
+      | string
+      | Array<
+          | { type: "input_text"; text: string }
+          | { type: "input_image"; image_url: string }
+        >;
   }>;
   instructions?: string;
   temperature?: number;
@@ -103,22 +108,22 @@ export function mapMessagesToOpenAIInput(request: AIChatRequest) {
   const input: OpenAIResponsesCreateParams["input"] = [];
 
   for (const message of request.messages) {
-    if (typeof message.text !== "string") {
+    if (typeof message.text !== "string" && !Array.isArray(message.content)) {
       logAIProviderErrorThrown({
         sourceFile: "lib/ai/providers/openai/openai-mappers.ts",
         sourceLine: 106,
-        reason: "openai_mapper_message_without_text",
+        reason: "openai_mapper_message_without_text_or_content",
       });
       throw new AIProviderError({
         code: "invalid_request",
-        message: "Todas as mensagens devem conter texto simples.",
+        message: "Todas as mensagens devem conter texto ou conteudo suportado.",
         provider: OPENAI_PROVIDER_ID,
         retryable: false,
       });
     }
 
     if (message.role === "system") {
-      instructions.push(message.text);
+      instructions.push(message.text ?? "");
       continue;
     }
 
@@ -136,10 +141,21 @@ export function mapMessagesToOpenAIInput(request: AIChatRequest) {
       });
     }
 
-    input.push({
-      role: message.role,
-      content: message.text,
-    });
+    input.push(
+      Array.isArray(message.content) && message.content.length > 0
+        ? {
+            role: message.role,
+            content: message.content.map((part) =>
+              part.type === "text"
+                ? { type: "input_text" as const, text: part.text }
+                : { type: "input_image" as const, image_url: part.imageUrl },
+            ),
+          }
+        : {
+            role: message.role,
+            content: message.text ?? "",
+          },
+    );
   }
 
   if (!input.length) {

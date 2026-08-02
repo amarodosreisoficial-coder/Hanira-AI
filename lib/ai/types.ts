@@ -2,9 +2,23 @@ export const AI_MESSAGE_ROLES = ["system", "user", "assistant"] as const;
 
 export type AIMessageRole = (typeof AI_MESSAGE_ROLES)[number];
 
+export interface AITextContentPart {
+  type: "text";
+  text: string;
+}
+
+export interface AIImageContentPart {
+  type: "image";
+  imageUrl: string;
+  mimeType?: string;
+}
+
+export type AIMessageContentPart = AITextContentPart | AIImageContentPart;
+
 export interface AITextMessage {
   role: AIMessageRole;
-  text: string;
+  text?: string;
+  content?: AIMessageContentPart[];
 }
 
 export interface AIUsage {

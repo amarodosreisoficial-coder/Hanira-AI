@@ -35,6 +35,7 @@ export async function transcribeAudio(
     signal,
   });
   const data = (await response.json()) as {
+    transcript?: string;
     text?: string;
     simulated?: boolean;
     attachment?: Attachment | null;
@@ -44,7 +45,7 @@ export async function transcribeAudio(
     throw new Error(data.error ?? "Não foi possível transcrever o áudio.");
   }
   return {
-    text: data.text ?? "",
+    text: data.transcript ?? data.text ?? "",
     simulated: Boolean(data.simulated),
     attachment: data.attachment ?? null,
   };

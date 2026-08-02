@@ -3,11 +3,11 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
 import { getOpenAIVoiceConfig } from "@/lib/ai/models";
-import { classifyOpenAIError } from "@/lib/openai/errors";
 import { createRequestId, logServerEvent } from "@/lib/logging/server";
+import { mediaConfig } from "@/lib/media/config";
+import { classifyOpenAIError } from "@/lib/openai/errors";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { validateMediaFile } from "@/lib/validation/media";
-import { mediaConfig } from "@/lib/media/config";
 import { storeAttachment } from "@/services/attachments";
 import { getOpenAIClient } from "@/services/openai";
 
@@ -17,6 +17,16 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
   try {
+    if (!mediaConfig.voiceEnabled) {
+      return Response.json(
+        {
+          error: "A transcricao de audio esta desativada nesta instancia.",
+          requestId,
+        },
+        { status: 409, headers: { "X-Request-ID": requestId } },
+      );
+    }
+
     const user = await requireSessionUser();
     const headerStore = await headers();
     const ip =
@@ -26,14 +36,15 @@ export async function POST(request: Request) {
     const rate = checkRateLimit(`transcribe:${user.id}:${ip}`);
     if (!rate.allowed) {
       return Response.json(
-        { error: "Aguarde antes de transcrever outro áudio.", requestId },
+        { error: "Aguarde antes de transcrever outro audio.", requestId },
         { status: 429, headers: { "X-Request-ID": requestId } },
       );
     }
+
     const contentLength = Number(headerStore.get("content-length") ?? 0);
     if (contentLength > mediaConfig.maxAudioSizeBytes + 1_000_000) {
       return Response.json(
-        { error: "O áudio excede o limite permitido.", requestId },
+        { error: "O audio excede o limite permitido.", requestId },
         { status: 413, headers: { "X-Request-ID": requestId } },
       );
     }
@@ -42,10 +53,11 @@ export async function POST(request: Request) {
     const audio = formData.get("audio");
     if (!(audio instanceof File)) {
       return Response.json(
-        { error: "Nenhum áudio foi recebido.", requestId },
+        { error: "Nenhum audio foi recebido.", requestId },
         { status: 400, headers: { "X-Request-ID": requestId } },
       );
     }
+
     await validateMediaFile(audio, "audio");
     const rawConversationId = formData.get("conversationId");
     const conversationId =
@@ -56,8 +68,10 @@ export async function POST(request: Request) {
     if (user.demo) {
       return Response.json(
         {
+          transcript:
+            "Transcricao simulada no modo demonstracao - revise este texto antes de enviar.",
           text:
-            "Transcrição simulada no modo demonstração — revise este texto antes de enviar.",
+            "Transcricao simulada no modo demonstracao - revise este texto antes de enviar.",
           simulated: true,
           attachment: null,
           requestId,
@@ -71,6 +85,15 @@ export async function POST(request: Request) {
     request.signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => abortController.abort(), 60_000);
     try {
+      logServerEvent({
+        level: "info",
+        requestId,
+        route: "/api/audio/transcribe",
+        event: "transcription_started",
+        status: 200,
+        durationMs: Date.now() - startedAt,
+      });
+
       const transcription = await getOpenAIClient().audio.transcriptions.create(
         {
           file: audio,
@@ -80,6 +103,7 @@ export async function POST(request: Request) {
         },
         { signal: abortController.signal },
       );
+
       const attachment = conversationId
         ? await storeAttachment({
             userId: user.id,
@@ -89,6 +113,7 @@ export async function POST(request: Request) {
             metadata: { purpose: "transcription" },
           })
         : null;
+
       logServerEvent({
         level: "info",
         requestId,
@@ -99,6 +124,7 @@ export async function POST(request: Request) {
       });
       return Response.json(
         {
+          transcript: transcription.text,
           text: transcription.text,
           simulated: false,
           attachment,
@@ -122,12 +148,12 @@ export async function POST(request: Request) {
             type: error instanceof Error ? error.name : "AudioError",
             message:
               error instanceof Error &&
-              (error.message.includes("áudio") ||
+              (error.message.includes("audio") ||
                 error.message.includes("arquivo") ||
-                error.message.includes("extensão") ||
+                error.message.includes("extensao") ||
                 error.message.includes("limite"))
                 ? error.message
-                : "Não foi possível transcrever o áudio.",
+                : "Nao foi possivel transcrever o audio.",
           };
     logServerEvent({
       level: "warn",

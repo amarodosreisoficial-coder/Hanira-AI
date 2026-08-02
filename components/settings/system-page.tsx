@@ -14,6 +14,19 @@ import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
 import type { SystemDiagnostics } from "@/types/diagnostics";
 
+function statusLabel(status: SystemDiagnostics["text"]["status"]) {
+  switch (status) {
+    case "available":
+      return "Disponivel";
+    case "disabled":
+      return "Desativado";
+    case "misconfigured":
+      return "Configuracao incompleta";
+    case "unavailable":
+      return "Indisponivel";
+  }
+}
+
 export function SystemPage() {
   const [diagnostics, setDiagnostics] = useState<SystemDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,7 +48,7 @@ export function SystemPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Não foi possível executar o diagnóstico.",
+          : "Nao foi possivel executar o diagnostico.",
       );
     } finally {
       setLoading(false);
@@ -44,22 +57,37 @@ export function SystemPage() {
 
   const rows = diagnostics
     ? [
-        ["Modo", diagnostics.mode === "demo" ? "Demonstração" : "Real", true],
-        ["Supabase configurado", undefined, diagnostics.supabaseConfigured],
-        ["OpenAI configurada", undefined, diagnostics.openAIConfigured],
-        ["Usuário autenticado", undefined, diagnostics.authenticated],
-        ["Banco acessível", undefined, diagnostics.databaseAccessible],
-        ["Streaming disponível", undefined, diagnostics.streamingAvailable],
-        ["Modelo configurado", undefined, diagnostics.modelConfigured],
+        ["Modo", diagnostics.mode === "demo" ? "Demonstracao" : "Real", true],
+        ["Usuario autenticado", undefined, diagnostics.authenticated],
+        ["Banco acessivel", undefined, diagnostics.databaseAccessible],
         [
-          "Modelo disponível",
-          diagnostics.modelAvailable === null ? "Não verificado em demo" : undefined,
-          diagnostics.modelAvailable ?? false,
+          "Texto",
+          `${statusLabel(diagnostics.text.status)}${diagnostics.text.model ? ` (${diagnostics.text.model})` : ""}`,
+          diagnostics.text.status === "available",
         ],
-        ["Migrations esperadas", undefined, diagnostics.migrationsExpected],
-        ["Versão do schema", diagnostics.schemaVersion ?? "Não verificada", true],
-        ["URL da aplicação", diagnostics.appUrl, true],
-        ["Versão da aplicação", diagnostics.appVersion, true],
+        [
+          "Visao",
+          `${statusLabel(diagnostics.vision.status)}${diagnostics.vision.model ? ` (${diagnostics.vision.model})` : ""}`,
+          diagnostics.vision.status === "available",
+        ],
+        [
+          "Transcricao",
+          `${statusLabel(diagnostics.transcription.status)}${diagnostics.transcription.model ? ` (${diagnostics.transcription.model})` : ""}`,
+          diagnostics.transcription.status === "available",
+        ],
+        [
+          "Voz",
+          `${statusLabel(diagnostics.speech.status)}${diagnostics.speech.voice ? ` (${diagnostics.speech.voice})` : ""}`,
+          diagnostics.speech.status === "available",
+        ],
+        [
+          "Anexos",
+          statusLabel(diagnostics.attachments.status),
+          diagnostics.attachments.status === "available",
+        ],
+        ["Versao do schema", diagnostics.schemaVersion ?? "Nao verificada", true],
+        ["URL da aplicacao", diagnostics.appUrl, true],
+        ["Versao da aplicacao", diagnostics.appVersion, true],
       ]
     : [];
 
@@ -73,7 +101,7 @@ export function SystemPage() {
             className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white"
           >
             <ArrowLeft className="size-4" />
-            Configurações
+            Configuracoes
           </Link>
         </div>
         <div className="mt-16">
@@ -81,10 +109,10 @@ export function SystemPage() {
             <Activity className="size-5" />
           </span>
           <h1 className="mt-6 text-3xl font-medium tracking-[-0.04em]">
-            Diagnóstico do sistema
+            Diagnostico do sistema
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
-            Verifica a ativação sem exibir chaves, tokens ou dados privados.
+            Verifica a ativacao sem exibir chaves, tokens ou dados privados.
           </p>
           <Button
             className="mt-7"
@@ -96,7 +124,7 @@ export function SystemPage() {
             ) : (
               <Play className="size-4" />
             )}
-            {loading ? "Verificando..." : "Executar diagnóstico"}
+            {loading ? "Verificando..." : "Executar diagnostico"}
           </Button>
           {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
         </div>
@@ -115,19 +143,19 @@ export function SystemPage() {
                   ) : healthy ? (
                     <>
                       <CheckCircle2 className="size-3.5 text-emerald-400" />
-                      Disponível
+                      Disponivel
                     </>
                   ) : (
                     <>
                       <CircleAlert className="size-3.5 text-amber-400" />
-                      Indisponível
+                      Indisponivel
                     </>
                   )}
                 </span>
               </div>
             ))}
             <div className="bg-black/15 px-5 py-3 text-[10px] text-zinc-700">
-              ID do diagnóstico: {diagnostics.requestId}
+              ID do diagnostico: {diagnostics.requestId}
             </div>
           </section>
         )}

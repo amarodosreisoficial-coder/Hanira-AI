@@ -15,6 +15,15 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
   try {
+    if (!mediaConfig.attachmentsEnabled || !mediaConfig.visionEnabled) {
+      return Response.json(
+        {
+          error: "O envio de imagens nao esta habilitado nesta instancia.",
+          requestId,
+        },
+        { status: 409, headers: { "X-Request-ID": requestId } },
+      );
+    }
     const user = await requireSessionUser();
     const headerStore = await headers();
     const ip =
@@ -111,7 +120,7 @@ export async function POST(request: Request) {
       level: "info",
       requestId,
       route: "/api/attachments",
-      event: "attachments_uploaded",
+      event: "attachment_uploaded",
       status: 201,
       durationMs: Date.now() - startedAt,
     });
@@ -143,7 +152,7 @@ export async function POST(request: Request) {
       level: "warn",
       requestId,
       route: "/api/attachments",
-      event: "upload_failed",
+      event: "attachment_validation_failed",
       status,
       durationMs: Date.now() - startedAt,
       errorType: error instanceof Error ? error.name : "UnknownError",
