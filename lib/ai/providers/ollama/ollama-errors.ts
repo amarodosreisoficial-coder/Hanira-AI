@@ -2,6 +2,7 @@ import {
   AIProviderError,
   type AIProviderErrorCode,
 } from "@/lib/ai/types";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 
 interface OllamaErrorLike {
   status?: number;
@@ -116,6 +117,15 @@ export function toOllamaProviderError(
   context: OllamaProviderErrorContext = {},
 ): AIProviderError {
   if (error instanceof AIProviderError) {
+    logAIProviderErrorThrown({
+      sourceFile: "lib/ai/providers/ollama/ollama-errors.ts",
+      sourceLine: 118,
+      reason: "ollama_error_passthrough",
+      requestId:
+        typeof error.metadata?.requestId === "string"
+          ? error.metadata.requestId
+          : undefined,
+    });
     return error;
   }
 
@@ -157,6 +167,15 @@ export function toOllamaProviderError(
                             "O Ollama retornou um erro inesperado.",
                           );
 
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/providers/ollama/ollama-errors.ts",
+    sourceLine: 160,
+    reason: `ollama_error_normalized:${code}:${String(context.metadata?.reason ?? "generic")}`,
+    requestId:
+      typeof context.metadata?.requestId === "string"
+        ? context.metadata.requestId
+        : undefined,
+  });
   return new AIProviderError({
     code,
     message,

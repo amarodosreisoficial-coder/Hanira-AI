@@ -8,6 +8,7 @@ import type {
   AIStreamEvent,
   AIUsage,
 } from "@/lib/ai/types";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { AIProviderError } from "@/lib/ai/types";
 
 export const OPENAI_PROVIDER_ID = "openai";
@@ -103,6 +104,11 @@ export function mapMessagesToOpenAIInput(request: AIChatRequest) {
 
   for (const message of request.messages) {
     if (typeof message.text !== "string") {
+      logAIProviderErrorThrown({
+        sourceFile: "lib/ai/providers/openai/openai-mappers.ts",
+        sourceLine: 106,
+        reason: "openai_mapper_message_without_text",
+      });
       throw new AIProviderError({
         code: "invalid_request",
         message: "Todas as mensagens devem conter texto simples.",
@@ -117,6 +123,11 @@ export function mapMessagesToOpenAIInput(request: AIChatRequest) {
     }
 
     if (message.role !== "user" && message.role !== "assistant") {
+      logAIProviderErrorThrown({
+        sourceFile: "lib/ai/providers/openai/openai-mappers.ts",
+        sourceLine: 120,
+        reason: "openai_mapper_unsupported_message_role",
+      });
       throw new AIProviderError({
         code: "unsupported_capability",
         message: `O papel de mensagem "${String(message.role)}" não é suportado por este adaptador.`,
@@ -132,6 +143,11 @@ export function mapMessagesToOpenAIInput(request: AIChatRequest) {
   }
 
   if (!input.length) {
+    logAIProviderErrorThrown({
+      sourceFile: "lib/ai/providers/openai/openai-mappers.ts",
+      sourceLine: 135,
+      reason: "openai_mapper_missing_user_or_assistant_message",
+    });
     throw new AIProviderError({
       code: "invalid_request",
       message: "O chat textual exige pelo menos uma mensagem de usuário ou assistente.",

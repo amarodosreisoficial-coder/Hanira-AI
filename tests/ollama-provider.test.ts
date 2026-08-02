@@ -818,6 +818,22 @@ describe("OllamaProvider", () => {
     });
   });
 
+  it("falha se o stream termina com finish mas sem conteudo textual util", async () => {
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createStreamResponse([
+          new TextEncoder().encode(
+            "{\"message\":{\"content\":\"   \\n\\t\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}\n",
+          ),
+        ]),
+    });
+
+    await expect(collectStream(provider)).rejects.toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "empty-content-before-finish" }),
+    });
+  });
+
   it("interrompe o stream quando o Ollama envia erro explicito no NDJSON", async () => {
     const provider = new OllamaProvider({
       fetch: async () =>

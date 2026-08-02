@@ -2,6 +2,7 @@ import {
   AIProviderError,
   type AIProviderErrorCode,
 } from "@/lib/ai/types";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 
 interface OpenAIErrorLike {
   status?: number;
@@ -53,6 +54,15 @@ export function toOpenAIProviderError(
   context: OpenAIProviderErrorContext = {},
 ): AIProviderError {
   if (error instanceof AIProviderError) {
+    logAIProviderErrorThrown({
+      sourceFile: "lib/ai/providers/openai/openai-errors.ts",
+      sourceLine: 55,
+      reason: "openai_error_passthrough",
+      requestId:
+        typeof error.metadata?.requestId === "string"
+          ? error.metadata.requestId
+          : undefined,
+    });
     return error;
   }
 
@@ -77,6 +87,11 @@ export function toOpenAIProviderError(
                     ? "O provider está temporariamente indisponível."
                     : getErrorMessage(candidate, "O provider retornou um erro inesperado.");
 
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/providers/openai/openai-errors.ts",
+    sourceLine: 80,
+    reason: `openai_error_normalized:${code}`,
+  });
   return new AIProviderError({
     code,
     message,

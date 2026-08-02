@@ -1,4 +1,5 @@
 import type { AIProvider, AIProviderHealth } from "@/lib/ai/provider";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import type {
   AIChatRequest,
   AIChatResponse,
@@ -308,6 +309,11 @@ function createTimeoutError(
   stage: "connect" | "request",
   phase: "connect" | "first_token" | "idle" | "total",
 ) {
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/providers/ollama/ollama-provider.ts",
+    sourceLine: 311,
+    reason: `ollama_provider_timeout:${stage}:${phase}`,
+  });
   return new AIProviderError({
     code: "timeout",
     message:
@@ -448,6 +454,17 @@ function createPostFinishStreamError(model: string) {
     provider: OLLAMA_PROVIDER_ID,
     model,
     metadata: { reason: "post-finish-data" },
+  });
+}
+
+function createEmptyStreamContentError(model: string) {
+  return new AIProviderError({
+    code: "provider_error",
+    message: "O stream do Ollama terminou sem conteudo textual util.",
+    provider: OLLAMA_PROVIDER_ID,
+    model,
+    retryable: true,
+    metadata: { reason: "empty-content-before-finish" },
   });
 }
 
@@ -684,6 +701,7 @@ export class OllamaProvider implements AIProvider {
     const diagnostics = createOllamaDiagnosticContext(request, model, baseUrl);
     let sawFirstChunk = false;
     let sawFirstToken = false;
+    let streamedText = "";
     const execution = createRequestExecutionContext(request, {
       connectTimeoutMs: this.connectTimeoutResolver(),
       firstTokenTimeoutMs: this.firstTokenTimeoutResolver(),
@@ -787,6 +805,7 @@ export class OllamaProvider implements AIProvider {
             sawFirstToken = true;
             logOllamaDiagnostic(diagnostics, "first_token_received", "provider_stream", {});
           }
+          streamedText += event.message.content;
           yield {
             type: "text-delta",
             textDelta: event.message.content,
@@ -815,6 +834,9 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (finishEvent) {
+        if (!streamedText.trim()) {
+          throw createEmptyStreamContentError(model);
+        }
         logOllamaDiagnostic(diagnostics, "stream_completed", "provider_stream", {});
         yield finishEvent;
         return;

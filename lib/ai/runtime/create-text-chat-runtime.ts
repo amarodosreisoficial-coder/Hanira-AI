@@ -1,9 +1,10 @@
 import type { AIProvider } from "@/lib/ai/provider";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
 
 const MIN_CONNECT_TIMEOUT_MS = 250;
-const MAX_CONNECT_TIMEOUT_MS = 30_000;
+const MAX_CONNECT_TIMEOUT_MS = 120_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
 const MIN_FIRST_TOKEN_TIMEOUT_MS = 1_000;
 const MAX_FIRST_TOKEN_TIMEOUT_MS = 600_000;
@@ -40,6 +41,13 @@ function createInvalidConfigError(
   message: string,
   metadata?: Record<string, unknown>,
 ) {
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/runtime/create-text-chat-runtime.ts",
+    sourceLine: 43,
+    reason: `ollama_runtime_invalid_config:${String(metadata?.env ?? "unknown")}`,
+    requestId:
+      typeof metadata?.requestId === "string" ? metadata.requestId : undefined,
+  });
   return new AIProviderError({
     code: "invalid_request",
     message,
@@ -126,6 +134,11 @@ function normalizeBaseUrl(baseUrl: string) {
 
 export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
   if (process.env.AI_ENGINE_OLLAMA_ENABLED !== "true") {
+    logAIProviderErrorThrown({
+      sourceFile: "lib/ai/runtime/create-text-chat-runtime.ts",
+      sourceLine: 129,
+      reason: "ollama_runtime_disabled",
+    });
     throw new AIProviderError({
       code: "unavailable",
       message: "O runtime Ollama esta desativado.",

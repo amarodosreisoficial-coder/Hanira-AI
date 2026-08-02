@@ -483,6 +483,63 @@ describe("runtime controlado do chat com Ollama", () => {
     expect(persisted).toBe(false);
   });
 
+  it("finish do provider real com apenas whitespace vira erro do provider, nao invalid_stream_event", async () => {
+    let capturedError: unknown;
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  "{\"message\":{\"content\":\" \\n\\t\"},\"done\":false}\n{\"done\":true,\"done_reason\":\"stop\"}\n",
+                ),
+              );
+              controller.close();
+            },
+          }),
+          {
+            headers: { "content-type": "application/x-ndjson" },
+          },
+        ),
+    });
+
+    const response = createTextChatProviderResponse({
+      request: new Request("http://localhost/api/chat"),
+      provider,
+      providerRequest: buildTextChatProviderRequest({
+        systemPrompt: "sys",
+        context: [{ role: "user", content: "msg" }],
+      }),
+      conversationId: "c-whitespace",
+      requestId: "r-whitespace",
+      mode: "ollama",
+      onFailed: async (error) => {
+        capturedError = error;
+      },
+    });
+
+    const events = await readSseEvents(response);
+    expect(events).toEqual([
+      {
+        type: "start",
+        conversationId: "c-whitespace",
+        mode: "ollama",
+        requestId: "r-whitespace",
+      },
+      { type: "delta", delta: " \n\t" },
+      {
+        type: "error",
+        message: "A Hanira encontrou um problema ao gerar a resposta.",
+        requestId: "r-whitespace",
+      },
+    ]);
+    expect(capturedError).toMatchObject({
+      code: "provider_error",
+      metadata: expect.objectContaining({ reason: "empty-content-before-finish" }),
+    });
+  });
+
   it("usage antes de finish nao conclui o stream", async () => {
     let persisted = false;
 

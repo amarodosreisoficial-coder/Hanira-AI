@@ -6,6 +6,7 @@ import type {
   AIProviderCapability,
   AIUsage,
 } from "@/lib/ai/types";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { AIProviderError } from "@/lib/ai/types";
 
 export const OLLAMA_PROVIDER_ID = "ollama";
@@ -121,6 +122,11 @@ export function mapMessagesToOllamaMessages(
   request: AIChatRequest,
 ): OllamaMessage[] {
   if (!request.messages.length) {
+    logAIProviderErrorThrown({
+      sourceFile: "lib/ai/providers/ollama/ollama-types.ts",
+      sourceLine: 124,
+      reason: "ollama_types_missing_messages",
+    });
     throw new AIProviderError({
       code: "invalid_request",
       message: "O chat textual exige pelo menos uma mensagem.",
@@ -131,6 +137,11 @@ export function mapMessagesToOllamaMessages(
 
   return request.messages.map((message) => {
     if (typeof message.text !== "string") {
+      logAIProviderErrorThrown({
+        sourceFile: "lib/ai/providers/ollama/ollama-types.ts",
+        sourceLine: 134,
+        reason: "ollama_types_message_without_text",
+      });
       throw new AIProviderError({
         code: "invalid_request",
         message: "Todas as mensagens devem conter texto simples.",
@@ -144,6 +155,11 @@ export function mapMessagesToOllamaMessages(
       message.role !== "user" &&
       message.role !== "assistant"
     ) {
+      logAIProviderErrorThrown({
+        sourceFile: "lib/ai/providers/ollama/ollama-types.ts",
+        sourceLine: 147,
+        reason: "ollama_types_unsupported_message_role",
+      });
       throw new AIProviderError({
         code: "unsupported_capability",
         message: `O papel de mensagem "${String(message.role)}" nao e suportado por este adaptador.`,

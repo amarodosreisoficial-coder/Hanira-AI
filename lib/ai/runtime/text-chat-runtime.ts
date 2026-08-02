@@ -1,10 +1,13 @@
 import type { AIProvider } from "@/lib/ai/provider";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import type {
   AIChatRequest,
+  AIProviderCapability,
   AIStreamEvent,
 } from "@/lib/ai/types";
 import { AIProviderError } from "@/lib/ai/types";
 import { toPublicAIError } from "@/lib/ai/runtime/public-ai-errors";
+import { shouldUseTextAIProvider } from "@/lib/ai/runtime/text-chat-eligibility";
 
 export interface TextChatContextMessage {
   role: "user" | "assistant";
@@ -13,9 +16,31 @@ export interface TextChatContextMessage {
 
 export interface OllamaEligibilityOptions {
   ollamaEnabled: boolean;
+  attachmentCount: number | string | null | undefined;
+  imageAttachmentCount: number | string | null | undefined;
+  requiresUnsupportedCapability?: boolean;
+  request?: AIChatRequest;
+  supportedCapabilities?: readonly AIProviderCapability[];
+}
+
+export interface OllamaEligibilityDiagnostics {
+  eligible: boolean;
+  reason: string;
   attachmentCount: number;
   imageAttachmentCount: number;
-  requiresUnsupportedCapability?: boolean;
+  messageCount: number;
+  roles: string[];
+  contentFieldTypes: string[];
+  hasTools: boolean;
+  hasMultimodalInput: boolean;
+  hasMetadata: boolean;
+  hasCapabilities: boolean;
+  conditions: {
+    ollamaEnabled: boolean;
+    attachmentCountIsZero: boolean;
+    imageAttachmentCountIsZero: boolean;
+    requiresUnsupportedCapabilityIsFalse: boolean;
+  };
 }
 
 export interface PublicTextChatError {
@@ -58,15 +83,73 @@ export function isOllamaTextProviderEnabled() {
   return process.env.AI_ENGINE_OLLAMA_ENABLED === "true";
 }
 
+function normalizeEligibilityCount(value: number | string | null | undefined) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : Number.NaN;
+  }
+  if (typeof value === "string" && value.trim()) {
+    return Number(value);
+  }
+  return 0;
+}
+
+export function getOllamaTextProviderEligibility(
+  options: OllamaEligibilityOptions,
+) : OllamaEligibilityDiagnostics {
+  const attachmentCount = normalizeEligibilityCount(options.attachmentCount);
+  const imageAttachmentCount = normalizeEligibilityCount(options.imageAttachmentCount);
+  const messages = Array.isArray(options.request?.messages) ? options.request.messages : [];
+  const roles = messages.map((message) => String(message.role));
+  const contentFieldTypes = messages.map((message) => typeof message.text);
+  const hasTools = Boolean(
+    (options.request as AIChatRequest & { tools?: unknown } | undefined)?.tools,
+  );
+  const hasMultimodalInput = messages.some(
+    (message) => typeof message.text !== "string",
+  );
+  const hasMetadata = Boolean(options.request?.metadata);
+  const hasCapabilities = Boolean(options.supportedCapabilities?.length);
+  const conditions = {
+    ollamaEnabled: options.ollamaEnabled,
+    attachmentCountIsZero: attachmentCount === 0,
+    imageAttachmentCountIsZero: imageAttachmentCount === 0,
+    requiresUnsupportedCapabilityIsFalse: !options.requiresUnsupportedCapability,
+  };
+  const result = shouldUseTextAIProvider({
+    featureEnabled: conditions.ollamaEnabled,
+    hasImage: !conditions.imageAttachmentCountIsZero,
+    hasAttachments: !conditions.attachmentCountIsZero,
+    hasMultimodalContent:
+      hasMultimodalInput || !conditions.requiresUnsupportedCapabilityIsFalse,
+    supportedCapabilities: options.supportedCapabilities
+      ? [...options.supportedCapabilities]
+      : undefined,
+  });
+
+  return {
+    eligible:
+      result.eligible &&
+      conditions.attachmentCountIsZero &&
+      conditions.imageAttachmentCountIsZero &&
+      conditions.requiresUnsupportedCapabilityIsFalse,
+    reason: result.reason,
+    attachmentCount,
+    imageAttachmentCount,
+    messageCount: messages.length,
+    roles,
+    contentFieldTypes,
+    hasTools,
+    hasMultimodalInput,
+    hasMetadata,
+    hasCapabilities,
+    conditions,
+  };
+}
+
 export function shouldUseOllamaTextProvider(
   options: OllamaEligibilityOptions,
 ) {
-  return (
-    options.ollamaEnabled &&
-    options.attachmentCount === 0 &&
-    options.imageAttachmentCount === 0 &&
-    !options.requiresUnsupportedCapability
-  );
+  return getOllamaTextProviderEligibility(options).eligible;
 }
 
 export function buildTextChatProviderRequest(options: {
@@ -161,6 +244,11 @@ function isExternalCancellation(error: unknown, request: Request) {
 }
 
 function createInvalidStreamEventError(providerId: string) {
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/runtime/text-chat-runtime.ts",
+    sourceLine: 165,
+    reason: "text_chat_runtime_invalid_stream_event",
+  });
   return new AIProviderError({
     code: "provider_error",
     message: "O provider retornou um evento de stream invalido.",
@@ -230,6 +318,12 @@ export function createTextChatProviderResponse(
         }
 
         if (!finished) {
+          logAIProviderErrorThrown({
+            sourceFile: "lib/ai/runtime/text-chat-runtime.ts",
+            sourceLine: 233,
+            reason: "text_chat_runtime_stream_ended_without_finish",
+            requestId: options.requestId,
+          });
           throw new AIProviderError({
             code: "provider_error",
             message: "O provider encerrou o stream sem finish.",

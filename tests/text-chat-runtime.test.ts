@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import { AIProviderError } from "../lib/ai/types";
 import {
   buildTextChatProviderRequest,
+  getOllamaTextProviderEligibility,
   shouldUseOllamaTextProvider,
   streamEvent,
   streamHeaders,
   toPublicTextChatError,
 } from "../lib/ai/runtime";
+import { chatRequestSchema } from "../lib/validation/chat";
 
 describe("text chat runtime", () => {
   it("serializa SSE no contrato atual", () => {
@@ -62,6 +64,113 @@ describe("text chat runtime", () => {
         imageAttachmentCount: 0,
       }),
     ).toBe(false);
+  });
+
+  it("mantem conversa nova so com texto como elegivel e detalha as condicoes", () => {
+    const providerRequest = buildTextChatProviderRequest({
+      systemPrompt: "Sys",
+      context: [{ role: "user", content: "Ola" }],
+    });
+
+    expect(
+      getOllamaTextProviderEligibility({
+        ollamaEnabled: true,
+        attachmentCount: 0,
+        imageAttachmentCount: 0,
+        request: providerRequest,
+        supportedCapabilities: ["text-generation", "text-streaming"],
+      }),
+    ).toEqual({
+      eligible: true,
+      reason: "eligible",
+      attachmentCount: 0,
+      imageAttachmentCount: 0,
+      messageCount: 2,
+      roles: ["system", "user"],
+      contentFieldTypes: ["string", "string"],
+      hasTools: false,
+      hasMultimodalInput: false,
+      hasMetadata: false,
+      hasCapabilities: true,
+      conditions: {
+        ollamaEnabled: true,
+        attachmentCountIsZero: true,
+        imageAttachmentCountIsZero: true,
+        requiresUnsupportedCapabilityIsFalse: true,
+      },
+    });
+  });
+
+  it("mantem historico textual como elegivel", () => {
+    const providerRequest = buildTextChatProviderRequest({
+      systemPrompt: "Sys",
+      context: [
+        { role: "user", content: "Ola" },
+        { role: "assistant", content: "Oi" },
+        { role: "user", content: "Continue" },
+      ],
+    });
+
+    expect(
+      getOllamaTextProviderEligibility({
+        ollamaEnabled: true,
+        attachmentCount: 0,
+        imageAttachmentCount: 0,
+        request: providerRequest,
+      }).eligible,
+    ).toBe(true);
+  });
+
+  it("bloqueia quando attachmentCount indica anexo", () => {
+    const providerRequest = buildTextChatProviderRequest({
+      systemPrompt: "Sys",
+      context: [{ role: "user", content: "Ola" }],
+    });
+
+    expect(
+      getOllamaTextProviderEligibility({
+        ollamaEnabled: true,
+        attachmentCount: 1,
+        imageAttachmentCount: 0,
+        request: providerRequest,
+      }),
+    ).toMatchObject({
+      eligible: false,
+      reason: "has_attachments",
+      conditions: { attachmentCountIsZero: false },
+    });
+  });
+
+  it("bloqueia quando imageAttachmentCount indica imagem", () => {
+    const providerRequest = buildTextChatProviderRequest({
+      systemPrompt: "Sys",
+      context: [{ role: "user", content: "Ola" }],
+    });
+
+    expect(
+      getOllamaTextProviderEligibility({
+        ollamaEnabled: true,
+        attachmentCount: 1,
+        imageAttachmentCount: 1,
+        request: providerRequest,
+      }),
+    ).toMatchObject({
+      eligible: false,
+      reason: "has_image",
+      conditions: {
+        attachmentCountIsZero: false,
+        imageAttachmentCountIsZero: false,
+      },
+    });
+  });
+
+  it("mantem comportamento esperado para payload invalido", () => {
+    const parsed = chatRequestSchema.safeParse({
+      message: "",
+      attachmentIds: [],
+    });
+
+    expect(parsed.success).toBe(false);
   });
 
   it("normaliza unsupported capability e timeout com mensagens seguras", () => {

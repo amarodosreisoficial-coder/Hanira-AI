@@ -5,11 +5,16 @@ import {
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
   createTextChatRuntime,
+  getOllamaTextProviderEligibility,
   shouldUseOllamaTextProvider,
   streamEvent,
   streamHeaders,
   toPublicAIError,
 } from "@/lib/ai/runtime";
+import {
+  logAIProviderErrorThrown,
+  summarizeErrorStack,
+} from "@/lib/ai/ai-provider-error-logging";
 import { buildSystemPrompt } from "@/lib/ai/runtime/system-prompt";
 import { AIProviderError } from "@/lib/ai/types";
 import {
@@ -146,6 +151,28 @@ export async function POST(request: Request) {
       status,
       durationMs: Date.now() - startedAt,
       errorType: error instanceof Error ? error.name : "UnknownError",
+      errorCode:
+        error instanceof AIProviderError
+          ? error.code
+          : error instanceof Error
+            ? error.name
+            : "unknown",
+      details: {
+        constructorName:
+          error && typeof error === "object" && "constructor" in error
+            ? (error as { constructor?: { name?: string } }).constructor?.name
+            : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCause:
+          error instanceof AIProviderError
+            ? error.cause instanceof Error
+              ? error.cause.message
+              : error.cause ?? null
+            : error instanceof Error && "cause" in error
+              ? (error as Error & { cause?: unknown }).cause ?? null
+              : null,
+        errorStack: summarizeErrorStack(error),
+      },
     });
 
     return Response.json(
@@ -394,10 +421,29 @@ async function createChatStream(
       requestTimeoutMs: runtime.requestTimeoutMs,
     },
   });
+  const providerRequest = buildTextChatProviderRequest({
+    systemPrompt: buildSystemPrompt({
+      baseInstructions: SYSTEM_PROMPT,
+      personalityInstructions: chatContext.personalityInstructions,
+      projectLabel: chatContext.projectName,
+      relevantMemories: chatContext.relevantMemories,
+    }),
+    context: chatContext.conversationMessages,
+    model: runtime.model,
+  });
+  const eligibility = getOllamaTextProviderEligibility({
+    ollamaEnabled: true,
+    attachmentCount: attachments.length,
+    imageAttachmentCount: imageAttachments.length,
+    request: providerRequest,
+    supportedCapabilities: runtime.provider.capabilities.supported,
+  });
   const eligible = shouldUseOllamaTextProvider({
     ollamaEnabled: true,
     attachmentCount: attachments.length,
     imageAttachmentCount: imageAttachments.length,
+    request: providerRequest,
+    supportedCapabilities: runtime.provider.capabilities.supported,
   });
   logServerEvent({
     level: eligible ? "info" : "warn",
@@ -412,13 +458,31 @@ async function createChatStream(
     durationMs: Date.now() - startedAt,
     stage: "provider_selection",
     details: {
-      attachmentCount: attachments.length,
-      imageAttachmentCount: imageAttachments.length,
+      attachmentCount: eligibility.attachmentCount,
+      imageAttachmentCount: eligibility.imageAttachmentCount,
       hasMessage: Boolean(payload.message.trim()),
+      messageCount: eligibility.messageCount,
+      roles: eligibility.roles,
+      contentFieldTypes: eligibility.contentFieldTypes,
+      hasTools: eligibility.hasTools,
+      hasMultimodalInput: eligibility.hasMultimodalInput,
+      hasMetadata: eligibility.hasMetadata,
+      hasCapabilities: eligibility.hasCapabilities,
+      eligibilityReason: eligibility.reason,
+      eligibilityConditions: eligibility.conditions,
     },
   });
 
   if (!eligible) {
+    logAIProviderErrorThrown({
+      sourceFile: "app/api/chat/route.ts",
+      sourceLine: 425,
+      reason:
+        attachments.length > 0
+          ? "chat_route_non_text_attachments_blocked"
+          : "chat_route_non_simple_text_blocked",
+      requestId,
+    });
     throw new AIProviderError({
       code: "unsupported_capability",
       message:
@@ -453,16 +517,7 @@ async function createChatStream(
     request,
     provider: runtime.provider,
     providerRequest: {
-      ...buildTextChatProviderRequest({
-        systemPrompt: buildSystemPrompt({
-          baseInstructions: SYSTEM_PROMPT,
-          personalityInstructions: chatContext.personalityInstructions,
-          projectLabel: chatContext.projectName,
-          relevantMemories: chatContext.relevantMemories,
-        }),
-        context: chatContext.conversationMessages,
-        model: runtime.model,
-      }),
+      ...providerRequest,
       signal: request.signal,
       timeoutMs: runtime.requestTimeoutMs,
       metadata: {

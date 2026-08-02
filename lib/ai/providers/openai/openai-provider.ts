@@ -1,4 +1,5 @@
 import type { AIProvider, AIProviderHealth } from "@/lib/ai/provider";
+import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import type {
   AIChatRequest,
   AIChatResponse,
@@ -79,6 +80,11 @@ function createRequestExecutionContext(
 }
 
 function createTimeoutError(model: string) {
+  logAIProviderErrorThrown({
+    sourceFile: "lib/ai/providers/openai/openai-provider.ts",
+    sourceLine: 82,
+    reason: "openai_provider_timeout",
+  });
   return new AIProviderError({
     code: "timeout",
     message: "O provider demorou mais que o permitido.",
@@ -102,6 +108,11 @@ export class OpenAIProvider implements AIProvider {
       (options.client
         ? () => options.client as OpenAIResponsesClientLike
         : () => {
+            logAIProviderErrorThrown({
+              sourceFile: "lib/ai/providers/openai/openai-provider.ts",
+              sourceLine: 105,
+              reason: "openai_provider_missing_client_factory",
+            });
             throw new AIProviderError({
               code: "authentication",
               message:
@@ -115,6 +126,11 @@ export class OpenAIProvider implements AIProvider {
       (options.defaultModel
         ? () => options.defaultModel as string
         : () => {
+            logAIProviderErrorThrown({
+              sourceFile: "lib/ai/providers/openai/openai-provider.ts",
+              sourceLine: 118,
+              reason: "openai_provider_missing_default_model",
+            });
             throw new AIProviderError({
               code: "model_not_found",
               message:
