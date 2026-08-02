@@ -685,7 +685,7 @@ describe("runtime controlado do chat com Ollama", () => {
   it("mantem a rota ligada ao helper de elegibilidade e compoe runtime Ollama sem OpenAIProvider", () => {
     const source = route("app/api/chat/route.ts");
     expect(source).toContain("shouldUseOllamaTextProvider");
-    expect(source).toContain("createTextChatRuntime()");
+    expect(source).toContain("routeChatCapability");
     expect(source).not.toContain("createDefaultOpenAIProvider");
     expect(source).not.toContain("new OpenAIProvider");
   });

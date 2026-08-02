@@ -31,13 +31,12 @@ describe("contratos das rotas de voz e visao", () => {
     expect(source).toContain("checkRateLimit");
   });
 
-  it("chat principal usa anexos proprios, mas restringe o runtime a texto simples", () => {
+  it("chat principal usa anexos proprios e roteamento explicito por capacidade", () => {
     const source = route("app/api/chat/route.ts");
     expect(source).toContain("getOwnedAttachments");
-    expect(source).toContain("createTextChatRuntime");
-    expect(source).toContain("unsupported_capability");
+    expect(source).toContain("routeChatCapability");
+    expect(source).toContain("capability_routing_selected");
     expect(source).not.toContain('"input_image"');
-    expect(source).not.toContain("attachmentImageDataUrl");
     expect(source).not.toContain("signedUrl");
   });
 });
