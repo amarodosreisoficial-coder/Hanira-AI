@@ -8,6 +8,7 @@ import { classifyOpenAIError } from "@/lib/openai/errors";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { speechRequestSchema } from "@/lib/validation/media";
 import { getOpenAIClient } from "@/services/openai";
+import { getUserSettingsForUser } from "@/services/user-settings";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -24,6 +25,16 @@ export async function POST(request: Request) {
     }
 
     const user = await requireSessionUser();
+    const userSettings = await getUserSettingsForUser(user.id);
+    if (!userSettings.voiceEnabled) {
+      return Response.json(
+        {
+          error: "A leitura em voz alta esta desativada nas configuracoes do usuario.",
+          requestId,
+        },
+        { status: 409, headers: { "X-Request-ID": requestId } },
+      );
+    }
     const payload = speechRequestSchema.parse(await request.json());
     if (user.demo) {
       return Response.json(

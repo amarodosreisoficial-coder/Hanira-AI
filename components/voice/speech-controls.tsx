@@ -45,15 +45,31 @@ export function SpeechControls({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
+  const playbackIdRef = useRef(crypto.randomUUID());
   const wasPending = useRef(Boolean(pending));
   const didAutoSpeak = useRef(false);
+
+  function stopLocalPlayback() {
+    abortRef.current?.abort();
+    if (mode === "demo") window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setStatus("idle");
+  }
 
   async function play(restart = false) {
     if (!text || status === "loading") return;
     setError("");
+    window.dispatchEvent(
+      new CustomEvent("hanira:stop-speech", {
+        detail: { id: playbackIdRef.current },
+      }),
+    );
     if (mode === "demo") {
       if (!("speechSynthesis" in window)) {
-        setError("A leitura local não está disponível neste navegador.");
+        setError("A leitura local nao esta disponivel neste navegador.");
         setStatus("error");
         return;
       }
@@ -81,7 +97,7 @@ export function SpeechControls({
       const audio = new Audio(urlRef.current);
       audio.onended = () => setStatus("idle");
       audio.onerror = () => {
-        setError("Não foi possível reproduzir o áudio.");
+        setError("Nao foi possivel reproduzir o audio.");
         setStatus("error");
       };
       audioRef.current = audio;
@@ -104,15 +120,18 @@ export function SpeechControls({
     setStatus("paused");
   }
 
-  function stop() {
-    abortRef.current?.abort();
-    if (mode === "demo") window.speechSynthesis.cancel();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+  useEffect(() => {
+    function stopOtherSpeech(event: Event) {
+      const detail = (event as CustomEvent<{ id?: string }>).detail;
+      if (detail?.id !== playbackIdRef.current) {
+        stopLocalPlayback();
+      }
     }
-    setStatus("idle");
-  }
+    window.addEventListener("hanira:stop-speech", stopOtherSpeech);
+    return () => {
+      window.removeEventListener("hanira:stop-speech", stopOtherSpeech);
+    };
+  });
 
   useEffect(() => {
     if (
@@ -131,8 +150,7 @@ export function SpeechControls({
 
   useEffect(
     () => () => {
-      abortRef.current?.abort();
-      audioRef.current?.pause();
+      stopLocalPlayback();
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     },
     [],
@@ -160,7 +178,11 @@ export function SpeechControls({
         </button>
       )}
       {status !== "idle" && (
-        <button onClick={stop} className="media-action" aria-label="Parar voz">
+        <button
+          onClick={stopLocalPlayback}
+          className="media-action"
+          aria-label="Parar voz"
+        >
           <CircleStop className="size-3.5" />
         </button>
       )}

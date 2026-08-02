@@ -10,6 +10,7 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import { validateMediaFile } from "@/lib/validation/media";
 import { storeAttachment } from "@/services/attachments";
 import { getOpenAIClient } from "@/services/openai";
+import { getUserSettingsForUser } from "@/services/user-settings";
 
 const conversationSchema = z.uuid();
 
@@ -28,6 +29,16 @@ export async function POST(request: Request) {
     }
 
     const user = await requireSessionUser();
+    const userSettings = await getUserSettingsForUser(user.id);
+    if (!userSettings.voiceEnabled || !userSettings.transcriptionEnabled) {
+      return Response.json(
+        {
+          error: "A transcricao esta desativada nas configuracoes do usuario.",
+          requestId,
+        },
+        { status: 409, headers: { "X-Request-ID": requestId } },
+      );
+    }
     const headerStore = await headers();
     const ip =
       headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
