@@ -34,7 +34,7 @@ export interface ChatRequest {
   attachmentIds?: string[];
   demoAttachments?: Array<{
     id: string;
-    type: "image" | "audio";
+    type: "image" | "audio" | "document";
     originalName: string;
     mimeType: string;
     sizeBytes: number;
