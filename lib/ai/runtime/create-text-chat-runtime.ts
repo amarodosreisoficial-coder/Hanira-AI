@@ -5,7 +5,10 @@ import { AIProviderError } from "@/lib/ai/types";
 
 const MIN_CONNECT_TIMEOUT_MS = 250;
 const MAX_CONNECT_TIMEOUT_MS = 120_000;
-const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
+// Ollama may spend roughly 50 seconds loading qwen2.5:7b before returning headers.
+// Keep a bounded connection timeout with a small margin; later phases retain
+// their own first-token and idle protections.
+const DEFAULT_CONNECT_TIMEOUT_MS = 60_000;
 const MIN_FIRST_TOKEN_TIMEOUT_MS = 1_000;
 const MAX_FIRST_TOKEN_TIMEOUT_MS = 600_000;
 const DEFAULT_FIRST_TOKEN_TIMEOUT_MS = 90_000;

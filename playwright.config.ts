@@ -58,7 +58,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npx.cmd next dev --webpack --port ${selectedTarget.port}`,
+    command: `npm.cmd run build && npx.cmd next start --port ${selectedTarget.port}`,
     url: `${baseURL}${selectedTarget.entryUrl}`,
     timeout: 120_000,
     reuseExistingServer: true,

@@ -11,6 +11,7 @@ import {
   toPublicAIError,
 } from "@/lib/ai/runtime";
 import { routeChatCapability } from "@/lib/ai/runtime/capability-router";
+import { createCurrentWeatherFallbackResponse } from "@/lib/ai/runtime/current-weather-fallback";
 import {
   logAIProviderErrorThrown,
   summarizeErrorStack,
@@ -35,13 +36,33 @@ import { saveExplicitMemory } from "@/services/memory";
 const SYSTEM_PROMPT =
   "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
 
+class InvalidChatPayloadError extends Error {
+  constructor() {
+    super("INVALID_CHAT_PAYLOAD");
+    this.name = "InvalidChatPayloadError";
+  }
+}
+
+async function parseChatPayload(request: Request) {
+  try {
+    const body = await request.text();
+    if (!body.trim()) throw new SyntaxError("Empty JSON body");
+    return chatRequestSchema.parse(JSON.parse(body));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new InvalidChatPayloadError();
+    }
+    throw error;
+  }
+}
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
   let requestId = createRequestId(request);
 
   try {
     const user = await requireSessionUser();
-    const payload = chatRequestSchema.parse(await request.json());
+    const payload = await parseChatPayload(request);
     requestId = payload.requestId ?? requestId;
     logServerEvent({
       level: "info",
@@ -92,6 +113,22 @@ export async function POST(request: Request) {
       startedAt,
     );
   } catch (error) {
+    if (error instanceof InvalidChatPayloadError) {
+      logServerEvent({
+        level: "warn",
+        requestId,
+        route: "/api/chat",
+        event: "invalid_json_payload",
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        errorType: error.name,
+      });
+      return Response.json(
+        { error: "Payload de chat invalido.", requestId },
+        { status: 400, headers: { "X-Request-ID": requestId } },
+      );
+    }
+
     if (error instanceof ZodError) {
       logServerEvent({
         level: "warn",
@@ -406,6 +443,26 @@ async function createChatStream(
     projectLabel: chatContext.projectName,
     relevantMemories: chatContext.relevantMemories,
   });
+  const currentWeatherFallback = createCurrentWeatherFallbackResponse({
+    request,
+    message: payload.message,
+    conversationId,
+    requestId,
+    onComplete: async (assistantContent) => {
+      await persistAssistantResponse({
+        supabase,
+        conversationId,
+        userId,
+        requestId,
+        projectId: chatContext.projectId,
+        assistantContent,
+        userMessage: payload.message,
+        startedAt,
+      });
+    },
+  });
+  if (currentWeatherFallback) return currentWeatherFallback;
+
   const routed = await routeChatCapability({
     systemPrompt,
     context: chatContext.conversationMessages,

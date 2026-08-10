@@ -6,7 +6,7 @@ import {
 } from "@/services/project-context";
 
 const SENSITIVE_PATTERN =
-  /\b(cpf|rg|cartÃƒÂ£o|senha|diagnÃƒÂ³stico|doenÃƒÂ§a|medicamento|conta bancÃƒÂ¡ria|chave pix|telefone|endereÃƒÂ§o|e-mail)\b/i;
+  /\b(cpf|rg|cartão|senha|diagnóstico|doença|medicamento|conta bancária|chave pix|telefone|endereço|e-mail)\b/i;
 
 interface QueryResult {
   data?: unknown;
@@ -198,15 +198,15 @@ export async function saveExplicitMemory(options: {
     category: string;
     importance: number;
   }> = [
-    { regex: /\bmeu nome ÃƒÂ©\s+(.+)/i, category: "identidade", importance: 5 },
+    { regex: /\bmeu nome é\s+(.+)/i, category: "identidade", importance: 5 },
     {
       regex: /\b(?:lembre que|guarde (?:isso:?\s*|que\s*))(.+)/i,
-      category: "explÃƒÂ­cita",
+      category: "explícita",
       importance: 4,
     },
-    { regex: /\beu prefiro\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
-    { regex: /\bprefiro\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
-    { regex: /\bnÃƒÂ£o gosto de\s+(.+)/i, category: "preferÃƒÂªncia", importance: 3 },
+    { regex: /\beu prefiro\s+(.+)/i, category: "preferência", importance: 3 },
+    { regex: /\bprefiro\s+(.+)/i, category: "preferência", importance: 3 },
+    { regex: /\bnão gosto de\s+(.+)/i, category: "preferência", importance: 3 },
   ];
   const match = patterns
     .map((pattern) => ({ pattern, match: normalized.match(pattern.regex) }))

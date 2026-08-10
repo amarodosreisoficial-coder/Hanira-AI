@@ -17,6 +17,12 @@ export function buildSystemPrompt(options: {
       body: cleanLine(options.baseInstructions),
     },
     {
+      title: "Idioma e limites de informacao",
+      body: cleanLine(
+        "Responda no mesmo idioma usado pelo usuario e, quando ele escrever em portugues, use portugues brasileiro. So mude de idioma se o usuario pedir explicitamente. Diferencie conhecimento geral de informacoes atuais: nesta instancia voce nao tem acesso direto a internet nem a ferramentas de clima, noticias, precos ou outras fontes em tempo real. Nunca diga que consultou, pesquisou ou verificou dados atuais sem uma ferramenta ter sido executada; explique a limitacao com clareza. Nao invente fatos atuais, nao prometa consultas externas e nao exiba placeholders, campos entre colchetes ou templates incompletos como resposta final. Use somente as capacidades e os dados presentes no contexto recebido.",
+      ),
+    },
+    {
       title: "Contexto do projeto",
       body: cleanLine(
         `Projeto ativo: ${options.projectLabel}.\nRestrinja a resposta a este contexto e nao misture dados de outros projetos.`,

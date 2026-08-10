@@ -611,6 +611,38 @@ describe("OllamaProvider", () => {
     ]);
   });
 
+  it("nao aborta a espera de headers acima do antigo limite de 30 segundos", async () => {
+    vi.useFakeTimers();
+
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(
+            () =>
+              resolve(
+                new Response(
+                  '{"message":{"content":"apos o cold start"},"done":true,"done_reason":"stop"}\n',
+                  { headers: { "content-type": "application/x-ndjson" } },
+                ),
+              ),
+            31_000,
+          );
+        }),
+      connectTimeoutMs: 60_000,
+      firstTokenTimeoutMs: 90_000,
+      idleTimeoutMs: 30_000,
+    });
+
+    const streamPromise = collectStream(provider);
+    await vi.advanceTimersByTimeAsync(31_100);
+
+    await expect(streamPromise).resolves.toEqual([
+      { type: "start", provider: "ollama", model: DEFAULT_OLLAMA_MODEL },
+      { type: "text-delta", textDelta: "apos o cold start" },
+      { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
   it("aplica timeout antes do primeiro token em streaming", async () => {
     vi.useFakeTimers();
 

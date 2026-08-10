@@ -218,4 +218,97 @@ describe("memory scope", () => {
     });
     expect(supabase.insertSpy).not.toHaveBeenCalled();
   });
+
+  it("salva o nome com acentuacao em portugues", async () => {
+    const supabase = createSupabaseStub({
+      conversations: [{ id: "conv-a", user_id: "user-1", project_id: "project-a" }],
+      insertedMemoryId: "memory-name",
+    });
+
+    await expect(
+      saveExplicitMemory({
+        supabase: supabase.client as never,
+        userId: "user-1",
+        projectId: "project-a",
+        conversationId: "conv-a",
+        message: "meu nome é Ana",
+      }),
+    ).resolves.toMatchObject({ status: "saved", memoryId: "memory-name" });
+    expect(supabase.insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Ana", category: "identidade" }),
+    );
+  });
+
+  it("salva preferencias com nao, cafe e demais acentos", async () => {
+    const supabase = createSupabaseStub({
+      conversations: [{ id: "conv-a", user_id: "user-1", project_id: "project-a" }],
+      insertedMemoryId: "memory-preference",
+    });
+
+    await expect(
+      saveExplicitMemory({
+        supabase: supabase.client as never,
+        userId: "user-1",
+        projectId: "project-a",
+        conversationId: "conv-a",
+        message: "não gosto de café",
+      }),
+    ).resolves.toMatchObject({ status: "saved" });
+    expect(supabase.insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "café", category: "preferência" }),
+    );
+
+    const accented = createSupabaseStub({
+      conversations: [{ id: "conv-a", user_id: "user-1", project_id: "project-a" }],
+      insertedMemoryId: "memory-accented",
+    });
+    await saveExplicitMemory({
+      supabase: accented.client as never,
+      userId: "user-1",
+      projectId: "project-a",
+      conversationId: "conv-a",
+      message: "lembre que ação é útil: ímã, união, açúcar, coração e pão",
+    });
+    expect(accented.insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "ação é útil: ímã, união, açúcar, coração e pão",
+      }),
+    );
+  });
+
+  it("ignora frases que nao correspondem a uma memoria", async () => {
+    const supabase = createSupabaseStub({
+      conversations: [{ id: "conv-a", user_id: "user-1", project_id: "project-a" }],
+      insertedMemoryId: "memory-never",
+    });
+
+    await expect(
+      saveExplicitMemory({
+        supabase: supabase.client as never,
+        userId: "user-1",
+        projectId: "project-a",
+        conversationId: "conv-a",
+        message: "Hoje está ensolarado",
+      }),
+    ).resolves.toMatchObject({ status: "skipped", reason: "pattern_not_matched" });
+    expect(supabase.insertSpy).not.toHaveBeenCalled();
+  });
+
+  it("continua bloqueando informacao sensivel acentuada", async () => {
+    const supabase = createSupabaseStub({
+      conversations: [{ id: "conv-a", user_id: "user-1", project_id: "project-a" }],
+      insertedMemoryId: "memory-sensitive",
+    });
+
+    await expect(
+      saveExplicitMemory({
+        supabase: supabase.client as never,
+        userId: "user-1",
+        projectId: "project-a",
+        conversationId: "conv-a",
+        message: "lembre que meu cartão é 1234",
+      }),
+    ).resolves.toMatchObject({ status: "skipped", reason: "sensitive_content" });
+    expect(supabase.insertSpy).not.toHaveBeenCalled();
+  });
 });

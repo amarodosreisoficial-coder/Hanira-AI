@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CircleStop,
   LoaderCircle,
@@ -49,7 +49,7 @@ export function SpeechControls({
   const wasPending = useRef(Boolean(pending));
   const didAutoSpeak = useRef(false);
 
-  function stopLocalPlayback() {
+  const stopLocalPlayback = useCallback(() => {
     abortRef.current?.abort();
     if (mode === "demo") window.speechSynthesis.cancel();
     if (audioRef.current) {
@@ -57,7 +57,7 @@ export function SpeechControls({
       audioRef.current.currentTime = 0;
     }
     setStatus("idle");
-  }
+  }, [mode]);
 
   async function play(restart = false) {
     if (!text || status === "loading") return;
@@ -153,7 +153,7 @@ export function SpeechControls({
       stopLocalPlayback();
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     },
-    [],
+    [stopLocalPlayback],
   );
 
   return (
