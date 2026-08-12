@@ -25,4 +25,6 @@ export interface Memory {
   category: string | null;
   importance: number;
   createdAt: string;
+  scope?: "global" | "project";
+  projectId?: string | null;
 }

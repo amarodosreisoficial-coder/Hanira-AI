@@ -155,7 +155,7 @@ export function MemoryPage(props: { conversationId?: string }) {
                   {memory.content}
                 </p>
                 <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-700">
-                  {memory.category ?? "geral"} | importancia {memory.importance}
+                  {memory.scope === "global" ? "Global" : "Projeto atual"} · {memory.category ?? "geral"} | importancia {memory.importance}
                 </p>
               </div>
               <button

@@ -42,10 +42,7 @@ export async function GET(request: Request) {
       return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
     }
 
-    const data = await listProjectMemories({
-      userId: user.id,
-      projectId,
-    });
+    const data = await listProjectMemories({ userId: user.id, projectId });
 
     return Response.json({
       mode: "supabase",
@@ -55,6 +52,8 @@ export async function GET(request: Request) {
         category: memory.category,
         importance: memory.importance,
         createdAt: memory.created_at,
+        scope: memory.scope ?? (memory.project_id ? "project" : "global"),
+        projectId: memory.project_id ?? null,
       })),
     });
   } catch (error) {
@@ -94,17 +93,20 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireSessionUser();
     if (user.demo) return Response.json({ ok: true });
-    const payload = await request.json() as { id?: string; conversationId?: string; content?: string };
+    const payload = await request.json() as { id?: string; conversationId?: string; content?: string; scope?: "global" | "project"; projectId?: string };
     if (!payload.id || !payload.conversationId || typeof payload.content !== "string" || !payload.content.trim()) {
       return Response.json({ error: "Memoria invalida." }, { status: 400 });
     }
     const projectId = await resolveOwnedConversationScope(user.id, payload.conversationId);
     if (!projectId) return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase!.from("memories").update({ content: payload.content.trim(), updated_at: new Date().toISOString() }).eq("id", payload.id).eq("user_id", user.id).eq("project_id", projectId).select("id,content,category,importance,created_at").maybeSingle();
+    const targetScope = payload.scope ?? "project";
+    if (targetScope === "project" && payload.projectId && payload.projectId !== projectId) return Response.json({ error: "Projeto invalido." }, { status: 400 });
+    const update = { content: payload.content.trim(), updated_at: new Date().toISOString(), scope: targetScope, project_id: targetScope === "global" ? null : projectId };
+    const { data, error } = await supabase!.from("memories").update(update).eq("id", payload.id).eq("user_id", user.id).select("id,content,category,importance,created_at,scope,project_id").maybeSingle();
     if (error) throw error;
     if (!data) return Response.json({ error: "Memoria nao encontrada." }, { status: 404 });
-    return Response.json({ memory: { id: data.id, content: data.content, category: data.category, importance: data.importance, createdAt: data.created_at } });
+    return Response.json({ memory: { id: data.id, content: data.content, category: data.category, importance: data.importance, createdAt: data.created_at, scope: data.scope, projectId: data.project_id } });
   } catch (error) {
     return apiErrorResponse(error);
   }

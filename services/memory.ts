@@ -35,6 +35,20 @@ interface MemoryRow {
   importance: number;
 }
 
+export type MemoryScope = "global" | "project";
+
+export interface MemoryRecord {
+  id: string;
+  userId: string;
+  scope: MemoryScope;
+  projectId: string | null;
+  content: string;
+  category: string | null;
+  importance: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export function normalizeMemoryContent(value: string) {
   return value.trim().toLocaleLowerCase("pt-BR").replace(/[.!?]+$/g, "").replace(/\s+/g, " ");
 }
@@ -116,7 +130,7 @@ export async function listProjectMemories(options: {
   if (!isLegacyConversationScope(options.projectId)) {
     const { data, error } = await db
       .from("memories")
-      .select("id,content,category,importance,created_at,source_conversation_id,project_id")
+      .select("id,content,category,importance,created_at,updated_at,source_conversation_id,project_id,scope")
       .eq("user_id", options.userId)
       .eq("project_id", options.projectId)
       .eq("is_active", true)
@@ -138,7 +152,7 @@ export async function listProjectMemories(options: {
 
   const { data, error } = await db
     .from("memories")
-    .select("id,content,category,importance,created_at,source_conversation_id,project_id")
+    .select("id,content,category,importance,created_at,updated_at,source_conversation_id,project_id,scope")
     .eq("user_id", options.userId)
     .eq("is_active", true)
     .in("source_conversation_id", conversationIds);
@@ -147,14 +161,46 @@ export async function listProjectMemories(options: {
   return (data ?? []) as Array<Record<string, unknown>>;
 }
 
+async function listGlobalMemories(options: { supabase: unknown; userId: string }) {
+  try {
+    const db = options.supabase as SupabaseQuerySurface;
+    const { data, error } = await db.from("memories")
+      .select("id,content,category,importance,created_at,updated_at,project_id,scope")
+      .eq("user_id", options.userId)
+      .eq("scope", "global")
+      .eq("is_active", true)
+      .limit(20);
+    if (error) throw error;
+    return (data ?? []) as Array<Record<string, unknown>>;
+  } catch (error) {
+    if (error instanceof TypeError) return [];
+    throw error;
+  }
+}
+
+export async function listMemoriesForContext(options: { supabase?: unknown; userId: string; projectId: string }) {
+  const supabase = await getSupabaseClient(options.supabase);
+  if (!supabase) return [];
+  const [global, project] = await Promise.all([
+    listGlobalMemories({ supabase, userId: options.userId }),
+    listProjectMemories({ ...options, supabase }),
+  ]);
+  return [...global, ...project];
+}
+
 export async function getRelevantMemories(options: {
   supabase?: unknown;
   userId: string;
   projectId: string;
   message: string;
 }): Promise<string[]> {
-  const memories = (await listProjectMemories(options)) as unknown as MemoryRow[];
-  return rankMemories(memories, options.message);
+  const [global, project] = await Promise.all([
+    listGlobalMemories({ supabase: await getSupabaseClient(options.supabase), userId: options.userId }),
+    listProjectMemories(options),
+  ]);
+  const merged = [...(project as unknown as MemoryRow[]), ...(global as unknown as MemoryRow[])];
+  const unique = merged.filter((memory, index, all) => all.findIndex((item) => normalizeMemoryContent(item.content) === normalizeMemoryContent(memory.content)) === index);
+  return rankMemories(unique, options.message);
 }
 
 export async function deleteProjectMemory(options: {
@@ -167,18 +213,14 @@ export async function deleteProjectMemory(options: {
   if (!supabase) return;
   const db = supabase as SupabaseQuerySurface;
 
-  const memories = (await listProjectMemories(options)) as Array<Record<string, unknown>>;
+  const memories = (await listMemoriesForContext(options)) as Array<Record<string, unknown>>;
   const ids = memories
     .map((memory) => (typeof memory.id === "string" ? memory.id : null))
     .filter((id): id is string => Boolean(id))
     .filter((id) => !options.id || id === options.id);
   if (!ids.length) return;
 
-  const { error } = await db
-    .from("memories")
-    .delete()
-    .eq("user_id", options.userId)
-    .in("id", ids);
+  const { error } = await db.from("memories").delete().eq("user_id", options.userId).in("id", ids);
   if (error) throw error;
 }
 
@@ -205,7 +247,7 @@ export async function saveExplicitMemory(options: {
   }> = [
     { regex: /\bmeu nome é\s+(.+)/i, category: "identidade", importance: 5 },
     {
-      regex: /\b(?:lembre que|guarde (?:isso:?\s*|que\s*))(.+)/i,
+      regex: /\b(?:lembre(?:\s+(?:globalmente|apenas neste projeto))?\s+que|guarde (?:isso:?\s*|que\s*))(.+)/i,
       category: "explícita",
       importance: 4,
     },
@@ -249,15 +291,19 @@ export async function saveExplicitMemory(options: {
     return { status: "skipped", reason: "context_mismatch" } as const;
   }
 
-  if (typeof conversation.project_id !== "string") {
-    return { status: "skipped", reason: "legacy_project_unavailable" } as const;
-  }
+  const explicitGlobal = /\b(globalmente|todos os projetos|sobre mim|para todos)\b/i.test(normalized);
+  const explicitProject = /\b(apenas neste projeto|s[oó] neste projeto|neste projeto)\b/i.test(normalized);
+  const scope: MemoryScope = explicitGlobal && !explicitProject ? "global" : "project";
+  if (scope === "project" && typeof conversation.project_id !== "string") return { status: "skipped", reason: "legacy_project_unavailable" } as const;
 
-  const existingQuery = db
-    .from("memories")
-    .select("id,content")
-    .eq("user_id", options.userId)
-    .eq("project_id", conversation.project_id);
+  let existingQuery: QueryBuilder;
+  try {
+    existingQuery = db.from("memories").select("id,content").eq("user_id", options.userId).eq("scope", scope);
+    if (scope === "project") existingQuery = existingQuery.eq("project_id", conversation.project_id);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    existingQuery = db.from("memories").select("id,content").eq("user_id", options.userId);
+  }
   const { data: existingMemories, error: existingError } = typeof (existingQuery as unknown as { limit?: unknown }).limit === "function"
     ? await existingQuery.limit(100)
     : { data: [], error: null };
@@ -266,7 +312,8 @@ export async function saveExplicitMemory(options: {
     .filter(isRecord)
     .find((memory) => normalizeMemoryContent(String(memory.content ?? "")) === normalizeMemoryContent(content));
   if (existing && typeof existing.id === "string") {
-    const updateQuery = db.from("memories").update({ content, updated_at: new Date().toISOString() }).eq("id", existing.id).eq("user_id", options.userId).eq("project_id", conversation.project_id);
+    let updateQuery = db.from("memories").update({ content, updated_at: new Date().toISOString() }).eq("id", existing.id).eq("user_id", options.userId).eq("scope", scope);
+    if (scope === "project") updateQuery = updateQuery.eq("project_id", conversation.project_id);
     const { error } = await (updateQuery as unknown as Promise<{ error?: unknown }>);
     if (error) throw error;
     return { status: "updated", reason: "duplicate", memoryId: existing.id } as const;
@@ -276,7 +323,8 @@ export async function saveExplicitMemory(options: {
     .from("memories")
     .insert({
       user_id: options.userId,
-      project_id: conversation.project_id,
+      project_id: scope === "project" ? conversation.project_id : null,
+      scope,
       content,
       category: match.pattern.category,
       importance: match.pattern.importance,
