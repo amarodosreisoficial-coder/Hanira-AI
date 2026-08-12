@@ -20,8 +20,9 @@ import {
   resolveProjectForConversationCreation,
 } from "@/services/project-service";
 import { findActivePersonalityByProject } from "@/services/personality-service";
+import { buildChatContextBudget, CHAT_CONTEXT_LIMITS, limitMemoryContext } from "@/lib/ai/runtime/chat-context-budget";
 
-const MAX_CONTEXT_MESSAGES = 20;
+const MAX_CONTEXT_MESSAGES = CHAT_CONTEXT_LIMITS.maxHistoryMessages;
 
 interface QueryResult {
   data?: unknown;
@@ -111,7 +112,6 @@ export function sanitizeConversationMessages(
       }
       return normalizeText(left.id).localeCompare(normalizeText(right.id));
     })
-    .slice(-MAX_CONTEXT_MESSAGES)
     .map(
       (message) =>
         ({
@@ -282,11 +282,11 @@ export async function resolveProjectChatContext(options: {
   if (messagesError) throw messagesError;
   if (settingsError) throw settingsError;
 
-  const conversationMessages = sanitizeConversationMessages(
+  const conversationMessages = buildChatContextBudget(sanitizeConversationMessages(
     Array.isArray(messages)
       ? (messages as Array<Record<string, unknown>>)
       : undefined,
-  );
+  ));
   if (activePersonality && activePersonality.projectId !== conversation.projectId) {
     logPersonalityScopeMismatch({
       requestId: options.requestId,
@@ -333,7 +333,7 @@ export async function resolveProjectChatContext(options: {
     conversationId: conversation.id,
     personalityId: activePersonality?.id,
     systemInstructions: "",
-    relevantMemories: memories,
+    relevantMemories: limitMemoryContext(memories),
     conversationMessages,
     personalityInstructions: personalityInstructions || undefined,
     historyMessageCount: conversationMessages.length,

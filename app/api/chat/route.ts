@@ -594,7 +594,7 @@ async function createChatStream(
     request,
     provider: routed.provider,
     providerRequest: {
-      ...routed.providerRequest,
+      ...providerRequest,
       signal: request.signal,
       timeoutMs: routed.requestTimeoutMs,
       metadata: {

@@ -778,9 +778,7 @@ export class OllamaProvider implements AIProvider {
             return;
           }
 
-          logOllamaDiagnostic(diagnostics, "chunk_received", "provider_stream", {
-            byteLength: chunk.byteLength,
-          });
+          // Chunk-level logging is intentionally disabled in production.
         },
       })) {
         execution.markChunkReceived();
