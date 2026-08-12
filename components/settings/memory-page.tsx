@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BrainCircuit, Trash2 } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Pencil, Trash2 } from "lucide-react";
 import { HaniraMark } from "@/components/brand/hanira-mark";
 import type { Memory } from "@/types/settings";
 
@@ -83,6 +83,26 @@ export function MemoryPage(props: { conversationId?: string }) {
     }));
   }
 
+  async function edit(memory: Memory) {
+    if (!conversationId) return;
+    const content = window.prompt("Editar memoria", memory.content)?.trim();
+    if (!content || content === memory.content) return;
+    const response = await fetch("/api/memories", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: memory.id, conversationId, content }),
+    });
+    if (!response.ok) {
+      setState((current) => current ? { ...current, error: "Nao foi possivel editar agora." } : current);
+      return;
+    }
+    setState((current) => current ? {
+      ...current,
+      memories: current.memories.map((item) => item.id === memory.id ? { ...item, content } : item),
+      error: "",
+    } : current);
+  }
+
   const loading = Boolean(conversationId) && state?.conversationId !== conversationId;
   const memories =
     state?.conversationId === conversationId ? state.memories : [];
@@ -138,6 +158,13 @@ export function MemoryPage(props: { conversationId?: string }) {
                   {memory.category ?? "geral"} | importancia {memory.importance}
                 </p>
               </div>
+              <button
+                onClick={() => void edit(memory)}
+                className="p-2 text-zinc-700 hover:text-violet-300"
+                aria-label="Editar memoria"
+              >
+                <Pencil className="size-4" />
+              </button>
               <button
                 onClick={() => void remove(memory.id)}
                 className="p-2 text-zinc-700 hover:text-rose-300"

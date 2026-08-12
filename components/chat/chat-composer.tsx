@@ -261,6 +261,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           },
           onError: (message) => {
             setError(message);
+            store.setDraft(content);
             store.markMessageFailed(assistantId);
             window.dispatchEvent(new Event("hanira:response-error"));
           },
@@ -281,6 +282,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       const message =
         caught instanceof Error ? caught.message : "Nao foi possivel enviar sua mensagem.";
       setError(message);
+      store.setDraft(content);
       if (assistantId) store.markMessageFailed(assistantId);
       window.dispatchEvent(new Event("hanira:response-error"));
     } finally {

@@ -17,6 +17,7 @@ interface QueryBuilder {
   eq(column: string, value: unknown): QueryBuilder;
   select(query: string): QueryBuilder;
   insert(value: Record<string, unknown>): QueryBuilder;
+  update(value: Record<string, unknown>): QueryBuilder;
   delete(): QueryBuilder;
   order(column: string, options: { ascending: boolean }): QueryBuilder;
   limit(value: number): Promise<QueryResult>;
@@ -32,6 +33,10 @@ interface MemoryRow {
   id?: unknown;
   content: string;
   importance: number;
+}
+
+export function normalizeMemoryContent(value: string) {
+  return value.trim().toLocaleLowerCase("pt-BR").replace(/[.!?]+$/g, "").replace(/\s+/g, " ");
 }
 
 async function getSupabaseClient(supabase?: unknown) {
@@ -246,6 +251,25 @@ export async function saveExplicitMemory(options: {
 
   if (typeof conversation.project_id !== "string") {
     return { status: "skipped", reason: "legacy_project_unavailable" } as const;
+  }
+
+  const existingQuery = db
+    .from("memories")
+    .select("id,content")
+    .eq("user_id", options.userId)
+    .eq("project_id", conversation.project_id);
+  const { data: existingMemories, error: existingError } = typeof (existingQuery as unknown as { limit?: unknown }).limit === "function"
+    ? await existingQuery.limit(100)
+    : { data: [], error: null };
+  if (existingError) throw existingError;
+  const existing = (Array.isArray(existingMemories) ? existingMemories : [])
+    .filter(isRecord)
+    .find((memory) => normalizeMemoryContent(String(memory.content ?? "")) === normalizeMemoryContent(content));
+  if (existing && typeof existing.id === "string") {
+    const updateQuery = db.from("memories").update({ content, updated_at: new Date().toISOString() }).eq("id", existing.id).eq("user_id", options.userId).eq("project_id", conversation.project_id);
+    const { error } = await (updateQuery as unknown as Promise<{ error?: unknown }>);
+    if (error) throw error;
+    return { status: "updated", reason: "duplicate", memoryId: existing.id } as const;
   }
 
   const { data, error } = await db

@@ -46,6 +46,7 @@ export function ChatInterface({ userName }: { userName: string }) {
   const store = useChatStore();
   const conversation = store.activeConversation();
   const messagesEnd = useRef<HTMLDivElement>(null);
+  const shouldFollowStream = useRef(true);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [voiceModeOpen, setVoiceModeOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -67,7 +68,7 @@ export function ChatInterface({ userName }: { userName: string }) {
   }, []);
 
   useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
+    if (shouldFollowStream.current) messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages.length, store.isThinking]);
 
   const lastMessage = conversation?.messages.at(-1);
@@ -126,7 +127,13 @@ export function ChatInterface({ userName }: { userName: string }) {
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className="flex-1 overflow-y-auto"
+            onScroll={(event) => {
+              const element = event.currentTarget;
+              shouldFollowStream.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+            }}
+          >
             {store.status === "loading" && !conversation ? (
               <div className="grid h-full place-items-center text-sm text-zinc-600">
                 <div className="flex flex-col items-center gap-4">

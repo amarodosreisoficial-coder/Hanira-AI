@@ -42,6 +42,8 @@ interface ChatState {
   activeConversation: () => Conversation | null;
 }
 
+const selectConversationTokens = new Map<string, string>();
+
 function localConversation(): Conversation {
   return {
     id: crypto.randomUUID(),
@@ -121,12 +123,15 @@ export const useChatStore = create<ChatState>()(
         }
       },
       selectConversation: async (id) => {
+        const requestToken = crypto.randomUUID();
+        selectConversationTokens.set(id, requestToken);
         set({ activeId: id, sidebarOpen: false, error: null });
         const existing = get().conversations.find((item) => item.id === id);
         if (get().mode !== "supabase" || existing?.messages.length) return;
         set({ status: "loading" });
         try {
           const conversation = await getConversation(id);
+          if (selectConversationTokens.get(id) !== requestToken || get().activeId !== id) return;
           set((state) => ({
             conversations: state.conversations.map((item) =>
               item.id === id ? conversation : item,

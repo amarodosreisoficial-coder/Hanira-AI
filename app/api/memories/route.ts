@@ -89,3 +89,23 @@ export async function DELETE(request: Request) {
     return apiErrorResponse(error);
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requireSessionUser();
+    if (user.demo) return Response.json({ ok: true });
+    const payload = await request.json() as { id?: string; conversationId?: string; content?: string };
+    if (!payload.id || !payload.conversationId || typeof payload.content !== "string" || !payload.content.trim()) {
+      return Response.json({ error: "Memoria invalida." }, { status: 400 });
+    }
+    const projectId = await resolveOwnedConversationScope(user.id, payload.conversationId);
+    if (!projectId) return Response.json({ error: "Conversa nao encontrada." }, { status: 404 });
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase!.from("memories").update({ content: payload.content.trim(), updated_at: new Date().toISOString() }).eq("id", payload.id).eq("user_id", user.id).eq("project_id", projectId).select("id,content,category,importance,created_at").maybeSingle();
+    if (error) throw error;
+    if (!data) return Response.json({ error: "Memoria nao encontrada." }, { status: 404 });
+    return Response.json({ memory: { id: data.id, content: data.content, category: data.category, importance: data.importance, createdAt: data.created_at } });
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
