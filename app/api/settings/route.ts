@@ -26,7 +26,7 @@ export async function GET() {
     const { data, error } = await supabase!
       .from("user_settings")
       .select(
-        "preferred_name,response_style,memory_enabled,voice_enabled,auto_speak,audio_autoplay,tts_voice,speech_rate,transcription_enabled,voice_conversation_enabled,privacy_notice_dismissed",
+        "preferred_name,occupation,language,technical_level,response_length,response_tone,response_style,memory_enabled,voice_enabled,auto_speak,audio_autoplay,tts_voice,speech_rate,transcription_enabled,voice_conversation_enabled,privacy_notice_dismissed",
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -37,6 +37,11 @@ export async function GET() {
       settings: data
         ? {
             preferredName: data.preferred_name,
+            occupation: data.occupation,
+            language: data.language,
+            technicalLevel: data.technical_level,
+            responseLength: data.response_length,
+            responseTone: data.response_tone,
             responseStyle: data.response_style,
             memoryEnabled: data.memory_enabled,
             voiceEnabled: data.voice_enabled,
@@ -66,6 +71,11 @@ export async function PATCH(request: Request) {
       ...(payload.preferredName !== undefined && {
         preferred_name: payload.preferredName,
       }),
+      ...(payload.occupation !== undefined && { occupation: payload.occupation }),
+      ...(payload.language !== undefined && { language: payload.language }),
+      ...(payload.technicalLevel !== undefined && { technical_level: payload.technicalLevel }),
+      ...(payload.responseLength !== undefined && { response_length: payload.responseLength }),
+      ...(payload.responseTone !== undefined && { response_tone: payload.responseTone }),
       ...(payload.responseStyle !== undefined && {
         response_style: payload.responseStyle,
       }),

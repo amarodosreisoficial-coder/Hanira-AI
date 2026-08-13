@@ -95,6 +95,11 @@ export const personalityUpdateSchema = z
 
 export const settingsSchema = z.object({
   preferredName: z.string().trim().max(80).nullable().optional(),
+  occupation: z.string().trim().max(120).nullable().optional(),
+  language: z.enum(["pt-BR", "en", "es"]).optional(),
+  technicalLevel: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+  responseLength: z.enum(["short", "balanced", "detailed"]).optional(),
+  responseTone: z.enum(["professional", "neutral", "casual"]).optional(),
   responseStyle: z
     .enum(["equilibrado", "conciso", "detalhado", "criativo", "técnico"])
     .optional(),

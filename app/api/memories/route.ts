@@ -54,6 +54,8 @@ export async function GET(request: Request) {
         createdAt: memory.created_at,
         scope: memory.scope ?? (memory.project_id ? "project" : "global"),
         projectId: memory.project_id ?? null,
+        updatedAt: memory.updated_at ?? memory.created_at,
+        origin: memory.origin ?? "legacy",
       })),
     });
   } catch (error) {

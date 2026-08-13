@@ -85,12 +85,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function buildPersonalityInstructions(settings: {
   preferred_name?: unknown;
   response_style?: unknown;
+  occupation?: unknown;
+  language?: unknown;
+  technical_level?: unknown;
+  response_length?: unknown;
+  response_tone?: unknown;
 }) {
   const preferredName = normalizeText(settings.preferred_name);
   const responseStyle = normalizeText(settings.response_style);
+  const occupation = normalizeText(settings.occupation);
+  const preferences = [settings.response_length, settings.response_tone, settings.language].map(normalizeText).filter(Boolean);
   const lines = [
     preferredName ? `Nome preferido do usuario: ${preferredName}.` : "",
     responseStyle ? `Estilo de resposta solicitado: ${responseStyle}.` : "",
+    occupation ? `OcupaÃ§Ã£o do usuÃ¡rio: ${occupation}.` : "",
+    preferences.length ? `PreferÃªncias do usuÃ¡rio: ${preferences.join(", ")}.` : "",
   ].filter(Boolean);
 
   return lines.join("\n");
@@ -268,7 +277,7 @@ export async function resolveProjectChatContext(options: {
         .limit(MAX_CONTEXT_MESSAGES),
       supabase
         .from("user_settings")
-        .select("preferred_name,response_style")
+        .select("preferred_name,response_style,occupation,language,technical_level,response_length,response_tone")
         .eq("user_id", options.userId)
         .maybeSingle(),
       getRelevantMemories({
