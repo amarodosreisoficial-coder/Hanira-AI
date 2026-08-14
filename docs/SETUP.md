@@ -60,7 +60,7 @@ mantenha a confirmacao de e-mail ativada para validar o fluxo completo.
 Em **Authentication > URL Configuration**, use:
 
 ```text
-Site URL: http://localhost:3002
+Site URL: http://localhost:3051
 ```
 
 Em producao, substitua pelo dominio HTTPS da Vercel.
@@ -70,7 +70,7 @@ Em producao, substitua pelo dominio HTTPS da Vercel.
 Adicione:
 
 ```text
-http://localhost:3002/auth/callback
+http://localhost:3051/auth/callback
 https://SEU-DOMINIO.vercel.app/auth/callback
 ```
 
@@ -111,7 +111,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 AI_ENGINE_OLLAMA_ENABLED=true
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b
-NEXT_PUBLIC_APP_URL=http://localhost:3002
+NEXT_PUBLIC_APP_URL=http://localhost:3051
 NEXT_PUBLIC_MAX_IMAGE_SIZE_MB=10
 NEXT_PUBLIC_MAX_AUDIO_SIZE_MB=25
 NEXT_PUBLIC_ATTACHMENTS_ENABLED=false
@@ -169,8 +169,8 @@ novamente o servidor depois de qualquer alteracao.
 ## Parte D - Teste ponta a ponta
 
 1. Execute `npm run doctor` e corrija todos os itens marcados com `X`.
-2. Execute `npm run dev -- --port 3002`.
-3. Abra `http://localhost:3002/cadastro` e crie um usuario.
+2. Execute `npm run dev`.
+3. Abra `http://localhost:3051/cadastro` e crie um usuario.
 4. Confirme o e-mail recebido.
 5. Faca login em `/login`.
 6. Crie uma conversa em `/chat`.
@@ -197,6 +197,28 @@ npm run build
 O health check publico esta em `GET /api/health` e retorna somente nome, versao
 e modo. O diagnostico privado esta em `GET /api/system/diagnostics`, exige
 sessao e nunca retorna chaves ou dados de usuarios.
+
+## Readiness e producao
+
+`GET /api/health` confirma apenas que a aplicacao esta viva. `GET /api/readiness`
+verifica env, Supabase e Ollama e retorna `ready`, `degraded` ou `unavailable`.
+O diagnostics continua autenticado em `/settings/system`.
+
+Mantenha a aplicacao e o Ollama na mesma maquina ou em rede privada. Nunca
+exponha a porta do Ollama diretamente na internet. Valide migrations e rode o
+doctor antes do deploy:
+
+```bash
+npx supabase migration list
+npx supabase db push
+npm run doctor -- --production
+npm run build
+npm run start
+```
+
+Nunca use `supabase db reset` em producao. Rollback de migration deve ser
+planejado e testado. Checklist: env, migrations, doctor, build, testes, Ollama,
+modelo, health, readiness, login, chat e logs sem segredos.
 
 ## Vercel
 

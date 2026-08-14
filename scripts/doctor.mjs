@@ -11,6 +11,7 @@ const REQUIRED_REAL = [
   "OLLAMA_MODEL",
   "NEXT_PUBLIC_MAX_IMAGE_SIZE_MB",
   "NEXT_PUBLIC_MAX_AUDIO_SIZE_MB",
+  "NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB",
 ];
 
 export function parseEnvFile(contents) {
@@ -95,6 +96,7 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
   for (const name of [
     "NEXT_PUBLIC_MAX_IMAGE_SIZE_MB",
     "NEXT_PUBLIC_MAX_AUDIO_SIZE_MB",
+    "NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB",
   ]) {
     const size = Number(values[name]);
     add(
@@ -264,6 +266,10 @@ export function runDoctor(cwd = process.cwd()) {
       ? "\nDiagnostico concluido com erros.\n"
       : "\nDiagnostico concluido sem erros bloqueantes.\n",
   );
+  if (process.argv.includes("--production") && result.mode === "demo") {
+    console.log("\nModo producao exige HANIRA_DEMO_MODE=false.\n");
+    return 1;
+  }
   return result.hasErrors ? 1 : 0;
 }
 
