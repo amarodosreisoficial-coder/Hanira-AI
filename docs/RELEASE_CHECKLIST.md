@@ -4,6 +4,7 @@
 
 - [ ] `npm.cmd run typecheck`
 - [ ] `npm.cmd test`
+- [ ] `npm.cmd run test:ci` (ambiente com pouca RAM)
 - [ ] `npm.cmd run lint`
 - [ ] `npm.cmd run build`
 - [ ] `git diff --check`
@@ -39,6 +40,9 @@
 - [ ] `npm audit` analisado
 - [ ] nenhum `npm audit fix --force`
 - [ ] vulnerabilidades sem patch seguro registradas como risco
+
+Versão candidata atual: `0.4.0`; Next.js `16.2.10`. A atualização para
+`16.3.1` depende de acesso ao registry e deve ser validada separadamente.
 
 ## Rollback
 

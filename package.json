@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:ci": "vitest run --pool=threads --maxWorkers=1",
     "doctor": "node scripts/doctor.mjs",
     "test:e2e:demo": "powershell -Command \"$env:HANIRA_E2E_TARGET='chat-demo'; npx.cmd playwright test --project=chat-demo\"",
     "test:e2e:real": "powershell -Command \"if (-not $env:HANIRA_TEST_EMAIL -or -not $env:HANIRA_TEST_PASSWORD) { Write-Error 'chat-real exige HANIRA_TEST_EMAIL e HANIRA_TEST_PASSWORD configurados. O teste real nao usa fallback silencioso para demo.'; exit 1 }; $env:HANIRA_E2E_TARGET='chat-real'; npx.cmd playwright test --project=chat-real\""
