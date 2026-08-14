@@ -167,6 +167,16 @@ export function SettingsPage() {
               className="h-10 w-48 rounded-xl border border-white/[0.09] bg-black/20 px-3 text-sm outline-none focus:border-violet-400/40"
             />
           </SettingRow>
+          <SettingRow title="Perfil" description="Informações usadas para personalizar o contexto, sem duplicá-las em memórias.">
+            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-3">
+              <input aria-label="Ocupação" placeholder="Ocupação" value={settings.occupation ?? ""} onChange={e => setSettings(v => ({ ...v, occupation: e.target.value }))} className="h-10 rounded-xl border border-white/[0.09] bg-black/20 px-3 text-sm" />
+              <select aria-label="Idioma" value={settings.language} onChange={e => setSettings(v => ({ ...v, language: e.target.value }))} className="h-10 rounded-xl border border-white/[0.09] bg-[#151217] px-3 text-sm"><option value="pt-BR">Português</option><option value="en">English</option><option value="es">Español</option></select>
+              <select aria-label="Nível técnico" value={settings.technicalLevel} onChange={e => setSettings(v => ({ ...v, technicalLevel: e.target.value as UserSettings["technicalLevel"] }))} className="h-10 rounded-xl border border-white/[0.09] bg-[#151217] px-3 text-sm"><option value="beginner">Iniciante</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select>
+            </div>
+          </SettingRow>
+          <SettingRow title="Preferências de resposta" description="Defina tamanho e tom das respostas da Hanira.">
+            <div className="flex flex-wrap gap-2"><select aria-label="Tamanho da resposta" value={settings.responseLength} onChange={e => setSettings(v => ({ ...v, responseLength: e.target.value as UserSettings["responseLength"] }))} className="h-10 rounded-xl border border-white/[0.09] bg-[#151217] px-3 text-sm"><option value="short">Curta</option><option value="balanced">Equilibrada</option><option value="detailed">Detalhada</option></select><select aria-label="Tom da resposta" value={settings.responseTone} onChange={e => setSettings(v => ({ ...v, responseTone: e.target.value as UserSettings["responseTone"] }))} className="h-10 rounded-xl border border-white/[0.09] bg-[#151217] px-3 text-sm"><option value="professional">Profissional</option><option value="neutral">Neutro</option><option value="casual">Casual</option></select></div>
+          </SettingRow>
           <SettingRow
             title="Estilo de resposta"
             description="A profundidade e o tom padrão das respostas."
