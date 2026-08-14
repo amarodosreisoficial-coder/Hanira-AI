@@ -11,7 +11,6 @@ const REQUIRED_REAL = [
   "OLLAMA_MODEL",
   "NEXT_PUBLIC_MAX_IMAGE_SIZE_MB",
   "NEXT_PUBLIC_MAX_AUDIO_SIZE_MB",
-  "NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB",
 ];
 
 export function parseEnvFile(contents) {
@@ -98,7 +97,7 @@ export function analyzeEnvironment(values, { envFileExists = true } = {}) {
     "NEXT_PUBLIC_MAX_AUDIO_SIZE_MB",
     "NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB",
   ]) {
-    const size = Number(values[name]);
+    const size = Number(values[name] ?? (name === "NEXT_PUBLIC_MAX_DOCUMENT_SIZE_MB" ? "5" : undefined));
     add(
       Number.isFinite(size) && size > 0 && size <= 100 ? "ok" : "error",
       Number.isFinite(size) && size > 0 && size <= 100
