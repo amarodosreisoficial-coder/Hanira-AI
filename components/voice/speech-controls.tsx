@@ -56,6 +56,12 @@ export function SpeechControls({
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = "";
+    }
+    audioRef.current = null;
+    setHasAudio(false);
     setStatus("idle");
   }, [mode]);
 
