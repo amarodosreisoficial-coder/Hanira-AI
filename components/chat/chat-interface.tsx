@@ -182,7 +182,10 @@ export function ChatInterface({ userName }: { userName: string }) {
                               ? "A resposta foi interrompida."
                               : "")}
                           {message.pending && message.content && (
-                            <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-violet-300 align-middle" />
+                            <>
+                              <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-violet-300 align-middle" />
+                              <span className="ml-2 text-xs text-zinc-600">Gerando resposta...</span>
+                            </>
                           )}
                         </div>
                         {message.role === "assistant" &&
@@ -243,7 +246,7 @@ export function ChatInterface({ userName }: { userName: string }) {
                     <HaniraMark compact />
                     <div className="flex items-center gap-2 text-sm text-zinc-500">
                       <Sparkles className="size-3.5 animate-pulse text-violet-400" />
-                      <span className="shimmer">Hanira está pensando...</span>
+                      <span className="shimmer">Preparando o motor local...</span>
                     </div>
                   </div>
                 )}

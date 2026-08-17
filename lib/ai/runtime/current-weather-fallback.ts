@@ -12,18 +12,28 @@ export interface CurrentWeatherFallbackOptions {
 }
 
 const PORTUGUESE_CURRENT_WEATHER_PATTERNS = [
-  /\bclima\s+atual\b/i,
-  /\btempo\s+agora\b/i,
-  /\btemperatura\s+agora\b/i,
-  /\bprevis(?:ã|a)o\s+do\s+tempo\b/i,
-  /\bvai\s+chover\s+hoje\b/i,
-  /\bcomo\s+est(?:á|a)\s+o\s+tempo\b/i,
+  /\bclima\s+atual\b/,
+  /\btempo\s+agora\b/,
+  /\btemperatura\s+agora\b/,
+  /\btemperatura\s+atual\b/,
+  /\bprevisao\s+do\s+tempo\b/,
+  /\bvai\s+chover\s+hoje\b/,
+  /\bcomo\s+esta\s+o\s+tempo\b/,
+  /\besta\s+chovendo\b/,
 ];
 
 const ENGLISH_CURRENT_WEATHER_PATTERNS = [
-  /\bweather\s+now\b/i,
-  /\bcurrent\s+weather\b/i,
+  /\bweather\s+now\b/,
+  /\bcurrent\s+weather\b/,
+  /\btemperature\s+now\b/,
 ];
+
+function normalizeWeatherIntent(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+}
 
 function matchesAny(message: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(message));
@@ -32,7 +42,7 @@ function matchesAny(message: string, patterns: RegExp[]) {
 export function detectCurrentWeatherRequest(message: string): {
   language: CurrentWeatherLanguage;
 } | null {
-  const normalized = message.trim();
+  const normalized = normalizeWeatherIntent(message.trim());
   if (!normalized) return null;
 
   if (matchesAny(normalized, ENGLISH_CURRENT_WEATHER_PATTERNS)) {
@@ -47,7 +57,7 @@ export function detectCurrentWeatherRequest(message: string): {
 export function buildCurrentWeatherFallback(language: CurrentWeatherLanguage) {
   return language === "en"
     ? "I do not have access to real-time weather data in this instance. I can help with general information about the region's climate, but I should not invent the current temperature or forecast."
-    : "Não tenho acesso a dados meteorológicos em tempo real nesta instância. Posso ajudar com informações gerais sobre o clima da região, mas não devo inventar a temperatura ou a previsão atual.";
+    : "\u004e\u00e3o tenho acesso a dados meteorol\u00f3gicos em tempo real nesta inst\u00e2ncia. Posso ajudar com informa\u00e7\u00f5es gerais sobre o clima da regi\u00e3o, mas n\u00e3o devo inventar a temperatura ou a previs\u00e3o atual.";
 }
 
 export function createCurrentWeatherFallbackResponse(

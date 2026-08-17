@@ -12,7 +12,7 @@ export function buildChatContextBudget(messages: TextChatContextMessage[], maxCh
   let chars = 0;
   for (let index = messages.length - 1; index >= 0 && result.length < CHAT_CONTEXT_LIMITS.maxHistoryMessages; index -= 1) {
     const message = messages[index];
-    if (chars + message.content.length > maxChars && result.length > 0) break;
+    if (chars + message.content.length > maxChars) continue;
     result.unshift(message);
     chars += message.content.length;
   }
@@ -23,7 +23,8 @@ export function limitMemoryContext(memories: string[]) {
   const result: string[] = [];
   let chars = 0;
   for (const memory of memories) {
-    if (result.length >= CHAT_CONTEXT_LIMITS.maxMemories || chars + memory.length > CHAT_CONTEXT_LIMITS.maxMemoryChars) break;
+    if (result.length >= CHAT_CONTEXT_LIMITS.maxMemories) break;
+    if (chars + memory.length > CHAT_CONTEXT_LIMITS.maxMemoryChars) continue;
     if (!result.includes(memory)) {
       result.push(memory);
       chars += memory.length;

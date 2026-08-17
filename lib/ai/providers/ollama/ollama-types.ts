@@ -26,6 +26,7 @@ export interface OllamaChatRequestBody {
   model: string;
   messages: OllamaMessage[];
   stream: boolean;
+  keep_alive?: string;
   options?: {
     temperature?: number;
     num_predict?: number;
@@ -42,6 +43,10 @@ export interface OllamaChatResponseLike {
   done_reason?: string | null;
   prompt_eval_count?: number;
   eval_count?: number;
+  load_duration?: number;
+  prompt_eval_duration?: number;
+  eval_duration?: number;
+  total_duration?: number;
 }
 
 export interface OllamaTagDetailsLike {
@@ -179,6 +184,7 @@ export function buildOllamaChatBody(
   request: AIChatRequest,
   model: string,
   stream: boolean,
+  keepAlive?: string,
 ): OllamaChatRequestBody {
   const options: OllamaChatRequestBody["options"] = {};
 
@@ -194,6 +200,7 @@ export function buildOllamaChatBody(
     model,
     messages: mapMessagesToOllamaMessages(request),
     stream,
+    ...(keepAlive !== undefined ? { keep_alive: keepAlive } : {}),
     ...(Object.keys(options).length ? { options } : {}),
   };
 }

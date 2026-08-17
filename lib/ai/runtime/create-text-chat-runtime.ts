@@ -18,6 +18,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 const MIN_REQUEST_TIMEOUT_MS = 0;
 const MAX_REQUEST_TIMEOUT_MS = 600_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 0;
+const KEEP_ALIVE_PATTERN = /^(0|[1-9]\d*(?:ms|s|m|h))$/;
 
 export interface OllamaRuntimeConfig {
   enabled: true;
@@ -27,6 +28,7 @@ export interface OllamaRuntimeConfig {
   firstTokenTimeoutMs: number;
   idleTimeoutMs: number;
   requestTimeoutMs: number;
+  keepAlive?: string;
 }
 
 export interface TextChatRuntimeConfig {
@@ -37,6 +39,7 @@ export interface TextChatRuntimeConfig {
   firstTokenTimeoutMs: number;
   idleTimeoutMs: number;
   requestTimeoutMs: number;
+  keepAlive?: string;
   providerId: string;
 }
 
@@ -111,6 +114,21 @@ function parseBoundedIntegerEnv(options: {
   return parsed;
 }
 
+function parseKeepAliveEnv(): string | undefined {
+  const rawValue = process.env.OLLAMA_KEEP_ALIVE;
+  if (rawValue === undefined) return undefined;
+
+  const value = rawValue.trim();
+  if (!KEEP_ALIVE_PATTERN.test(value)) {
+    throw createInvalidConfigError(
+      "A configuracao OLLAMA_KEEP_ALIVE deve ser 0 ou uma duracao como 10m, 15m ou 1h.",
+      { env: "OLLAMA_KEEP_ALIVE" },
+    );
+  }
+
+  return value;
+}
+
 function normalizeBaseUrl(baseUrl: string) {
   let parsed: URL;
   try {
@@ -177,6 +195,7 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
     max: MAX_REQUEST_TIMEOUT_MS,
     fallback: DEFAULT_REQUEST_TIMEOUT_MS,
   });
+  const keepAlive = parseKeepAliveEnv();
 
   if (firstTokenTimeoutMs < connectTimeoutMs) {
     throw createInvalidConfigError(
@@ -206,6 +225,7 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
     firstTokenTimeoutMs,
     idleTimeoutMs,
     requestTimeoutMs,
+    ...(keepAlive !== undefined ? { keepAlive } : {}),
   };
 }
 
@@ -228,6 +248,7 @@ export function createTextChatRuntime(): TextChatRuntimeConfig {
     firstTokenTimeoutMs: config.firstTokenTimeoutMs,
     idleTimeoutMs: config.idleTimeoutMs,
     requestTimeoutMs: config.requestTimeoutMs,
+    keepAlive: config.keepAlive,
     providerId: provider.providerId,
   };
 }

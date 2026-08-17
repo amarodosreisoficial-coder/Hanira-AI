@@ -4,6 +4,7 @@ import { requireSessionUser } from "@/lib/auth/session";
 import {
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
+  createDeterministicTextResponse,
   getOllamaTextProviderEligibility,
   shouldUseOllamaTextProvider,
   streamEvent,
@@ -32,6 +33,8 @@ import {
   resolveProjectChatContext,
 } from "@/services/chat-context";
 import { saveExplicitMemory } from "@/services/memory";
+import { routeTool } from "@/lib/tools/router";
+import { formatWeatherCurrent } from "@/lib/tools/weather-current";
 
 const SYSTEM_PROMPT =
   "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
@@ -443,6 +446,57 @@ async function createChatStream(
     projectLabel: chatContext.projectName,
     relevantMemories: chatContext.relevantMemories,
   });
+  const routedTool = await routeTool({
+    message: payload.message,
+    requestId,
+    signal: request.signal,
+  });
+  if (routedTool?.result.ok && routedTool.result.data) {
+    return createDeterministicTextResponse({
+      request,
+      conversationId,
+      requestId,
+      mode: routedTool.tool,
+      text: formatWeatherCurrent(routedTool.result.data, routedTool.language),
+      onComplete: async (assistantContent) => {
+        await persistAssistantResponse({
+          supabase,
+          conversationId,
+          userId,
+          requestId,
+          projectId: chatContext.projectId,
+          assistantContent,
+          userMessage: payload.message,
+          startedAt,
+        });
+      },
+    });
+  }
+  if (
+    routedTool?.result.error?.code === "ambiguous_location" ||
+    routedTool?.result.error?.code === "missing_location"
+  ) {
+    return createDeterministicTextResponse({
+      request,
+      conversationId,
+      requestId,
+      mode: routedTool.tool,
+      text: routedTool.result.error.message,
+      onComplete: async (assistantContent) => {
+        await persistAssistantResponse({
+          supabase,
+          conversationId,
+          userId,
+          requestId,
+          projectId: chatContext.projectId,
+          assistantContent,
+          userMessage: payload.message,
+          startedAt,
+        });
+      },
+    });
+  }
+
   const currentWeatherFallback = createCurrentWeatherFallbackResponse({
     request,
     message: payload.message,

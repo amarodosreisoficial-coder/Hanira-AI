@@ -21,6 +21,7 @@ describe("createTextChatRuntime", () => {
     process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS = "45000";
     process.env.OLLAMA_IDLE_TIMEOUT_MS = "15000";
     process.env.OLLAMA_REQUEST_TIMEOUT_MS = "120000";
+    process.env.OLLAMA_KEEP_ALIVE = "10m";
 
     const runtime = createTextChatRuntime();
 
@@ -31,6 +32,7 @@ describe("createTextChatRuntime", () => {
     expect(runtime.firstTokenTimeoutMs).toBe(45000);
     expect(runtime.idleTimeoutMs).toBe(15000);
     expect(runtime.requestTimeoutMs).toBe(120000);
+    expect(runtime.keepAlive).toBe("10m");
   });
 
   it.each([
@@ -74,6 +76,7 @@ describe("createTextChatRuntime", () => {
     delete process.env.OLLAMA_FIRST_TOKEN_TIMEOUT_MS;
     delete process.env.OLLAMA_IDLE_TIMEOUT_MS;
     delete process.env.OLLAMA_REQUEST_TIMEOUT_MS;
+    delete process.env.OLLAMA_KEEP_ALIVE;
 
     expect(resolveOllamaRuntimeConfig()).toMatchObject({
       connectTimeoutMs: OLLAMA_RUNTIME_TIMEOUT_LIMITS.connect.fallback,
@@ -99,6 +102,9 @@ describe("createTextChatRuntime", () => {
     ["OLLAMA_REQUEST_TIMEOUT_MS", "abc"],
     ["OLLAMA_REQUEST_TIMEOUT_MS", "1.5"],
     ["OLLAMA_REQUEST_TIMEOUT_MS", "-1"],
+    ["OLLAMA_KEEP_ALIVE", "-1"],
+    ["OLLAMA_KEEP_ALIVE", "infinite"],
+    ["OLLAMA_KEEP_ALIVE", "10"],
   ] as const)("rejeita timeout invalido em %s=%s", (name, value) => {
     process.env.AI_ENGINE_OLLAMA_ENABLED = "true";
     process.env.OLLAMA_BASE_URL = "http://127.0.0.1:11434";

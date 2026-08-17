@@ -96,6 +96,63 @@ describe("OllamaProvider", () => {
     vi.useRealTimers();
   });
 
+  it("registra metricas do Ollama sem incluir conteudo da conversa", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createJsonResponse({
+          model: "qwen",
+          message: { content: "resposta privada" },
+          done: true,
+          done_reason: "stop",
+          load_duration: 50_000_000_000,
+          prompt_eval_duration: 2_000_000,
+          eval_duration: 3_000_000,
+          total_duration: 55_000_000_000,
+        }),
+    });
+
+    await provider.generate({
+      messages: [{ role: "user", text: "pergunta privada" }],
+    });
+
+    const metrics = info.mock.calls
+      .map(([entry]) => JSON.parse(String(entry)) as Record<string, unknown>)
+      .find((entry) => entry.event === "generation_metrics");
+
+    expect(metrics).toMatchObject({
+      event: "generation_metrics",
+      loadDurationMs: 50_000,
+      promptEvalDurationMs: 2,
+      evalDurationMs: 3,
+      providerTotalDurationMs: 55_000,
+      modelLoadState: "cold_start_likely",
+    });
+    expect(JSON.stringify(metrics)).not.toContain("resposta privada");
+    expect(JSON.stringify(metrics)).not.toContain("pergunta privada");
+    info.mockRestore();
+  });
+
+  it("classifica uma carga curta como aquecimento provavel", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const provider = new OllamaProvider({
+      fetch: async () =>
+        createJsonResponse({
+          message: { content: "ok" },
+          done: true,
+          load_duration: 850_000_000,
+        }),
+    });
+
+    await provider.generate({ messages: [{ role: "user", text: "teste" }] });
+
+    const metrics = info.mock.calls
+      .map(([entry]) => JSON.parse(String(entry)) as Record<string, unknown>)
+      .find((entry) => entry.event === "generation_metrics");
+    expect(metrics).toMatchObject({ modelLoadState: "warm_likely" });
+    info.mockRestore();
+  });
+
   it("satisfaz o contrato base e anuncia capacidades textuais", () => {
     const provider: AIProvider = new OllamaProvider({
       fetch: async () => createJsonResponse({ models: [] }),
@@ -129,6 +186,25 @@ describe("OllamaProvider", () => {
 
     const body = JSON.parse(String(calls[0]?.init?.body));
     expect(body.model).toBe(DEFAULT_OLLAMA_MODEL);
+  });
+
+  it("omite keep_alive por padrao e envia a duracao quando configurada", async () => {
+    const { calls, fetch } = createFetchDouble(async () =>
+      createJsonResponse({
+        model: DEFAULT_OLLAMA_MODEL,
+        message: { content: "ok" },
+        done: true,
+        done_reason: "stop",
+      }),
+    );
+    const provider = new OllamaProvider({
+      fetch,
+      keepAlive: "10m",
+    });
+
+    await provider.generate({ messages: [{ role: "user", text: "oi" }] });
+
+    expect(JSON.parse(String(calls[0]?.init?.body)).keep_alive).toBe("10m");
   });
 
   it("permite override de modelo e baseUrl na factory e no provider", async () => {

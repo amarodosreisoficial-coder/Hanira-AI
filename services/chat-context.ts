@@ -273,7 +273,8 @@ export async function resolveProjectChatContext(options: {
         .select("id,role,content,created_at")
         .eq("conversation_id", conversation.id)
         .eq("user_id", options.userId)
-        .order("created_at", { ascending: true })
+        // Fetch the newest window first; sanitization restores chronological order.
+        .order("created_at", { ascending: false })
         .limit(MAX_CONTEXT_MESSAGES),
       supabase
         .from("user_settings")

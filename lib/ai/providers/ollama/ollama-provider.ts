@@ -34,6 +34,8 @@ interface OllamaDiagnosticContext {
   startedAtMs: number;
 }
 
+const WARM_LOAD_DURATION_THRESHOLD_MS = 1_000;
+
 function isDiagnosticMetadata(
   value: unknown,
 ): value is {
@@ -88,6 +90,37 @@ function logOllamaDiagnostic(
   );
 }
 
+function logOllamaGenerationMetrics(
+  context: OllamaDiagnosticContext,
+  stage: string,
+  response: OllamaChatResponseLike,
+) {
+  const durationMs = (value: number | undefined) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value / 1_000_000))
+      : undefined;
+  const loadDurationMs = durationMs(response.load_duration);
+
+  logOllamaDiagnostic(context, "generation_metrics", stage, {
+    ...(loadDurationMs !== undefined && { loadDurationMs }),
+    ...(durationMs(response.prompt_eval_duration) !== undefined && {
+      promptEvalDurationMs: durationMs(response.prompt_eval_duration),
+    }),
+    ...(durationMs(response.eval_duration) !== undefined && {
+      evalDurationMs: durationMs(response.eval_duration),
+    }),
+    ...(durationMs(response.total_duration) !== undefined && {
+      providerTotalDurationMs: durationMs(response.total_duration),
+    }),
+    ...(loadDurationMs !== undefined && {
+      modelLoadState:
+        loadDurationMs > WARM_LOAD_DURATION_THRESHOLD_MS
+          ? "cold_start_likely"
+          : "warm_likely",
+    }),
+  });
+}
+
 export interface OllamaProviderOptions {
   fetch?: OllamaFetch;
   baseUrl?: string;
@@ -96,6 +129,7 @@ export interface OllamaProviderOptions {
   firstTokenTimeoutMs?: number;
   idleTimeoutMs?: number;
   requestTimeoutMs?: number;
+  keepAlive?: string;
   baseUrlResolver?: () => string;
   defaultModelResolver?: () => string;
   connectTimeoutResolver?: () => number;
@@ -572,6 +606,7 @@ export class OllamaProvider implements AIProvider {
   private readonly firstTokenTimeoutResolver: () => number;
   private readonly idleTimeoutResolver: () => number;
   private readonly requestTimeoutResolver: () => number;
+  private readonly keepAlive?: string;
 
   constructor(options: OllamaProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
@@ -593,6 +628,7 @@ export class OllamaProvider implements AIProvider {
     this.requestTimeoutResolver =
       options.requestTimeoutResolver ??
       (() => options.requestTimeoutMs ?? 0);
+    this.keepAlive = options.keepAlive;
   }
 
   supports(capability: AIProviderCapability): boolean {
@@ -615,10 +651,12 @@ export class OllamaProvider implements AIProvider {
       logOllamaDiagnostic(diagnostics, "provider_request_shape", "provider_request", {
         method: "POST",
         endpoint: `${baseUrl}/api/chat`,
-        payloadKeys: Object.keys(buildOllamaChatBody(request, model, false)).sort(),
+        payloadKeys: Object.keys(
+          buildOllamaChatBody(request, model, false, this.keepAlive),
+        ).sort(),
       });
       logOllamaDiagnostic(diagnostics, "ollama_fetch_started", "provider_request", {});
-      const requestBody = buildOllamaChatBody(request, model, false);
+      const requestBody = buildOllamaChatBody(request, model, false, this.keepAlive);
       const response = await this.fetchImpl(
         `${baseUrl}/api/chat`,
         {
@@ -649,6 +687,7 @@ export class OllamaProvider implements AIProvider {
         provider: this.providerId,
         model,
       });
+      logOllamaGenerationMetrics(diagnostics, "generate", parsed);
       logOllamaDiagnostic(diagnostics, "generation_completed", "generate", {});
 
       if (!parsed.message || typeof parsed.message.content !== "string") {
@@ -713,7 +752,7 @@ export class OllamaProvider implements AIProvider {
 
     try {
       logOllamaDiagnostic(diagnostics, "provider_request_started", "provider_stream", {});
-      const requestBody = buildOllamaChatBody(request, model, true);
+      const requestBody = buildOllamaChatBody(request, model, true, this.keepAlive);
       logOllamaDiagnostic(diagnostics, "provider_request_shape", "provider_stream", {
         method: "POST",
         endpoint: `${baseUrl}/api/chat`,
@@ -811,6 +850,7 @@ export class OllamaProvider implements AIProvider {
         }
 
         if (event.done) {
+          logOllamaGenerationMetrics(diagnostics, "provider_stream", event);
           const usage = mapUsage(event);
           if (usage) {
             usageEvent = {
