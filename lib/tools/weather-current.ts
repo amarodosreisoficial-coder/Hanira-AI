@@ -1,6 +1,7 @@
 import { detectCurrentWeatherRequest, type CurrentWeatherLanguage } from "@/lib/ai/runtime/current-weather-fallback";
 import { logServerEvent } from "@/lib/logging/server";
 import type { ToolExecutionContext, ToolResult } from "./types";
+import { GeocodingError, resolveGeocodedLocation } from "./geocoding";
 
 export const CURRENT_WEATHER_TOOL = "weather.current";
 export const OPEN_METEO_SOURCE = "open-meteo";
@@ -36,30 +37,8 @@ interface WeatherToolOptions extends ToolExecutionContext {
   timeoutMs?: number;
 }
 
-interface GeocodingResult {
-  name?: unknown;
-  latitude?: unknown;
-  longitude?: unknown;
-  admin1?: unknown;
-  country?: unknown;
-  country_code?: unknown;
-  timezone?: unknown;
-}
-
-interface GeocodingResponse {
-  results?: unknown;
-}
-
 interface ForecastResponse {
   current?: Record<string, unknown>;
-}
-
-function normalizedText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim();
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -79,39 +58,6 @@ function extractLocation(message: string) {
     .replace(/[?!.,]+$/u, "")
     .trim();
   return location || null;
-}
-
-function locationTokens(value: string) {
-  return normalizedText(value)
-    .split(/[\s,/-]+/u)
-    .filter((token) => token.length > 1);
-}
-
-function chooseGeocodingResult(results: GeocodingResult[], requested: string) {
-  const tokens = locationTokens(requested);
-  const ranked = results
-    .filter(
-      (result) =>
-        isFiniteNumber(result.latitude) && isFiniteNumber(result.longitude) &&
-        typeof result.name === "string",
-    )
-    .map((result) => {
-      const fields = [result.name, result.admin1, result.country]
-        .filter((field): field is string => typeof field === "string")
-        .map(normalizedText);
-      const score = tokens.reduce(
-        (total, token) => total + (fields.some((field) => field.includes(token)) ? 1 : 0),
-        0,
-      );
-      return { result, score };
-    })
-    .sort((left, right) => right.score - left.score);
-
-  const best = ranked[0];
-  if (!best || best.score === 0) return { kind: "not_found" as const };
-  const second = ranked[1];
-  if (second && second.score === best.score) return { kind: "ambiguous" as const };
-  return { kind: "selected" as const, result: best.result };
 }
 
 function conditionFromWeatherCode(code: number | undefined, language: CurrentWeatherLanguage) {
@@ -235,18 +181,7 @@ export async function executeCurrentWeatherTool(options: WeatherToolOptions): Pr
   reportToolEvent(options, "tool_execution_started", 0, 200);
 
   try {
-    const geocodingUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
-    geocodingUrl.searchParams.set("name", location);
-    geocodingUrl.searchParams.set("count", "5");
-    geocodingUrl.searchParams.set("language", detected.language === "pt-BR" ? "pt" : "en");
-    geocodingUrl.searchParams.set("format", "json");
-    const geocoding = await fetchJson<GeocodingResponse>(fetchImpl, geocodingUrl, controller.signal);
-    const results = Array.isArray(geocoding.results) ? geocoding.results as GeocodingResult[] : [];
-    const selected = chooseGeocodingResult(results, location);
-    if (selected.kind === "not_found") return toolFailure(options, startedAt, { code: "not_found", message: "Nao encontrei essa localidade." });
-    if (selected.kind === "ambiguous") return toolFailure(options, startedAt, { code: "ambiguous_location", message: "Encontrei mais de uma localidade possivel. Informe tambem o estado ou pais." });
-
-    const point = selected.result;
+    const point = await resolveGeocodedLocation({ query: location, language: detected.language, signal: controller.signal, fetchImpl });
     const forecastUrl = new URL("https://api.open-meteo.com/v1/forecast");
     forecastUrl.searchParams.set("latitude", String(point.latitude));
     forecastUrl.searchParams.set("longitude", String(point.longitude));
@@ -257,12 +192,12 @@ export async function executeCurrentWeatherTool(options: WeatherToolOptions): Pr
     if (!current || typeof current.time !== "string") throw new Error("invalid_current");
     const weatherCode = optionalNumber(current.weather_code);
     const result: WeatherCurrentResult = {
-      location: String(point.name),
-      ...(typeof point.admin1 === "string" && { region: point.admin1 }),
-      ...(typeof point.country === "string" && { country: point.country }),
+      location: point.location,
+      ...(point.region && { region: point.region }),
+      ...(point.country && { country: point.country }),
       latitude: Number(point.latitude),
       longitude: Number(point.longitude),
-      ...(typeof point.timezone === "string" && { timezone: point.timezone }),
+      ...(point.timezone && { timezone: point.timezone }),
       observedAt: current.time,
       temperatureC: optionalNumber(current.temperature_2m),
       apparentTemperatureC: optionalNumber(current.apparent_temperature),
@@ -285,12 +220,16 @@ export async function executeCurrentWeatherTool(options: WeatherToolOptions): Pr
   } catch (error) {
     const code = controller.signal.aborted
       ? options.signal.aborted ? "aborted" : "timeout"
+      : error instanceof GeocodingError ? error.code
       : error instanceof Error && (error.message === "invalid_current" || error.message === "invalid_json")
         ? "invalid_response"
         : "unavailable";
     return toolFailure(options, startedAt, {
       code,
-      message: code === "timeout" ? "A fonte meteorologica demorou para responder." : "A fonte meteorologica nao esta disponivel.",
+      message: code === "timeout" ? "A fonte meteorologica demorou para responder."
+        : code === "not_found" ? "Nao encontrei essa localidade."
+          : code === "ambiguous_location" ? "Encontrei mais de uma localidade possivel. Informe tambem o estado ou pais."
+            : "A fonte meteorologica nao esta disponivel.",
     });
   } finally {
     clearTimeout(timeout);

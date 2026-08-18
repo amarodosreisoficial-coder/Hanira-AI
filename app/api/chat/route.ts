@@ -5,6 +5,11 @@ import {
   buildTextChatProviderRequest,
   createTextChatProviderResponse,
   createDeterministicTextResponse,
+  createGroundedToolResponse,
+  createWeatherGroundedContext,
+  createTimeGroundedContext,
+  buildGroundedSynthesisRequest,
+  createTextChatRuntime,
   getOllamaTextProviderEligibility,
   shouldUseOllamaTextProvider,
   streamEvent,
@@ -35,6 +40,7 @@ import {
 import { saveExplicitMemory } from "@/services/memory";
 import { routeTool } from "@/lib/tools/router";
 import { formatWeatherCurrent } from "@/lib/tools/weather-current";
+import { formatTimeCurrent } from "@/lib/tools/time-current";
 
 const SYSTEM_PROMPT =
   "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
@@ -452,12 +458,93 @@ async function createChatStream(
     signal: request.signal,
   });
   if (routedTool?.result.ok && routedTool.result.data) {
-    return createDeterministicTextResponse({
+    const deterministicText = routedTool.tool === "weather.current"
+      ? formatWeatherCurrent(routedTool.result.data, routedTool.language)
+      : formatTimeCurrent(routedTool.result.data, routedTool.language);
+    const groundedContext = routedTool.tool === "weather.current"
+      ? createWeatherGroundedContext(routedTool.result, routedTool.language)
+      : createTimeGroundedContext(routedTool.result, routedTool.language);
+    let synthesisRuntime: ReturnType<typeof createTextChatRuntime> | null = null;
+    try {
+      synthesisRuntime = createTextChatRuntime();
+    } catch {
+      // A successful tool result remains useful when the local model is offline
+      // or misconfigured; the deterministic formatter is the safe second layer.
+    }
+
+    if (!synthesisRuntime) {
+      logServerEvent({
+        level: "warn",
+        requestId,
+        projectId: chatContext.projectId,
+        conversationId,
+        route: "/api/chat",
+        event: "tool_synthesis_deterministic_fallback",
+        status: 200,
+        durationMs: Date.now() - startedAt,
+        stage: "tool_synthesis",
+        details: { tool: routedTool.tool, reason: "runtime_unavailable" },
+      });
+      return createDeterministicTextResponse({
+        request,
+        conversationId,
+        requestId,
+        mode: routedTool.tool,
+        text: deterministicText,
+        onComplete: async (assistantContent) => {
+          await persistAssistantResponse({
+            supabase,
+            conversationId,
+            userId,
+            requestId,
+            projectId: chatContext.projectId,
+            assistantContent,
+            userMessage: payload.message,
+            startedAt,
+          });
+        },
+      });
+    }
+
+    logServerEvent({
+      level: "info",
+      requestId,
+      projectId: chatContext.projectId,
+      conversationId,
+      providerId: synthesisRuntime.providerId,
+      modelId: synthesisRuntime.model,
+      route: "/api/chat",
+      event: "tool_synthesis_started",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      stage: "tool_synthesis",
+      details: { tool: routedTool.tool, source: routedTool.result.source },
+    });
+    return createGroundedToolResponse({
       request,
+      provider: synthesisRuntime.provider,
+      providerRequest: buildGroundedSynthesisRequest({
+        context: groundedContext,
+        model: synthesisRuntime.model,
+        signal: request.signal,
+        timeoutMs: synthesisRuntime.requestTimeoutMs,
+        metadata: {
+          requestId,
+          generationStartedAtMs: Date.now(),
+          diagnostics: {
+            baseUrl: synthesisRuntime.baseUrl,
+            connectTimeoutMs: synthesisRuntime.connectTimeoutMs,
+            firstTokenTimeoutMs: synthesisRuntime.firstTokenTimeoutMs,
+            idleTimeoutMs: synthesisRuntime.idleTimeoutMs,
+            requestTimeoutMs: synthesisRuntime.requestTimeoutMs,
+          },
+        },
+      }),
+      groundedContext,
+      deterministicText,
       conversationId,
       requestId,
       mode: routedTool.tool,
-      text: formatWeatherCurrent(routedTool.result.data, routedTool.language),
       onComplete: async (assistantContent) => {
         await persistAssistantResponse({
           supabase,
@@ -468,6 +555,30 @@ async function createChatStream(
           assistantContent,
           userMessage: payload.message,
           startedAt,
+        });
+      },
+      onOutcome: async (outcome) => {
+        const event = outcome.kind === "synthesized"
+          ? "tool_synthesis_completed"
+          : outcome.kind === "cancelled"
+            ? "tool_synthesis_failed"
+            : outcome.reason === "grounding_rejected"
+              ? "tool_synthesis_grounding_rejected"
+              : "tool_synthesis_deterministic_fallback";
+        logServerEvent({
+          level: outcome.kind === "synthesized" ? "info" : "warn",
+          requestId,
+          projectId: chatContext.projectId,
+          conversationId,
+          providerId: synthesisRuntime.providerId,
+          modelId: synthesisRuntime.model,
+          route: "/api/chat",
+          event,
+          status: outcome.kind === "cancelled" ? 499 : 200,
+          durationMs: Date.now() - startedAt,
+          stage: "tool_synthesis",
+          ...(outcome.kind === "cancelled" ? { cancelledByClient: true } : {}),
+          details: { tool: routedTool.tool, ...(outcome.reason ? { reason: outcome.reason } : {}) },
         });
       },
     });
@@ -494,6 +605,18 @@ async function createChatStream(
           startedAt,
         });
       },
+    });
+  }
+
+  if (routedTool?.tool === "time.current") {
+    const message = routedTool.language === "pt-BR"
+      ? "Nao consegui consultar o fuso horario dessa localidade agora. Tente novamente em instantes."
+      : "I could not resolve that location's time zone right now. Please try again shortly.";
+    return createDeterministicTextResponse({
+      request, conversationId, requestId, mode: routedTool.tool, text: message,
+      onComplete: async (assistantContent) => persistAssistantResponse({ supabase, conversationId,
+        userId, requestId, projectId: chatContext.projectId, assistantContent,
+        userMessage: payload.message, startedAt }),
     });
   }
 
