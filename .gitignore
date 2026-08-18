@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/artifacts/chat-loop-diagnostics/
+/test-results/
 
 # next.js
 /.next/
@@ -22,6 +24,7 @@
 
 # misc
 .DS_Store
+desktop.ini
 *.pem
 
 # debug
@@ -41,3 +44,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/supabase/.temp/
