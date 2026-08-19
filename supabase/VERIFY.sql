@@ -1,5 +1,5 @@
 -- Consulta somente leitura para verificar a instalacao da Hanira.
--- Execute no SQL Editor do Supabase apos as migrations 001, 002, 003, 004 e 005.
+-- Execute no SQL Editor do Supabase apos as migrations 001 a 008.
 
 select
   expected.table_name,
@@ -51,7 +51,7 @@ select
   file_size_limit,
   allowed_mime_types
 from storage.buckets
-where id in ('chat-images', 'chat-audio')
+where id in ('chat-images', 'chat-audio', 'chat-documents')
 order by id;
 
 select

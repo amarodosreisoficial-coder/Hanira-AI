@@ -236,8 +236,3 @@ export async function executeCurrentWeatherTool(options: WeatherToolOptions): Pr
     options.signal.removeEventListener("abort", onAbort);
   }
 }
-
-
-
-
-

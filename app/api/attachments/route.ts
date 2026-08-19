@@ -151,9 +151,7 @@ export async function POST(request: Request) {
         : error instanceof Error &&
             ["CONVERSATION_NOT_FOUND", "ATTACHMENT_NOT_SAVED"].includes(error.message)
           ? "Nao foi possivel associar o arquivo a conversa."
-          : error instanceof Error
-            ? error.message
-            : "Nao foi possivel enviar o arquivo.";
+          : "Nao foi possivel enviar o arquivo.";
     const status =
       error instanceof Error && error.message === "UNAUTHENTICATED" ? 401 : 400;
     logServerEvent({

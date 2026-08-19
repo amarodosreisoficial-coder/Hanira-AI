@@ -20,7 +20,6 @@ import { routeChatCapability } from "@/lib/ai/runtime/capability-router";
 import { createCurrentWeatherFallbackResponse } from "@/lib/ai/runtime/current-weather-fallback";
 import {
   logAIProviderErrorThrown,
-  summarizeErrorStack,
 } from "@/lib/ai/ai-provider-error-logging";
 import { buildSystemPrompt } from "@/lib/ai/runtime/system-prompt";
 import { AIProviderError } from "@/lib/ai/types";
@@ -208,16 +207,6 @@ export async function POST(request: Request) {
           error && typeof error === "object" && "constructor" in error
             ? (error as { constructor?: { name?: string } }).constructor?.name
             : typeof error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorCause:
-          error instanceof AIProviderError
-            ? error.cause instanceof Error
-              ? error.cause.message
-              : error.cause ?? null
-            : error instanceof Error && "cause" in error
-              ? (error as Error & { cause?: unknown }).cause ?? null
-              : null,
-        errorStack: summarizeErrorStack(error),
       },
     });
 

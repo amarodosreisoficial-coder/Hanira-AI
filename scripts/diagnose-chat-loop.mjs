@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 
-const baseURL = process.env.HANIRA_DIAG_BASE_URL ?? "http://localhost:3002";
+const baseURL = process.env.HANIRA_DIAG_BASE_URL ?? "http://localhost:3051";
 const artifactsDir = path.join(
   process.cwd(),
   "artifacts",

@@ -14,7 +14,7 @@ npm run doctor
 npm run dev
 ```
 
-A aplicação abre em `http://localhost:3002`. O arquivo de exemplo inicia em
+A aplicação abre em `http://localhost:3051`. O arquivo de exemplo inicia em
 modo demonstração, sem exigir serviços externos.
 
 ## Variáveis de ambiente
@@ -29,7 +29,7 @@ OPENAI_VISION_MODEL=
 OPENAI_TRANSCRIPTION_MODEL=
 OPENAI_TTS_MODEL=
 OPENAI_TTS_VOICE=
-NEXT_PUBLIC_APP_URL=http://localhost:3002
+NEXT_PUBLIC_APP_URL=http://localhost:3051
 NEXT_PUBLIC_MAX_IMAGE_SIZE_MB=10
 NEXT_PUBLIC_MAX_AUDIO_SIZE_MB=25
 NEXT_PUBLIC_VOICE_ENABLED=true
@@ -53,7 +53,11 @@ Execute no SQL Editor do Supabase, em ordem:
 1. `supabase/migrations/001_initial_schema.sql`;
 2. `supabase/migrations/002_functional_product.sql`;
 3. `supabase/migrations/003_activation_hardening.sql`.
-4. `supabase/migrations/004_voice_and_vision.sql`.
+4. `supabase/migrations/004_voice_and_vision.sql`;
+5. `supabase/migrations/005_projects_and_personalities.sql`;
+6. `supabase/migrations/006_document_attachments.sql`;
+7. `supabase/migrations/007_global_memory_scope.sql`;
+8. `supabase/migrations/008_profile_preferences_memory_origin.sql`.
 
 Depois execute `supabase/VERIFY.sql` para conferir tabelas, buckets privados,
 RLS, policies, triggers e a versão do schema. As políticas isolam banco e
