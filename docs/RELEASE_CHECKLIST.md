@@ -41,8 +41,7 @@
 - [ ] nenhum `npm audit fix --force`
 - [ ] vulnerabilidades sem patch seguro registradas como risco
 
-Versão candidata atual: `0.4.0`; Next.js `16.2.10`. A atualização para
-`16.3.1` depende de acesso ao registry e deve ser validada separadamente.
+Versão candidata atual: `0.4.0`; Next.js `16.3.3`.
 
 ## Rollback
 
