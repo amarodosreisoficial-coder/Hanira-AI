@@ -43,12 +43,18 @@ No **SQL Editor**, execute os arquivos completos e nesta ordem:
 
 1. `supabase/migrations/001_initial_schema.sql`;
 2. `supabase/migrations/002_functional_product.sql`;
-3. `supabase/migrations/003_activation_hardening.sql`.
-4. `supabase/migrations/004_voice_and_vision.sql`.
+3. `supabase/migrations/003_activation_hardening.sql`;
+4. `supabase/migrations/004_voice_and_vision.sql`;
+5. `supabase/migrations/005_projects_and_personalities.sql`;
+6. `supabase/migrations/006_document_attachments.sql`;
+7. `supabase/migrations/007_global_memory_scope.sql`;
+8. `supabase/migrations/008_profile_preferences_memory_origin.sql`.
 
-As migrations 003 e 004 sao incrementais. A 003 adiciona idempotencia; a 004
-adiciona voz, visao, anexos, preferencias e buckets privados. Nenhuma apaga
-tabelas ou dados.
+As migrations sao incrementais: a 003 adiciona idempotencia; a 004 adiciona
+voz, visao, anexos, preferencias e buckets privados; a 005 adiciona projetos e
+personalidades; a 006 adiciona documentos; a 007 adiciona escopo global de
+memoria; a 008 adiciona preferencias de perfil e origem de memoria. Nenhuma
+apaga tabelas ou dados.
 
 ### 4. Habilitar autenticacao por e-mail
 
@@ -81,15 +87,15 @@ Nao adicione o dominio de producao antes de conhecer a URL real.
 No SQL Editor, execute `supabase/VERIFY.sql`. O script e somente leitura e
 lista:
 
-- as seis tabelas esperadas;
+- as nove tabelas esperadas;
 - o estado de RLS;
-- a versao `003`;
+- a versao `008`;
 - os triggers instalados.
 
-Devem existir `profiles`, `conversations`, `messages`, `memories`,
-`user_settings`, `attachments` e `system_metadata`. Tambem devem aparecer os
-buckets privados `chat-images` e `chat-audio`. Nao desative RLS para contornar
-erros.
+Devem existir `profiles`, `projects`, `personalities`, `conversations`,
+`messages`, `memories`, `user_settings`, `system_metadata` e `attachments`.
+Tambem devem aparecer os buckets privados `chat-images`, `chat-audio` e
+`chat-documents`. Nao desative RLS para contornar erros.
 
 ## Parte B - Ollama
 
@@ -253,7 +259,7 @@ confirme o usuario pelo Dashboard.
 
 ### Diagnostico mostra banco ou migration indisponivel
 
-Execute as quatro migrations em ordem e depois `supabase/VERIFY.sql`. Verifique
+Execute as oito migrations em ordem e depois `supabase/VERIFY.sql`. Verifique
 se a service role pertence ao mesmo projeto da URL.
 
 ### Diagnostico mostra modelo indisponivel

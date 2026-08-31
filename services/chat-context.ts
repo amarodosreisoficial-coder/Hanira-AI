@@ -98,8 +98,8 @@ export function buildPersonalityInstructions(settings: {
   const lines = [
     preferredName ? `Nome preferido do usuario: ${preferredName}.` : "",
     responseStyle ? `Estilo de resposta solicitado: ${responseStyle}.` : "",
-    occupation ? `OcupaÃ§Ã£o do usuÃ¡rio: ${occupation}.` : "",
-    preferences.length ? `PreferÃªncias do usuÃ¡rio: ${preferences.join(", ")}.` : "",
+    occupation ? `Ocupação do usuário: ${occupation}.` : "",
+    preferences.length ? `Preferências do usuário: ${preferences.join(", ")}.` : "",
   ].filter(Boolean);
 
   return lines.join("\n");
