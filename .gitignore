@@ -45,3 +45,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /supabase/.temp/
+
+# local/private keys
+/keys/
