@@ -7,15 +7,14 @@ import {
   type RouterDecision,
 } from "@/lib/ai/router/types";
 
-// Composition root do Model Router para o runtime de texto (Pacote 14.2B).
-//
-// O Model Router continua PURO: nao le process.env, nao cria providers, nao
-// faz fetch e nao conhece Supabase/HTTP. Esta camada e a unica ponte entre a
+// Composition root do Model Router para o runtime de texto (Pacotes 14.2B e
+// 14.3). A configuracao logica dos candidatos vive no registry tipado
+// (lib/ai/router/candidate-registry.ts); este modulo e a ponte entre a
 // decisao logica do router (RouterDecision) e a criacao de uma instancia
 // AIProvider, via factories explicitamente injetadas pelo composition root.
-
-// Id logico estavel do unico candidato real de texto neste pacote.
-export const TEXT_ROUTER_CANDIDATE_ID = "ollama-default";
+//
+// O Model Router e o registry continuam PUROS: nao leem process.env, nao
+// criam providers, nao fazem fetch e nao conhecem Supabase/HTTP.
 
 // Allow-list de providers logicos elegiveis para o runtime de texto. Qualquer
 // id fora desta lista falha de forma controlada (sem fallback implicito e sem
@@ -43,26 +42,6 @@ export type TextRouterProviderFactory = (
 export type TextRouterProviderFactories = Readonly<
   Record<TextRouterLogicalProviderId, TextRouterProviderFactory>
 >;
-
-// Prioridade fixa neste pacote: existe somente um candidato real de texto.
-const TEXT_ROUTER_PRIORITY = 1;
-
-export function buildTextRouterCandidates(config: {
-  readonly model: string;
-}): readonly RouterCandidate[] {
-  return [
-    {
-      id: TEXT_ROUTER_CANDIDATE_ID,
-      provider: "ollama",
-      model: config.model,
-      capabilities: ["text"],
-      priority: TEXT_ROUTER_PRIORITY,
-      enabled: true,
-      deployment: "local",
-      label: "Ollama local (texto)",
-    },
-  ];
-}
 
 export function createTextModelRouter(
   candidates: readonly RouterCandidate[],

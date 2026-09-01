@@ -2,8 +2,8 @@ import type { AIProvider } from "@/lib/ai/provider";
 import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
+import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
 import {
-  buildTextRouterCandidates,
   createTextModelRouter,
   resolveTextRouterDecisionProvider,
 } from "@/lib/ai/runtime/text-router-resolution";
@@ -237,13 +237,14 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
 export function createTextChatRuntime(): TextChatRuntimeConfig {
   const config = resolveOllamaRuntimeConfig();
 
-  // Pacote 14.2B: a selecao do provider de texto passa pelo Model Router,
-  // que permanece puro (sem env, sem rede, sem criacao de providers).
-  // Este e o composition root: RouterDecision -> AIProvider real.
-  const candidates = buildTextRouterCandidates(config);
-  const decision = createTextModelRouter(candidates).select({
-    capability: "text",
-  });
+  // Pacotes 14.2B/14.3: a selecao do provider de texto passa pelo Model
+  // Router alimentado pelo registry tipado de candidatos; ambos permanecem
+  // puros (sem env, sem rede, sem criacao de providers). Este e o composition
+  // root: RouterDecision -> AIProvider real.
+  const registry = createRouterCandidateRegistry({ ollamaModel: config.model });
+  const decision = createTextModelRouter(
+    registry.getCandidatesForCapability("text"),
+  ).select({ capability: "text" });
 
   const provider = resolveTextRouterDecisionProvider(decision, {
     ollama: ({ model }) =>
