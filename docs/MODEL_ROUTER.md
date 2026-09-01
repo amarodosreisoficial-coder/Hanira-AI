@@ -4,18 +4,24 @@ Documento tecnico do componente de roteamento de modelos.
 
 ## Estado
 
-Atualizado no Pacote 14.2B: o Model Router esta conectado ao runtime de texto.
+Atualizado no Pacote 14.3: os candidatos do Model Router vivem em um registry
+tipado e deterministico (`lib/ai/router/candidate-registry.ts`). O
 `createTextChatRuntime()` (composition root, em
-`lib/ai/runtime/create-text-chat-runtime.ts`) seleciona o provider de texto
-via `ModelRouter.select({ capability: "text" })` e resolve o `RouterDecision`
+`lib/ai/runtime/create-text-chat-runtime.ts`) alimenta o `ModelRouter` a
+partir do registry (`createRouterCandidateRegistry({ ollamaModel:
+config.model })`), seleciona o provider de texto via
+`ModelRouter.select({ capability: "text" })` e resolve o `RouterDecision`
 para uma instancia `AIProvider` atraves de
 `lib/ai/runtime/text-router-resolution.ts`. Existe somente um candidato real:
-`ollama-default` (provider `ollama`, deployment `local`, prioridade fixa).
-O comportamento funcional permanece identico: o texto continua saindo pelo
-Ollama local configurado, sem provider cloud, sem fallback e sem custo novo.
+`ollama-default` (provider `ollama`, capability `text`, deployment `local`,
+prioridade 1, enabled). O comportamento funcional permanece identico: o
+texto continua saindo pelo Ollama local configurado, sem provider cloud, sem
+fallback e sem custo novo.
 
-Historico do Pacote 14.2A: a fundacao do Model Router v1 foi implementada
-como camada isolada em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
+Historico:
+- Pacote 14.2A: fundacao do Model Router v1 implementada como camada isolada
+  em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
+- Pacote 14.2B: Router integrado ao runtime de texto via composition root.
 
 ### Implementado agora (fundacao isolada)
 
@@ -51,9 +57,10 @@ como camada isolada em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
 
 ### Integracao no runtime (14.2B)
 
-- `buildTextRouterCandidates()` monta os candidatos de texto por configuracao
-  interna tipada (nenhuma variavel de ambiente nova);
-- `createTextModelRouter()` cria o `ModelRouter` com esse snapshot;
+- `createRouterCandidateRegistry()` fornece os candidatos de texto por
+  configuracao interna tipada (nenhuma variavel de ambiente nova);
+- `createTextModelRouter()` cria o `ModelRouter` com
+  `registry.getCandidatesForCapability("text")`;
 - `resolveTextRouterDecisionProvider()` resolve o provider logico selecionado
   para o `AIProvider` real por allow-list explicita (somente `ollama`) e
   exige a capability obrigatoria `text-generation` (ponte tipada
@@ -67,15 +74,43 @@ como camada isolada em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
 - testes da integracao em `tests/router-runtime-integration.test.ts`
   (unitarios, sem rede).
 
+### Registry de candidatos (14.3)
+
+- Camada central, tipada e deterministica em
+  `lib/ai/router/candidate-registry.ts`;
+- contrato: `createRouterCandidateRegistry({ ollamaModel })` retorna
+  `{ candidates, getCandidatesForCapability(capability) }`;
+- somente leitura: candidatos, capabilities e listas congelados
+  (`Object.freeze`); sem mutacao global e sem singleton mutavel (o registry
+  e recriado a cada chamada);
+- ordenacao deterministica por (priority asc, id asc): a ordem de registro
+  nunca altera o resultado;
+- catalogo ativo contendo SOMENTE `ollama-default` (provider `ollama`,
+  capability `text`, deployment `local`, prioridade 1, enabled), com o model
+  injetado pelo composition root a partir da configuracao Ollama ja validada
+  (`resolveOllamaRuntimeConfig()`);
+- o registry NAO cria providers, NAO le env/secrets, NAO acessa rede,
+  Supabase, HTTP ou banco, NAO executa modelos e NAO implementa fallback ou
+  retries;
+- entrada invalida falha de forma tipada (`ModelRouterError` /
+  `invalid_configuration`);
+- testes do registry em `tests/router-candidate-registry.test.ts`
+  (unitarios, sem rede).
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
   tentativas.
 - Provider cloud novo no router: nenhum candidato `cloud` existe (sem GLM,
-  DeepSeek, Laguna, LongCat, Gemini ou OpenAI adicional).
+  DeepSeek, Laguna, LongCat, Gemini ou OpenAI adicional). Candidatos como
+  `glm-cloud-fast`, `deepseek-cloud-fast`, `nira-local`, `laguna-code` e
+  `longcat-agent` NAO existem, nem como strings usadas em runtime.
 - Perfis Nira (Local, Fast, Pro, Code, Agent) e quota.
 - Retry centralizado, load balancing, selecao por custo e selecao por
   latencia.
+- Candidate config via env: o registry ainda usa configuracao interna
+  tipada; leitura de candidatos de variaveis de ambiente ficara para pacote
+  posterior.
 
 ## Primeira versao desejada
 

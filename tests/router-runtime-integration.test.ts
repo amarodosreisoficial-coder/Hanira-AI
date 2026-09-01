@@ -13,10 +13,13 @@ import {
 } from "../lib/ai/types";
 import { OllamaProvider } from "../lib/ai/providers/ollama";
 import {
-  buildTextRouterCandidates,
+  createRouterCandidateRegistry,
+  OLLAMA_DEFAULT_CANDIDATE_ID,
+} from "../lib/ai/router/candidate-registry";
+import type { RouterCandidate } from "../lib/ai/router/types";
+import {
   createTextModelRouter,
   resolveTextRouterDecisionProvider,
-  TEXT_ROUTER_CANDIDATE_ID,
   TEXT_ROUTER_LOGICAL_PROVIDERS,
 } from "../lib/ai/runtime/text-router-resolution";
 import { createTextChatRuntime } from "../lib/ai/runtime";
@@ -76,9 +79,13 @@ function buildNonTextProvider() {
   });
 }
 
+function buildTextCandidates(model: string): readonly RouterCandidate[] {
+  return createRouterCandidateRegistry({ ollamaModel: model }).candidates;
+}
+
 function buildDecision(): RouterDecision {
   return createTextModelRouter(
-    buildTextRouterCandidates({ model: "qwen2.5:latest" }),
+    buildTextCandidates("qwen2.5:latest"),
   ).select({ capability: "text" });
 }
 
@@ -104,7 +111,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
     const decision = buildDecision();
 
     expect(decision.capability).toBe("text");
-    expect(decision.selected.candidateId).toBe(TEXT_ROUTER_CANDIDATE_ID);
+    expect(decision.selected.candidateId).toBe(OLLAMA_DEFAULT_CANDIDATE_ID);
     expect(decision.selected.provider).toBe("ollama");
     expect(decision.selected.model).toBe("qwen2.5:latest");
     expect(decision.selected.deployment).toBe("local");
@@ -160,7 +167,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
     const decision = forgeDecision({
       capability: "vision",
       selected: {
-        candidateId: TEXT_ROUTER_CANDIDATE_ID,
+        candidateId: OLLAMA_DEFAULT_CANDIDATE_ID,
         provider: "ollama",
         model: "qwen2.5:latest",
         priority: 1,
@@ -187,9 +194,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
 
 describe("integracao Model Router -> guardas de regressao (14.2B)", () => {
   it("selecao permanece deterministica independentemente da ordem de entrada", () => {
-    const candidates = buildTextRouterCandidates({
-      model: "qwen2.5:latest",
-    });
+    const candidates = buildTextCandidates("qwen2.5:latest");
 
     const decisionA = createTextModelRouter(candidates).select({
       capability: "text",
@@ -206,9 +211,7 @@ describe("integracao Model Router -> guardas de regressao (14.2B)", () => {
   });
 
   it("nenhum provider cloud entra na lista de candidatos de texto", () => {
-    const candidates = buildTextRouterCandidates({
-      model: "qwen2.5:latest",
-    });
+    const candidates = buildTextCandidates("qwen2.5:latest");
 
     expect(candidates).toHaveLength(1);
     for (const candidate of candidates) {
