@@ -2,6 +2,11 @@ import type { AIProvider } from "@/lib/ai/provider";
 import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
+import {
+  buildTextRouterCandidates,
+  createTextModelRouter,
+  resolveTextRouterDecisionProvider,
+} from "@/lib/ai/runtime/text-router-resolution";
 
 const MIN_CONNECT_TIMEOUT_MS = 250;
 const MAX_CONNECT_TIMEOUT_MS = 120_000;
@@ -231,13 +236,25 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
 
 export function createTextChatRuntime(): TextChatRuntimeConfig {
   const config = resolveOllamaRuntimeConfig();
-  const provider = new OllamaProvider({
-    baseUrl: config.baseUrl,
-    defaultModel: config.model,
-    connectTimeoutMs: config.connectTimeoutMs,
-    firstTokenTimeoutMs: config.firstTokenTimeoutMs,
-    idleTimeoutMs: config.idleTimeoutMs,
-    requestTimeoutMs: config.requestTimeoutMs,
+
+  // Pacote 14.2B: a selecao do provider de texto passa pelo Model Router,
+  // que permanece puro (sem env, sem rede, sem criacao de providers).
+  // Este e o composition root: RouterDecision -> AIProvider real.
+  const candidates = buildTextRouterCandidates(config);
+  const decision = createTextModelRouter(candidates).select({
+    capability: "text",
+  });
+
+  const provider = resolveTextRouterDecisionProvider(decision, {
+    ollama: ({ model }) =>
+      new OllamaProvider({
+        baseUrl: config.baseUrl,
+        defaultModel: model,
+        connectTimeoutMs: config.connectTimeoutMs,
+        firstTokenTimeoutMs: config.firstTokenTimeoutMs,
+        idleTimeoutMs: config.idleTimeoutMs,
+        requestTimeoutMs: config.requestTimeoutMs,
+      }),
   });
 
   return {

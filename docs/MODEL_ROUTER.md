@@ -4,10 +4,18 @@ Documento tecnico do componente de roteamento de modelos.
 
 ## Estado
 
-Atualizado no Pacote 14.2A: a fundacao do Model Router v1 foi implementada
-como camada isolada em `lib/ai/router/`. O componente NAO esta ativo em
-producao: nenhum fluxo real (`POST /api/chat`, `createTextChatRuntime`,
-`capability-router`) consome o router nesta etapa.
+Atualizado no Pacote 14.2B: o Model Router esta conectado ao runtime de texto.
+`createTextChatRuntime()` (composition root, em
+`lib/ai/runtime/create-text-chat-runtime.ts`) seleciona o provider de texto
+via `ModelRouter.select({ capability: "text" })` e resolve o `RouterDecision`
+para uma instancia `AIProvider` atraves de
+`lib/ai/runtime/text-router-resolution.ts`. Existe somente um candidato real:
+`ollama-default` (provider `ollama`, deployment `local`, prioridade fixa).
+O comportamento funcional permanece identico: o texto continua saindo pelo
+Ollama local configurado, sem provider cloud, sem fallback e sem custo novo.
+
+Historico do Pacote 14.2A: a fundacao do Model Router v1 foi implementada
+como camada isolada em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
 
 ### Implementado agora (fundacao isolada)
 
@@ -41,15 +49,33 @@ producao: nenhum fluxo real (`POST /api/chat`, `createTextChatRuntime`,
   memorias.
 - Testes unitarios puros em `tests/model-router.test.ts` (sem rede).
 
+### Integracao no runtime (14.2B)
+
+- `buildTextRouterCandidates()` monta os candidatos de texto por configuracao
+  interna tipada (nenhuma variavel de ambiente nova);
+- `createTextModelRouter()` cria o `ModelRouter` com esse snapshot;
+- `resolveTextRouterDecisionProvider()` resolve o provider logico selecionado
+  para o `AIProvider` real por allow-list explicita (somente `ollama`) e
+  exige a capability obrigatoria `text-generation` (ponte tipada
+  `ROUTER_CAPABILITY_TO_PROVIDER_CAPABILITY`);
+- provider logico desconhecido, capability incompativel ou provider sem
+  `text-generation` falham de forma controlada (`ModelRouterError`), sem
+  fallback implicito e sem expor secrets;
+- `capability-router` e `POST /api/chat` nao mudaram: continuam consumindo
+  `createTextChatRuntime()`, que agora passa pelo router. O caminho de visao
+  (OpenAI) permanece fora do router neste pacote;
+- testes da integracao em `tests/router-runtime-integration.test.ts`
+  (unitarios, sem rede).
+
 ### Nao implementado ainda
 
-- Integracao com `createTextChatRuntime`, `capability-router` ou
-  `POST /api/chat` (a fundacao coexiste com o runtime atual sem ser usada).
-- Fallback real, retries, circuit breaker e limite de tentativas.
-- Politicas de perfil Nira (Local, Fast, Pro, Code, Agent) — os perfis
-  resolverao para candidatos no futuro.
-- Providers adicionais (DeepSeek, GLM, Gemini e outros).
-- Custo, latencia, metricas por modelo e load balancing.
+- Fallback real entre providers, retries, circuit breaker e limite de
+  tentativas.
+- Provider cloud novo no router: nenhum candidato `cloud` existe (sem GLM,
+  DeepSeek, Laguna, LongCat, Gemini ou OpenAI adicional).
+- Perfis Nira (Local, Fast, Pro, Code, Agent) e quota.
+- Retry centralizado, load balancing, selecao por custo e selecao por
+  latencia.
 
 ## Primeira versao desejada
 
