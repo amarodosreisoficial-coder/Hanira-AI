@@ -4,6 +4,7 @@ import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
 import type { ExternalRouterCandidateConfig } from "@/lib/ai/router/candidate-config";
 import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
+import type { RouterDecisionReason } from "@/lib/ai/router/types";
 import {
   DEFAULT_NIRA_PROFILE_ID,
   resolveNiraProfile,
@@ -48,6 +49,15 @@ export interface NiraRuntimeMetadata {
   readonly displayName: string;
 }
 
+// Metadata segura da decisao do Model Router (Pacote 16.6). Contem apenas
+// identificadores logicos da selecao (candidateId, reason, providerId),
+// sem segredos, sem baseUrl, sem objetos completos de provider.
+export interface TextChatRuntimeRoutingMetadata {
+  readonly candidateId: string;
+  readonly reason: RouterDecisionReason;
+  readonly providerId: string;
+}
+
 export interface TextChatRuntimeConfig {
   provider: AIProvider;
   model: string;
@@ -60,6 +70,8 @@ export interface TextChatRuntimeConfig {
   providerId: string;
   // Identidade Nira do runtime (Pacote 14.5): perfil logico em uso.
   readonly nira: NiraRuntimeMetadata;
+  // Decisao do Model Router (Pacote 14.6): candidato logico selecionado.
+  readonly routing: TextChatRuntimeRoutingMetadata;
 }
 
 // Opcoes opcionais de composicao do runtime de texto (Pacotes 14.4 e 14.5).
@@ -318,10 +330,15 @@ export function createTextChatRuntime(
     requestTimeoutMs: config.requestTimeoutMs,
     keepAlive: config.keepAlive,
     providerId: provider.providerId,
-    nira: {
+    nira: Object.freeze({
       profileId: niraProfile.id,
       displayName: niraProfile.name,
-    },
+    }),
+    routing: Object.freeze({
+      candidateId: decision.selected.candidateId,
+      reason: decision.reason,
+      providerId: decision.selected.provider,
+    }),
   };
 }
 

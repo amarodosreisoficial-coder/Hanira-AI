@@ -199,6 +199,31 @@ Hanira
   Local: a fronteira de execucao continua sendo o Provider Resolver;
 - testes em `tests/nira-local-profile.test.ts` (unitarios, sem rede).
 
+### Prova de runtime da Nira Local (14.6)
+
+Integracao ponta a ponta comprovada do fluxo da Nira Local no runtime textual:
+
+```
+Hanira
+  -> Nira Local
+  -> Candidate Registry
+  -> ModelRouter
+  -> RouterDecision
+  -> Provider Resolver
+  -> OllamaProvider
+  -> resposta textual
+```
+
+- o composition root agora expoe metadata segura de routing
+  `runtime.routing = { candidateId, reason, providerId }`, congelada, sem
+  segredos, sem `baseUrl` e sem objetos completos de provider;
+- a prova em `tests/nira-local-runtime-proof.test.ts` exercita o fluxo real
+  (Nira -> Registry -> ModelRouter -> Decision -> Provider Resolver -> provider)
+  com mock APENAS na fronteira de rede (OllamaProvider simulado), sem chamada de
+  rede real e sem depender de Ollama instalado;
+- nenhum provider cloud foi adicionado; nenhum fallback, retry, quota ou billing
+  foi implementado; comportamento padrao permanece equivalente.
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
