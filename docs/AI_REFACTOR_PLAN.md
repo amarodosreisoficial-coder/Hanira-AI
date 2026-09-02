@@ -235,6 +235,9 @@ verificaveis e reversiveis, com base no estado real do codigo.
   injetados.
 - Pacote 14.5: camada de identidade Nira Local acima do router
   (`lib/ai/nira/profiles.ts`).
+- Pacote 14.6: prova funcional/runtime da Nira Local ponta a ponta
+  (`tests/nira-local-runtime-proof.test.ts`), com metadata segura de routing
+  (`runtime.routing = { candidateId, reason, providerId }`).
 
 Fluxo atual do runtime textual:
 
