@@ -2,6 +2,7 @@ import type { AIProvider } from "@/lib/ai/provider";
 import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
+import type { ExternalRouterCandidateConfig } from "@/lib/ai/router/candidate-config";
 import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
 import {
   createTextModelRouter,
@@ -46,6 +47,15 @@ export interface TextChatRuntimeConfig {
   requestTimeoutMs: number;
   keepAlive?: string;
   providerId: string;
+}
+
+// Opcoes opcionais de composicao do runtime de texto (Pacote 14.4). Nenhuma
+// opcao e obrigatoria: sem argumentos, o comportamento continua identico ao
+// Pacote 14.3 (somente candidato interno Ollama, externalCandidates = []).
+// Candidatos externos sao apenas configuracao logica injetada; nunca ativam
+// providers cloud reais neste pacote.
+export interface TextChatRuntimeCreateOptions {
+  readonly externalCandidates?: readonly ExternalRouterCandidateConfig[];
 }
 
 function createInvalidConfigError(
@@ -234,14 +244,25 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
   };
 }
 
-export function createTextChatRuntime(): TextChatRuntimeConfig {
+export function createTextChatRuntime(
+  options?: TextChatRuntimeCreateOptions,
+): TextChatRuntimeConfig {
   const config = resolveOllamaRuntimeConfig();
 
   // Pacotes 14.2B/14.3: a selecao do provider de texto passa pelo Model
   // Router alimentado pelo registry tipado de candidatos; ambos permanecem
   // puros (sem env, sem rede, sem criacao de providers). Este e o composition
   // root: RouterDecision -> AIProvider real.
-  const registry = createRouterCandidateRegistry({ ollamaModel: config.model });
+  //
+  // Pacote 14.4: a composition root pode injetar `externalCandidates` (ja
+  // validados/normalizados) para o registry. Sem a opcao, o padrao e
+  // `[]`, entao o comportamento funcional e identico ao Pacote 14.3: somente
+  // o candidato interno `ollama-default` e registrado e o Ollama continua
+  // sendo selecionado.
+  const registry = createRouterCandidateRegistry({
+    ollamaModel: config.model,
+    externalCandidates: options?.externalCandidates,
+  });
   const decision = createTextModelRouter(
     registry.getCandidatesForCapability("text"),
   ).select({ capability: "text" });

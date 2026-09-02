@@ -97,6 +97,60 @@ Historico:
 - testes do registry em `tests/router-candidate-registry.test.ts`
   (unitarios, sem rede).
 
+### Configuracao externa de candidatos (14.4)
+
+- Nova camada tipada `lib/ai/router/candidate-config.ts` — "External Candidate
+  Configuration". Fluxo:
+
+```
+External Candidate Configuration
+          ↓
+Candidate Registry
+          ↓
+ModelRouter
+          ↓
+RouterDecision
+          ↓
+Provider Resolver
+          ↓
+AIProvider
+```
+
+- contrato: `normalizeExternalRouterCandidates(input?)` valida e normaliza a
+  lista de candidatos externos injetados pela camada de composicao,
+  retornando `readonly RouterCandidate[]` congelada. Reutiliza o tipo
+  `RouterCandidate` (sem duplicacao de contrato);
+- a configuracao e INJETADA: esta camada NAO le `process.env` e NAO importa
+  qualquer provider concreto (nem Ollama, nem providers cloud);
+- validacao deterministica: id/provider/model nao vazios, ao menos uma
+  capability valida, `deployment` restrito ao contrato (`local|cloud`),
+  `priority` inteira segura, `enabled` booleano, label string opcional, e IDs
+  duplicados proibidos — entrada ausente ou `[]` resulta em lista vazia;
+- dados invalidos falham com `ModelRouterError` / `invalid_configuration`,
+  sem vazar o objeto completo e sem incluir secrets ou conteudo sensivel na
+  mensagem;
+- imutabilidade: lista, candidatos e capabilities congelados; a entrada
+  recebida nunca e mutada; sem singleton mutavel e sem estado global;
+- o Candidate Registry (14.3) agora aceita
+  `createRouterCandidateRegistry({ ollamaModel, externalCandidates })`:
+  `ollama-default` continua criado internamente, candidatos externos sao
+  adicionados de forma controlada, IDs duplicados entre internos e externos
+  falham, e a ordenacao/exposicao continua deterministica e readonly;
+- o composition root `createTextChatRuntime(options?)` ficou preparado para
+  receber futuramente `externalCandidates` via injecao, mas o padrao e
+  `externalCandidates = []`: `createTextChatRuntime()` sem argumentos
+  continua funcionando exatamente como antes, com o Ollama selecionado e sem
+  nenhuma mudanca funcional percebida pelo usuario;
+- NENHUM candidato cloud real foi adicionado ao runtime padrao. Nao existem
+  `glm-default`, `deepseek-default`, `laguna-default` ou `longcat-default`.
+  Configuracao externa nao significa provider disponivel: quem decide a
+  execucao continua sendo o Provider Resolver
+  (`lib/ai/runtime/text-router-resolution.ts`, allow-list somente `ollama`);
+- fallback, retry, quota, load balancing, circuit breaker e metricas
+  continuam fora deste pacote;
+- testes em `tests/external-router-candidate-config.test.ts` (unitarios, sem
+  rede, com candidatos ficticios como `cloud-test`/`candidate-b`).
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
