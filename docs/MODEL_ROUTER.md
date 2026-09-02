@@ -4,24 +4,30 @@ Documento tecnico do componente de roteamento de modelos.
 
 ## Estado
 
-Atualizado no Pacote 14.3: os candidatos do Model Router vivem em um registry
-tipado e deterministico (`lib/ai/router/candidate-registry.ts`). O
-`createTextChatRuntime()` (composition root, em
-`lib/ai/runtime/create-text-chat-runtime.ts`) alimenta o `ModelRouter` a
-partir do registry (`createRouterCandidateRegistry({ ollamaModel:
-config.model })`), seleciona o provider de texto via
-`ModelRouter.select({ capability: "text" })` e resolve o `RouterDecision`
-para uma instancia `AIProvider` atraves de
+Atualizado no Pacote 14.5: os candidatos do Model Router vivem em um registry
+tipado e deterministico (`lib/ai/router/candidate-registry.ts`), alimentado por
+uma camada tipada de configuracao externa (`lib/ai/router/candidate-config.ts`)
+e selecionado a partir de um perfil de identidade Nira
+(`lib/ai/nira/profiles.ts`). O `createTextChatRuntime()` (composition root, em
+`lib/ai/runtime/create-text-chat-runtime.ts`) usa por padrao o perfil Nira Local
+(preferredCandidateId `ollama-default`), alimenta o `ModelRouter` via registry e
+resolve o `RouterDecision` para uma instancia `AIProvider` atraves de
 `lib/ai/runtime/text-router-resolution.ts`. Existe somente um candidato real:
 `ollama-default` (provider `ollama`, capability `text`, deployment `local`,
-prioridade 1, enabled). O comportamento funcional permanece identico: o
-texto continua saindo pelo Ollama local configurado, sem provider cloud, sem
-fallback e sem custo novo.
+prioridade 1, enabled). O comportamento funcional permanece identico: o texto
+continua saindo pelo Ollama local configurado, sem provider cloud, sem fallback
+e sem custo novo.
 
 Historico:
 - Pacote 14.2A: fundacao do Model Router v1 implementada como camada isolada
   em `lib/ai/router/`, sem ser consumida por nenhum fluxo.
 - Pacote 14.2B: Router integrado ao runtime de texto via composition root.
+- Pacote 14.3: Candidate Registry tipado e deterministico
+  (`lib/ai/router/candidate-registry.ts`).
+- Pacote 14.4: External Candidate Configuration tipada
+  (`lib/ai/router/candidate-config.ts`), com candidatos externos injetados.
+- Pacote 14.5: camada de identidade Nira (Local) acima do router
+  (`lib/ai/nira/profiles.ts`).
 
 ### Implementado agora (fundacao isolada)
 
@@ -151,15 +157,59 @@ AIProvider
 - testes em `tests/external-router-candidate-config.test.ts` (unitarios, sem
   rede, com candidatos ficticios como `cloud-test`/`candidate-b`).
 
+### Perfil Nira (14.5)
+
+Nova camada de identidade/capability da Hanira em `lib/ai/nira/profiles.ts`,
+logicamente ACIMA do router. Nira nao e o provider e nao e o modelo fisico:
+um perfil Nira aponta para um CANDIDATO LOGICO do router
+(`preferredCandidateId`), jamais diretamente para um provider concreto.
+
+```
+Hanira
+  -> Nira Profile
+  -> Candidate Configuration
+  -> Candidate Registry
+  -> ModelRouter
+  -> RouterDecision
+  -> Provider Resolver
+  -> AIProvider
+```
+
+- contrato `NiraProfile` (id, name, capability via `RouterCapability`,
+  preferredCandidateId e description opcional), reutilizando os tipos do
+  router ja existentes (sem duplicacao de contrato);
+- catalogo unico neste pacote: Nira Local (`nira-local`, name "Nira Local",
+  capability `text`, preferredCandidateId `ollama-default`);
+- `resolveNiraProfile(profileId)` resolve perfil conhecido e falha de forma
+  controlada (`ModelRouterError` / `invalid_configuration`) para perfil
+  desconhecido, sem vazar objetos nem dados sensiveis;
+- a camada Nira e pura: NAO importa nenhum provider (nem Ollama), NAO le
+  `process.env`, NAO chama rede, NAO instancia providers e NAO acessa Supabase;
+- imutabilidade: catalogo e perfis congelados; sem singleton mutavel e sem
+  estado global (o catalogo e construido uma vez e apenas lido);
+- integracao no composition root: `createTextChatRuntime(options?)` aceita a
+  opcao opcional `niraProfileId` (default `nira-local`). O perfil resolvido e
+  traduzido para `preferredCandidateId` no `RouterRequest` — reutilizando o
+  suporte de preferencia ja existente no `ModelRouter` (senha
+  `selected_by_preference`), sem duplicar logica;
+- o runtime expoe metadata segura `runtime.nira = { profileId, displayName }`
+  para UI/runtime (sem redesign visual neste pacote);
+- Nira Local hoje usa o engine Ollama via candidato `ollama-default` no runtime
+  padrao. No futuro o engine por baixo pode mudar sem mudar a identidade Nira
+  Local: a fronteira de execucao continua sendo o Provider Resolver;
+- testes em `tests/nira-local-profile.test.ts` (unitarios, sem rede).
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
   tentativas.
 - Provider cloud novo no router: nenhum candidato `cloud` existe (sem GLM,
   DeepSeek, Laguna, LongCat, Gemini ou OpenAI adicional). Candidatos como
-  `glm-cloud-fast`, `deepseek-cloud-fast`, `nira-local`, `laguna-code` e
-  `longcat-agent` NAO existem, nem como strings usadas em runtime.
-- Perfis Nira (Local, Fast, Pro, Code, Agent) e quota.
+  `glm-cloud-fast`, `deepseek-cloud-fast`, `laguna-code` e `longcat-agent` NAO
+  existem, nem como strings usadas em runtime (`nira-local` e um PERFIL Nira,
+  nao um candidato do router).
+- Perfis Nira adicionais (Fast, Pro, Code, Agent, Cloud, Vision, Video) e
+  quota.
 - Retry centralizado, load balancing, selecao por custo e selecao por
   latencia.
 - Candidate config via env: o registry ainda usa configuracao interna

@@ -5,6 +5,10 @@ import { AIProviderError } from "@/lib/ai/types";
 import type { ExternalRouterCandidateConfig } from "@/lib/ai/router/candidate-config";
 import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
 import {
+  DEFAULT_NIRA_PROFILE_ID,
+  resolveNiraProfile,
+} from "@/lib/ai/nira/profiles";
+import {
   createTextModelRouter,
   resolveTextRouterDecisionProvider,
 } from "@/lib/ai/runtime/text-router-resolution";
@@ -37,6 +41,13 @@ export interface OllamaRuntimeConfig {
   keepAlive?: string;
 }
 
+// Metadata segura do perfil Nira ativo no runtime (Pacote 14.5). Contem
+// apenas identidade de produto (profileId/displayName), sem segredos.
+export interface NiraRuntimeMetadata {
+  readonly profileId: string;
+  readonly displayName: string;
+}
+
 export interface TextChatRuntimeConfig {
   provider: AIProvider;
   model: string;
@@ -47,15 +58,21 @@ export interface TextChatRuntimeConfig {
   requestTimeoutMs: number;
   keepAlive?: string;
   providerId: string;
+  // Identidade Nira do runtime (Pacote 14.5): perfil logico em uso.
+  readonly nira: NiraRuntimeMetadata;
 }
 
-// Opcoes opcionais de composicao do runtime de texto (Pacote 14.4). Nenhuma
-// opcao e obrigatoria: sem argumentos, o comportamento continua identico ao
-// Pacote 14.3 (somente candidato interno Ollama, externalCandidates = []).
-// Candidatos externos sao apenas configuracao logica injetada; nunca ativam
-// providers cloud reais neste pacote.
+// Opcoes opcionais de composicao do runtime de texto (Pacotes 14.4 e 14.5).
+// Nenhuma opcao e obrigatoria: sem argumentos, o comportamento continua
+// identico ao Pacote 14.3 (somente candidato interno Ollama, externalCandidates
+// = [], perfil nira-local). Candidatos externos sao apenas configuracao logica
+// injetada; nunca ativam providers cloud reais neste pacote.
 export interface TextChatRuntimeCreateOptions {
   readonly externalCandidates?: readonly ExternalRouterCandidateConfig[];
+  // Perfil Nira a usar como identidade logica acima do router (Pacote 14.5).
+  // Padrao: nira-local. Perfis desconhecidos falham de forma controlada
+  // (ModelRouterError invalid_configuration).
+  readonly niraProfileId?: string;
 }
 
 function createInvalidConfigError(
@@ -259,13 +276,25 @@ export function createTextChatRuntime(
   // `[]`, entao o comportamento funcional e identico ao Pacote 14.3: somente
   // o candidato interno `ollama-default` e registrado e o Ollama continua
   // sendo selecionado.
+  // Pacote 14.5: o runtime usa um perfil Nira como identidade logica acima do
+  // router (default: nira-local). O perfil aponta para o candidato logico
+  // `ollama-default` e o ModelRouter o trata como preferencia
+  // (preferredCandidateId). Quem converte a decisao em provider real continua
+  // sendo o Provider Resolver.
+  const niraProfile = resolveNiraProfile(
+    options?.niraProfileId ?? DEFAULT_NIRA_PROFILE_ID,
+  );
+
   const registry = createRouterCandidateRegistry({
     ollamaModel: config.model,
     externalCandidates: options?.externalCandidates,
   });
   const decision = createTextModelRouter(
     registry.getCandidatesForCapability("text"),
-  ).select({ capability: "text" });
+  ).select({
+    capability: "text",
+    preferredCandidateId: niraProfile.preferredCandidateId,
+  });
 
   const provider = resolveTextRouterDecisionProvider(decision, {
     ollama: ({ model }) =>
@@ -289,6 +318,10 @@ export function createTextChatRuntime(
     requestTimeoutMs: config.requestTimeoutMs,
     keepAlive: config.keepAlive,
     providerId: provider.providerId,
+    nira: {
+      profileId: niraProfile.id,
+      displayName: niraProfile.name,
+    },
   };
 }
 
