@@ -238,6 +238,11 @@ verificaveis e reversiveis, com base no estado real do codigo.
 - Pacote 14.6: prova funcional/runtime da Nira Local ponta a ponta
   (`tests/nira-local-runtime-proof.test.ts`), com metadata segura de routing
   (`runtime.routing = { candidateId, reason, providerId }`).
+- Pacote 14.7: live smoke opcional da Nira Local contra Ollama real
+  (`tests/nira-local-live-smoke.test.ts`), comando `npm run test:nira:local:live`
+  (ativa `HANIRA_NIRA_LIVE_SMOKE=true`); por padrao o teste fica SKIPPED e a
+  suíte normal (`npm test`) nao depende de Ollama; nao instala Ollama, nao baixa
+  modelo, nao altera `.env`, nao faz chamadas cloud.
 
 Fluxo atual do runtime textual:
 

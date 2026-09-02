@@ -224,6 +224,31 @@ Hanira
 - nenhum provider cloud foi adicionado; nenhum fallback, retry, quota ou billing
   foi implementado; comportamento padrao permanece equivalente.
 
+### Live smoke opcional da Nira Local (14.7)
+
+Automacao controlada de prova real da Nira Local contra Ollama local:
+
+```
+Hanira
+  -> Nira Local
+  -> Candidate Registry
+  -> ModelRouter
+  -> RouterDecision
+  -> Provider Resolver
+  -> OllamaProvider REAL
+  -> Ollama local REAL
+  -> modelo local instalado
+  -> resposta textual REAL
+```
+
+- comando dedicado: `npm run test:nira:local:live` (ativa `HANIRA_NIRA_LIVE_SMOKE=true`);
+- por padrao (`npm test`), o teste live fica **SKIPPED** — a suíte normal nao depende de Ollama;
+- teste em `tests/nira-local-live-smoke.test.ts`: usa `createTextChatRuntime()` real, sem mocks;
+- valida pre-condicoes de configuracao (`AI_ENGINE_OLLAMA_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`), cria o runtime, verifica `healthCheck()` real, confirma que o modelo configurado existe via `listModels()` real e executa uma geracao textual curta;
+- nao instala Ollama, nao baixa modelo, nao altera `.env`, nao faz chamadas cloud;
+- se o modelo configurado nao estiver instalado, informa mensagem clara sem tentar `ollama pull` automaticamente;
+- o smoke live e opcional e manual: serve apenas para comprovacao humana; a suíte CI nao depende dele.
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
