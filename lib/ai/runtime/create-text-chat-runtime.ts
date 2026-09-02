@@ -49,7 +49,7 @@ export interface NiraRuntimeMetadata {
   readonly displayName: string;
 }
 
-// Metadata segura da decisao do Model Router (Pacote 16.6). Contem apenas
+// Metadata segura da decisao do Model Router (Pacote 14.6). Contem apenas
 // identificadores logicos da selecao (candidateId, reason, providerId),
 // sem segredos, sem baseUrl, sem objetos completos de provider.
 export interface TextChatRuntimeRoutingMetadata {
