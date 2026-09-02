@@ -223,6 +223,37 @@ verificaveis e reversiveis, com base no estado real do codigo.
   configuravel e integracao controlada por flag.
 - Fases 5 a 7: ainda nao iniciadas no runtime.
 
+## Estado do roteamento e Nira (Pacotes 14.x)
+
+- Pacote 14.2A: Model Router v1 puro (`lib/ai/router/`) com selecao
+  deterministica, sem provider e sem env.
+- Pacote 14.2B: router integrado ao runtime de texto via composition root.
+- Pacote 14.3: Candidate Registry tipado e deterministico
+  (`lib/ai/router/candidate-registry.ts`).
+- Pacote 14.4: External Candidate Configuration tipada
+  (`lib/ai/router/candidate-config.ts`), com validacao de candidatos externos
+  injetados.
+- Pacote 14.5: camada de identidade Nira Local acima do router
+  (`lib/ai/nira/profiles.ts`).
+
+Fluxo atual do runtime textual:
+
+```
+Hanira
+  -> Nira Profile
+  -> Candidate Configuration
+  -> Candidate Registry
+  -> ModelRouter
+  -> RouterDecision
+  -> Provider Resolver
+  -> AIProvider
+```
+
+Nira e a camada de identidade/capability da Hanira: NAO e o provider e NAO e o
+modelo fisico. Nira Local hoje aponta para o candidato logico
+`ollama-default`; no futuro o engine por baixo pode mudar sem mudar a
+identidade Nira Local (a fronteira de execucao continua no Provider Resolver).
+
 ## Fora de escopo nesta etapa
 
 - implementacao de embeddings;
