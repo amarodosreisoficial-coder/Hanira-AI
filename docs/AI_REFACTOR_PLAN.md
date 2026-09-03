@@ -243,6 +243,14 @@ verificaveis e reversiveis, com base no estado real do codigo.
   (ativa `HANIRA_NIRA_LIVE_SMOKE=true`); por padrao o teste fica SKIPPED e a
   suíte normal (`npm test`) nao depende de Ollama; nao instala Ollama, nao baixa
   modelo, nao altera `.env`, nao faz chamadas cloud.
+- Pacote 14.8: Zero-Cost Guard — politica financeira fail-closed centralizada
+  (`lib/ai/router/cost-policy.ts`), aplicada dentro do `ModelRouter.select`
+  ANTES de qualquer execucao; custo vira configuracao explicita do candidato
+  (`RouterCandidate.costClass`), a elegibilidade NUNCA depende do nome do
+  provider, nenhum preco/quota de mercado e hardcoded e nenhuma API cloud real
+  foi conectada. Fundacao do perfil Nira Cloud Free (`nira-cloud-free`, slot
+  logico `nira-cloud-free-default`) com selecao por escopo de perfil e erro
+  estruturado `capacity_unavailable` quando nao ha candidato executavel.
 
 Fluxo atual do runtime textual:
 
@@ -261,6 +269,15 @@ Nira e a camada de identidade/capability da Hanira: NAO e o provider e NAO e o
 modelo fisico. Nira Local hoje aponta para o candidato logico
 `ollama-default`; no futuro o engine por baixo pode mudar sem mudar a
 identidade Nira Local (a fronteira de execucao continua no Provider Resolver).
+
+Regra financeira (Pacote 14.8): a Hanira esta em ZERO-COST MODE (orcamento
+autorizado R$ 0,00/mes). Candidato free e permitido; promotional e bloqueado
+por padrao; paid e SEMPRE bloqueado; candidato sem classificacao de custo e
+bloqueado (UNKNOWN != FREE). A decisao acontece no ModelRouter, antes de
+qualquer chamada de rede, e "nenhum candidato financeiramente elegivel" e
+representado pelo erro estruturado `capacity_unavailable` (sem texto de UI no
+core). O futuro fallback (14.9+) NUNCA podera transicionar de FREE esgotado
+para PAID.
 
 ## Fora de escopo nesta etapa
 

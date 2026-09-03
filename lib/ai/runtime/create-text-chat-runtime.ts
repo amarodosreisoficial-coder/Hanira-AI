@@ -4,9 +4,14 @@ import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
 import type { ExternalRouterCandidateConfig } from "@/lib/ai/router/candidate-config";
 import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
-import type { RouterDecisionReason } from "@/lib/ai/router/types";
+import { ModelRouterError } from "@/lib/ai/router/errors";
+import type {
+  RouterDecision,
+  RouterDecisionReason,
+} from "@/lib/ai/router/types";
 import {
   DEFAULT_NIRA_PROFILE_ID,
+  getNiraProfileCandidateIds,
   resolveNiraProfile,
 } from "@/lib/ai/nira/profiles";
 import {
@@ -293,6 +298,15 @@ export function createTextChatRuntime(
   // `ollama-default` e o ModelRouter o trata como preferencia
   // (preferredCandidateId). Quem converte a decisao em provider real continua
   // sendo o Provider Resolver.
+  //
+  // Pacote 14.8: a selecao passa a respeitar o ESCOPO DO PERFIL (somente os
+  // candidatos logicos declarados no perfil) e a POLITICA FINANCEIRA do
+  // ModelRouter (Zero-Cost Mode por padrao: paid/promocional-bloqueado/sem
+  // classificacao nunca sao executaveis). Quando o escopo do perfil nao tem
+  // nenhum candidato executavel (ex.: Nira Cloud Free sem provider cloud
+  // registrado), o runtime falha de forma estruturada e deterministica com
+  // ModelRouterError(capacity_unavailable) — sem fingir disponibilidade e sem
+  // fazer fallback silencioso para outra capacidade.
   const niraProfile = resolveNiraProfile(
     options?.niraProfileId ?? DEFAULT_NIRA_PROFILE_ID,
   );
@@ -301,12 +315,57 @@ export function createTextChatRuntime(
     ollamaModel: config.model,
     externalCandidates: options?.externalCandidates,
   });
-  const decision = createTextModelRouter(
-    registry.getCandidatesForCapability("text"),
-  ).select({
-    capability: "text",
-    preferredCandidateId: niraProfile.preferredCandidateId,
-  });
+
+  const profileScope = getNiraProfileCandidateIds(niraProfile);
+  const scopedCandidates = registry
+    .getCandidatesForCapability("text")
+    .filter((candidate) => profileScope.includes(candidate.id));
+
+  if (scopedCandidates.length === 0) {
+    throw new ModelRouterError({
+      code: "capacity_unavailable",
+      message:
+        "Nenhum candidato executavel no escopo do perfil Nira informado.",
+      metadata: {
+        requestedCapability: "text",
+        niraProfileId: niraProfile.id,
+        preferredCandidateId: niraProfile.preferredCandidateId,
+        candidatesConsidered: 0,
+        rejected: [],
+      },
+    });
+  }
+
+  let decision: RouterDecision;
+  try {
+    decision = createTextModelRouter(scopedCandidates).select({
+      capability: "text",
+      preferredCandidateId: niraProfile.preferredCandidateId,
+    });
+  } catch (error) {
+    if (
+      error instanceof ModelRouterError &&
+      error.code === "no_eligible_candidate"
+    ) {
+      // Nenhum candidato elegivel dentro do escopo do perfil (por exemplo,
+      // unico candidato bloqueado pela politica financeira). Erro estruturado
+      // do core: a traducao para texto de UI e responsabilidade da camada
+      // HTTP/UI, nunca deste runtime.
+      throw new ModelRouterError({
+        code: "capacity_unavailable",
+        message:
+          "Nenhum candidato elegivel disponivel para o perfil Nira informado.",
+        metadata: {
+          requestedCapability: error.metadata?.requestedCapability ?? "text",
+          niraProfileId: niraProfile.id,
+          preferredCandidateId: niraProfile.preferredCandidateId,
+          candidatesConsidered: error.metadata?.candidatesConsidered,
+          rejected: error.metadata?.rejected ?? [],
+        },
+      });
+    }
+    throw error;
+  }
 
   const provider = resolveTextRouterDecisionProvider(decision, {
     ollama: ({ model }) =>

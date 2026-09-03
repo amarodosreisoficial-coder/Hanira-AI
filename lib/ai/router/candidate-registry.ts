@@ -95,6 +95,11 @@ function buildInternalCatalog(
       priority: OLLAMA_DEFAULT_PRIORITY,
       enabled: true,
       deployment: "local",
+      // Pacote 14.8: classificacao financeira DECLARADA EXPLICITAMENTE.
+      // Execucao local no hardware do usuario, sem custo de API. A
+      // classificacao e configuracao do candidato: NAO e inferida pelo nome
+      // do provider ("ollama" != gratuito por convencao).
+      costClass: "free",
       label: "Ollama local (texto)",
     },
   ];

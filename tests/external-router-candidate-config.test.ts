@@ -30,6 +30,9 @@ function externalCandidate(
     priority: 2,
     enabled: true,
     deployment: "cloud",
+    // Pacote 14.8: fixtures de teste declaram classificacao financeira
+    // explicita (fail-closed: sem costClass o candidato seria bloqueado).
+    costClass: "free",
     ...overrides,
   };
 }

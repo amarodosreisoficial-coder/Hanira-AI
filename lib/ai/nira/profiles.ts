@@ -53,6 +53,11 @@ export interface NiraProfile {
   // Id logico do candidato preferido do Model Router. NUNCA e um provider
   // instanciado nem um provider id solto.
   readonly preferredCandidateId: string;
+  // Pacote 14.8: candidatos logicos adicionais que podem servir este perfil,
+  // em ordem de preferencia. FUNDACAO para fallback futuro (Pacote 14.9+):
+  // nenhum fallback executavel (retry/repique por falha) e implementado
+  // neste pacote. Vazio por padrao.
+  readonly fallbackCandidateIds?: readonly string[];
   // Descricao opcional puramente informativa (sem dados sensiveis).
   readonly description?: string;
 }
@@ -77,14 +82,72 @@ const NIRA_LOCAL_PROFILE: NiraProfile = Object.freeze({
     "Perfil padrao local/offline da Hanira, executando o modelo local atraves do candidato ollama-default.",
 });
 
+// Pacote 14.8 - Nira Cloud Free (fundacao).
+//
+// Perfil de produto para capacidade CLOUD GRATUITA da Hanira, sob o
+// Zero-Cost Mode (orcamento R$ 0,00/mes). Principios:
+// - NAO e acoplado a nenhum provider (nenhum Groq, Gemini, OpenRouter,
+//   Together, Alibaba, Z.ai ou DeepSeek aparece aqui): o perfil expressa
+//   INTENCAO/CAPACIDADE e o Model Router resolve o candidato;
+// - aponta para um SLOT LOGICO estavel (nira-cloud-free-default). NESTE
+//   pacote NENHUM candidato cloud real esta registrado: o perfil existe
+//   sem candidato executavel e isso e representado corretamente com erro
+//   estruturado (capacity_unavailable) — a disponibilidade NUNCA e fingida;
+// - nenhum secret, chave de API ou chamada de rede pertence a esta camada.
+export const NIRA_CLOUD_FREE_PROFILE_ID = "nira-cloud-free";
+
+// Nome de exibicao seguro (UI/runtime), sem conteudo sensivel.
+export const NIRA_CLOUD_FREE_PROFILE_NAME = "Nira Cloud Free";
+
+// Capability primaria do perfil, usando o contrato RouterCapability.
+export const NIRA_CLOUD_FREE_PROFILE_CAPABILITY = "text" as const;
+
+// Slot logico estavel do candidato cloud free. E um identificador de
+// INTENCAO, nao um provider: pacotes futuros registraro candidatos cloud
+// (com costClass valida e politica elegivel) sob este id logico ou via
+// fallbackCandidateIds, sem alterar a identidade do perfil.
+export const NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID =
+  "nira-cloud-free-default";
+
+const NIRA_CLOUD_FREE_PROFILE: NiraProfile = Object.freeze({
+  id: NIRA_CLOUD_FREE_PROFILE_ID,
+  name: NIRA_CLOUD_FREE_PROFILE_NAME,
+  capability: NIRA_CLOUD_FREE_PROFILE_CAPABILITY,
+  preferredCandidateId: NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
+  fallbackCandidateIds: Object.freeze([]),
+  description:
+    "Perfil cloud gratuito da Hanira sob Zero-Cost Mode. Nao e acoplado a nenhum provider: o Model Router resolve o candidato logico elegivel.",
+});
+
 // Catalogo declarativo e imutavel de perfis Nira. Nenhuma outra estrutura
-// (Cloud, Fast, Pro, Code, Agent, Vision, Video) existe neste pacote.
+// (Fast, Pro, Code, Agent, Vision, Video) existe neste pacote.
 export const NIRA_PROFILES: readonly NiraProfile[] = Object.freeze([
   NIRA_LOCAL_PROFILE,
+  NIRA_CLOUD_FREE_PROFILE,
 ]);
 
 // Perfil padrao do runtime quando nenhum niraProfileId e informado.
 export const DEFAULT_NIRA_PROFILE_ID = NIRA_LOCAL_PROFILE_ID;
+
+/**
+ * Retorna o ESCOPO de candidatos logicos que podem servir um perfil Nira:
+ * [preferredCandidateId, ...fallbackCandidateIds], imutavel.
+ *
+ * O runtime NUNCA seleciona, para um perfil, um candidato fora deste escopo
+ * (sem fallback silencioso entre perfis/capacidades diferentes). A eleicao
+ * dentro do escopo continua seguindo o ModelRouter (prioridade + preferencia
+ * + politica financeira).
+ *
+ * Funcao pura: nao le env, nao chama rede, nao instancia providers.
+ */
+export function getNiraProfileCandidateIds(
+  profile: NiraProfile,
+): readonly string[] {
+  return Object.freeze([
+    profile.preferredCandidateId,
+    ...(profile.fallbackCandidateIds ?? []),
+  ]);
+}
 
 /**
  * Resolve um perfil Nira pelo id logico.
