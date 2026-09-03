@@ -13,8 +13,8 @@ const statusText: Record<VoiceConversationStatus, string> = {
   idle: "Pronta para conversar",
   listening: "Ouvindo você",
   transcribing: "Transformando voz em texto",
-  thinking: "Hanira está pensando",
-  speaking: "Hanira está falando",
+  thinking: "Nira está pensando",
+  speaking: "Nira está falando",
   error: "A conversa foi interrompida",
 };
 

@@ -1,6 +1,9 @@
 export type MessageRole = "user" | "assistant";
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
 
+import type { ChatErrorCode } from "@/lib/chat/chat-errors";
+import type { Attachment } from "@/types/media";
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -8,6 +11,7 @@ export interface ChatMessage {
   createdAt: string;
   pending?: boolean;
   failed?: boolean;
+  errorCode?: ChatErrorCode;
   attachments?: Attachment[];
 }
 
@@ -40,4 +44,3 @@ export interface ChatRequest {
     sizeBytes: number;
   }>;
 }
-import type { Attachment } from "@/types/media";

@@ -1,6 +1,7 @@
 import { AIProviderError } from "@/lib/ai/types";
 
 export type PublicAIErrorCode =
+  | "capacity_unavailable"
   | "unavailable"
   | "model_not_found"
   | "timeout"
@@ -30,6 +31,11 @@ const PUBLIC_AI_ERROR_MESSAGES: Record<
   Exclude<PublicAIErrorCode, "cancelled">,
   { message: string; status: number }
 > = {
+  capacity_unavailable: {
+    message:
+      "A Nira está temporariamente sem capacidade gratuita disponível. Tente novamente em alguns instantes.",
+    status: 503,
+  },
   unavailable: {
     message: "O motor local da Hanira não está disponível no momento.",
     status: 503,
@@ -61,6 +67,9 @@ function normalizePublicAIErrorCode(error: unknown): PublicAIErrorCode {
 
   if (candidate?.code === "cancelled" || candidate?.name === "AbortError") {
     return "cancelled";
+  }
+  if (candidate?.code === "capacity_unavailable") {
+    return "capacity_unavailable";
   }
   if (candidate?.code === "unavailable") {
     return "unavailable";

@@ -3,6 +3,19 @@ import type {
   Conversation,
   ConversationListResponse,
 } from "@/types/chat";
+import type { ChatErrorCode } from "@/lib/chat/chat-errors";
+
+export class ChatRequestError extends Error {
+  readonly code?: ChatErrorCode;
+  readonly status?: number;
+
+  constructor(message: string, options?: { code?: ChatErrorCode; status?: number }) {
+    super(message);
+    this.name = "ChatRequestError";
+    this.code = options?.code;
+    this.status = options?.status;
+  }
+}
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -53,7 +66,7 @@ export interface StreamHandlers {
   onStart?: (conversationId: string) => void;
   onDelta: (delta: string) => void;
   onDone?: (conversationId: string) => void;
-  onError?: (message: string) => void;
+  onError?: (error: ChatRequestError) => void;
 }
 
 export async function streamChatMessage(
@@ -73,8 +86,14 @@ export async function streamChatMessage(
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? "Não foi possível falar com a Hanira agora.");
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      code?: ChatErrorCode;
+    };
+    throw new ChatRequestError(
+      data.error ?? "Não foi possível falar com a Hanira agora.",
+      { code: data.code, status: response.status },
+    );
   }
   if (!response.body) throw new Error("O navegador não suporta streaming.");
 
@@ -99,6 +118,7 @@ export async function streamChatMessage(
         conversationId?: string;
         delta?: string;
         message?: string;
+        code?: ChatErrorCode;
       };
       if (event.type === "start" && event.conversationId) {
         handlers.onStart?.(event.conversationId);
@@ -107,7 +127,12 @@ export async function streamChatMessage(
       } else if (event.type === "done" && event.conversationId) {
         handlers.onDone?.(event.conversationId);
       } else if (event.type === "error") {
-        handlers.onError?.(event.message ?? "A resposta foi interrompida.");
+        handlers.onError?.(
+          new ChatRequestError(
+            event.message ?? "A resposta foi interrompida.",
+            { code: event.code },
+          ),
+        );
       }
     }
   }

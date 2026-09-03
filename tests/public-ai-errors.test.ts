@@ -4,6 +4,11 @@ import { toPublicAIError } from "../lib/ai/runtime/public-ai-errors";
 describe("public ai errors", () => {
   it.each([
     [
+      { code: "capacity_unavailable", message: "quota/provider interno" },
+      "capacity_unavailable",
+      "A Nira está temporariamente sem capacidade gratuita disponível. Tente novamente em alguns instantes.",
+    ],
+    [
       { code: "timeout", message: "http://internal.local timed out" },
       "timeout",
       "A Hanira demorou mais que o esperado para responder.",
