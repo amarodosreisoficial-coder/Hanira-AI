@@ -1,6 +1,7 @@
 import { ModelRouterError } from "@/lib/ai/router/errors";
 import {
   isRouterCapability,
+  isRouterCostClass,
   isRouterDeployment,
   type RouterCandidate,
 } from "@/lib/ai/router/types";
@@ -108,6 +109,18 @@ function validateExternalCandidate(
     );
   }
 
+  // Pacote 14.8: costClass presente precisa ser valida. A ausencia e aceita
+  // na configuracao (o candidato entra no registry), mas sera bloqueada pela
+  // politica de custo zero no ModelRouter (fail-closed, UNKNOWN != FREE).
+  if (
+    candidate.costClass !== undefined &&
+    !isRouterCostClass(candidate.costClass)
+  ) {
+    invalidExternalConfig(
+      `Candidato externo "${candidate.id}" possui costClass invalida.`,
+    );
+  }
+
   if (candidate.label !== undefined && typeof candidate.label !== "string") {
     invalidExternalConfig(
       `Candidato externo "${candidate.id}" possui label invalido.`,
@@ -123,6 +136,9 @@ function validateExternalCandidate(
     enabled: candidate.enabled,
     ...(candidate.deployment !== undefined
       ? { deployment: candidate.deployment }
+      : {}),
+    ...(candidate.costClass !== undefined
+      ? { costClass: candidate.costClass }
       : {}),
     ...(candidate.label !== undefined ? { label: candidate.label } : {}),
   });

@@ -4,7 +4,7 @@ Documento tecnico do componente de roteamento de modelos.
 
 ## Estado
 
-Atualizado no Pacote 14.5: os candidatos do Model Router vivem em um registry
+Atualizado nos Pacotes 14.5 a 14.8: os candidatos do Model Router vivem em um registry
 tipado e deterministico (`lib/ai/router/candidate-registry.ts`), alimentado por
 uma camada tipada de configuracao externa (`lib/ai/router/candidate-config.ts`)
 e selecionado a partir de um perfil de identidade Nira
@@ -28,6 +28,10 @@ Historico:
   (`lib/ai/router/candidate-config.ts`), com candidatos externos injetados.
 - Pacote 14.5: camada de identidade Nira (Local) acima do router
   (`lib/ai/nira/profiles.ts`).
+- Pacote 14.8: Zero-Cost Guard — politica financeira fail-closed centralizada
+  (`lib/ai/router/cost-policy.ts`), aplicada dentro do `ModelRouter.select`
+  antes de qualquer execucao, e fundacao do perfil Nira Cloud Free
+  (`nira-cloud-free`), sem nenhum provider cloud real conectado.
 
 ### Implementado agora (fundacao isolada)
 
@@ -249,6 +253,92 @@ Hanira
 - se o modelo configurado nao estiver instalado, informa mensagem clara sem tentar `ollama pull` automaticamente;
 - o smoke live e opcional e manual: serve apenas para comprovacao humana; a suíte CI nao depende dele.
 
+### Zero-Cost Guard e Nira Cloud Free (14.8)
+
+Fundacao arquitetural da capacidade "Nira Cloud Free" com protecao financeira
+estrutural. REGRA FINANCEIRA ABSOLUTA: a Hanira esta em ZERO-COST MODE, com
+orcamento autorizado de R$ 0,00/mes. NENHUMA API cloud real foi conectada
+neste pacote: nenhuma chave, conta, credito ou chamada externa.
+
+- Classificacao financeira tipada (`lib/ai/router/types.ts`):
+  `ROUTER_COST_CLASSES` (`free`, `promotional`, `paid`), tipo
+  `RouterCostClass` e campo opcional `RouterCandidate.costClass`. A
+  classificacao e CONFIGURACAO EXPLICITA do candidato e NUNCA e inferida pelo
+  nome do provider ("groq" nao e automaticamente free; "openai" nao e
+  automaticamente paid). Nenhum preco ou quota de mercado e hardcoded.
+- Politica centralizada e pura (`lib/ai/router/cost-policy.ts`):
+  `ZERO_COST_ROUTER_POLICY` (mode `zero_cost`, `allowPromotional: false`).
+  - free -> permitido;
+  - promotional -> bloqueado por padrao (promocao != gratuito permanente;
+    so se torna elegivel futuramente mediante politica explicita, injetada
+    via `ModelRouterOptions.costPolicy`);
+  - paid -> SEMPRE bloqueado no Zero-Cost Mode.
+- FAIL-CLOSED: candidato sem `costClass`, com `costClass` invalida,
+  disabled ou financeiramente inelegivel NUNCA e selecionado. UNKNOWN !=
+  FREE. `costClass` presente porem invalida falha na construcao
+  (`invalid_configuration`, inclusive na configuracao externa 14.4);
+  ausencia de `costClass` e bloqueada no `select` (`cost_class_unknown`).
+- A decisao financeira acontece ANTES de qualquer chamada de rede, dentro de
+  `ModelRouter.select` (guarda apos `disabled`, antes da capability): um
+  candidato pago jamais chega ao Provider Resolver como candidato executavel.
+- Novas razoes de rejeicao tipadas em `RouterDecision.rejected` e no metadata
+  de erros (apenas ids logicos): `cost_class_unknown`, `cost_blocked_paid`,
+  `cost_blocked_promotional`.
+- Erro de capacidade estruturado: `ModelRouterError` com novo codigo
+  `capacity_unavailable`, lancado pelo composition root quando o escopo do
+  perfil Nira nao tem nenhum candidato executavel (incluindo o caso
+  "nenhum candidato financeiramente elegivel"). A traducao para texto de UI
+  e responsabilidade da camada HTTP/UI; o core nao espalha strings de
+  interface.
+- Vocabulario de disponibilidade (`ROUTER_AVAILABILITY_STATES` +
+  `describeRouterCandidateAvailability`): `available`, `rate_limited`,
+  `quota_exhausted`, `unhealthy`, `disabled`, `cost_blocked`. Hoje apenas
+  `available`, `disabled` e `cost_blocked` sao produzidos a partir da
+  configuracao estatica do candidato; `rate_limited`, `quota_exhausted` e
+  `unhealthy` ficam RESERVADOS para sinais futuros de saude/quota (YAGNI).
+  Nada finge disponibilidade.
+- Nira Cloud Free (`lib/ai/nira/profiles.ts`): perfil `nira-cloud-free`
+  (name "Nira Cloud Free", capability `text`, preferredCandidateId
+  `nira-cloud-free-default`). E um SLOT LOGICO de intencao/capacidade, NAO
+  um provider: nenhum Groq/Gemini/OpenRouter/etc. aparece no perfil, que
+  continua podendo trocar de engine por baixo sem mudar de identidade.
+  NESTE pacote nenhum candidato cloud real esta registrado;
+  `createTextChatRuntime({ niraProfileId: "nira-cloud-free" })` falha de
+  forma deterministica com `capacity_unavailable`.
+- Escopo de perfil: `getNiraProfileCandidateIds()` define os UNICOS
+  candidatos logicos que podem servir um perfil (`preferredCandidateId` +
+  `fallbackCandidateIds`, vazio por padrao — fundacao do fallback 14.9,
+  sem fallback executavel implementado). O runtime filtra os candidatos do
+  registry pelo escopo do perfil antes do router: sem fallback silencioso
+  entre capacidades (Nira Cloud Free NUNCA cai silenciosamente no motor
+  local; Nira Local nao e desviada para candidatos externos).
+- Nira Local preservada: `ollama-default` permanece o unico candidato real,
+  agora com `costClass: "free"` DECLARADO explicitamente no registry
+  (execucao local sem custo de API; classificacao e configuracao, nao
+  inferencia pelo nome do provider). Comportamento funcional, metadata de
+  routing e suíte de testes existentes permanecem identicos.
+- Fluxo atual do runtime textual (14.8):
+
+```
+Nira Profile (escopo do perfil)
+  -> Candidate Registry (candidatos do escopo)
+  -> ModelRouter.select
+       1. ignora candidatos disabled;
+       2. aplica politica financeira zero-cost (fail-closed);
+       3. exige suporte a capability;
+       4. prioridade + preferencia deterministicas
+  -> RouterDecision executavel
+  -> Provider Resolver
+  -> AIProvider
+```
+
+- Testes: `tests/router-cost-policy.test.ts` (politica pura, bloqueios
+  free/paid/unknown/promotional, determinismo, opt-in explicito,
+  independencia do nome do provider, disponibilidade) e
+  `tests/nira-cloud-free.test.ts` (perfil desacoplado, capacidade
+  representada, provas paid/unknown/promotional ANTES do provider,
+  preservacao da Nira Local).
+
 ### Nao implementado ainda
 
 - Fallback real entre providers, retries, circuit breaker e limite de
@@ -258,8 +348,12 @@ Hanira
   `glm-cloud-fast`, `deepseek-cloud-fast`, `laguna-code` e `longcat-agent` NAO
   existem, nem como strings usadas em runtime (`nira-local` e um PERFIL Nira,
   nao um candidato do router).
-- Perfis Nira adicionais (Fast, Pro, Code, Agent, Cloud, Vision, Video) e
-  quota.
+- Perfis Nira adicionais (Fast, Pro, Code, Agent, Vision, Video) e quota.
+- Candidato cloud free real no registry: a fundacao 14.8 existe, mas nenhum
+  provider cloud foi registrado, conectado ou autorizado a gastar.
+- Sinais de runtime para os estados reservados de disponibilidade
+  (`rate_limited`, `quota_exhausted`, `unhealthy`) e fallback real entre
+  candidatos (a transicao de FREE esgotado para PAID permanece PROIBIDA).
 - Retry centralizado, load balancing, selecao por custo e selecao por
   latencia.
 - Candidate config via env: o registry ainda usa configuracao interna

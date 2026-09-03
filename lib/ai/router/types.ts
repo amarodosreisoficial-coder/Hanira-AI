@@ -19,6 +19,27 @@ export const ROUTER_DEPLOYMENTS = ["local", "cloud"] as const;
 
 export type RouterDeployment = (typeof ROUTER_DEPLOYMENTS)[number];
 
+// Classificacao financeira dos candidatos (Pacote 14.8 - Nira Cloud Free).
+// A classificacao e CONFIGURACAO EXPLICITA do candidato: nunca e inferida pelo
+// nome do provider ("groq" nao e automaticamente free; "openai" nao e
+// automaticamente paid). Nenhum preco ou quota de mercado vive aqui.
+//
+// Regra do Zero-Cost Mode (orcamento autorizado: R$ 0,00/mes):
+// - "free": permitido;
+// - "promotional": bloqueado por padrao (promocao != gratuito permanente;
+//   so se torna elegivel mediante politica explicita futura);
+// - "paid": SEMPRE bloqueado no Zero-Cost Mode.
+//
+// FAIL-CLOSED: candidato sem classificacao (campo ausente) e tratado como
+// desconhecido e bloqueado. UNKNOWN != FREE.
+export const ROUTER_COST_CLASSES = ["free", "promotional", "paid"] as const;
+
+export type RouterCostClass = (typeof ROUTER_COST_CLASSES)[number];
+
+export function isRouterCostClass(value: unknown): value is RouterCostClass {
+  return (ROUTER_COST_CLASSES as readonly string[]).includes(value as string);
+}
+
 export function isRouterCapability(value: unknown): value is RouterCapability {
   return (ROUTER_CAPABILITIES as readonly string[]).includes(value as string);
 }
@@ -56,6 +77,10 @@ export interface RouterCandidate {
   readonly enabled: boolean;
   // Classificacao opcional de implantacao para observabilidade.
   readonly deployment?: RouterDeployment;
+  // Classificacao financeira explicita do candidato (Pacote 14.8). A ausencia
+  // NAO significa gratuito: candidato sem classificacao e desconhecido e a
+  // politica de custo zero o bloqueia (fail-closed, UNKNOWN != FREE).
+  readonly costClass?: RouterCostClass;
   // Rotulo opcional de observabilidade (sem conteudo sensivel).
   readonly label?: string;
 }
@@ -84,6 +109,11 @@ export interface RouterRequest {
 export const ROUTER_REJECTION_REASONS = [
   "disabled",
   "capability_not_supported",
+  // Razoes financeiras (Pacote 14.8): aplicadas pela politica de custo ANTES
+  // de qualquer resolucao de provider. Nenhuma delas executa rede.
+  "cost_class_unknown",
+  "cost_blocked_paid",
+  "cost_blocked_promotional",
 ] as const;
 
 export type RouterRejectionReason = (typeof ROUTER_REJECTION_REASONS)[number];

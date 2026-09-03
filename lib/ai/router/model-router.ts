@@ -1,6 +1,12 @@
 import { ModelRouterError } from "@/lib/ai/router/errors";
 import {
+  ZERO_COST_ROUTER_POLICY,
+  evaluateRouterCostPolicy,
+  type RouterCostPolicy,
+} from "@/lib/ai/router/cost-policy";
+import {
   isRouterCapability,
+  isRouterCostClass,
   type RouterCandidate,
   type RouterDecision,
   type RouterDecisionReason,
@@ -8,6 +14,14 @@ import {
   type RouterRequest,
   type RouterSelectedCandidate,
 } from "@/lib/ai/router/types";
+
+// Opcoes do ModelRouter (Pacote 14.8). A politica financeira padrao e sempre
+// a ZERO_COST_ROUTER_POLICY: nenhum caminho de construcao seleciona um
+// candidato pago silenciosamente. A injecao explícita existe para configuracao
+// futura (ex.: permitir promocional por opt-in), nunca para relaxar "paid".
+export interface ModelRouterOptions {
+  readonly costPolicy?: RouterCostPolicy;
+}
 
 // Snapshot ordenado por (priority asc, id asc). A ordenacao explicita garante
 // que a ordem de entrada dos candidatos nunca altere a decisao.
@@ -81,6 +95,20 @@ function validateCandidate(candidate: RouterCandidate, index: number): void {
       message: `Candidato ${candidate.id} possui capabilities invalidas.`,
     });
   }
+
+  // Pacote 14.8: costClass PRESENTE porem invalido e configuracao malformada
+  // e falha na construcao. A AUSENCIA de costClass e permitida aqui, mas o
+  // candidato sera bloqueado pela politica de custo no select (fail-closed:
+  // UNKNOWN != FREE).
+  if (
+    candidate.costClass !== undefined &&
+    !isRouterCostClass(candidate.costClass)
+  ) {
+    throw new ModelRouterError({
+      code: "invalid_configuration",
+      message: `Candidato ${candidate.id} possui costClass invalida.`,
+    });
+  }
 }
 
 /**
@@ -97,17 +125,28 @@ function validateCandidate(candidate: RouterCandidate, index: number): void {
  * - nao executa chamadas ao modelo;
  * - nao implementa retries, fallback executavel, load balancing ou
  *   circuit breaker (pacotes futuros).
+ *
+ * Pacote 14.8: a selecao aplica a politica financeira (Zero-Cost Mode por
+ * padrao) ANTES de produzir qualquer RouterDecision executavel. Um candidato
+ * pago, promocional-bloqueado ou sem classificacao de custo jamais chega ao
+ * Provider Resolver como candidato executavel.
  */
 export class ModelRouter {
   private readonly candidates: readonly RouterCandidate[];
+  private readonly costPolicy: RouterCostPolicy;
 
-  constructor(candidates: readonly RouterCandidate[]) {
+  constructor(
+    candidates: readonly RouterCandidate[],
+    options: ModelRouterOptions = {},
+  ) {
     if (!Array.isArray(candidates)) {
       throw new ModelRouterError({
         code: "invalid_configuration",
         message: "O router exige uma lista de candidatos.",
       });
     }
+
+    this.costPolicy = options.costPolicy ?? ZERO_COST_ROUTER_POLICY;
 
     const seenIds = new Set<string>();
     for (let index = 0; index < candidates.length; index += 1) {
@@ -157,6 +196,25 @@ export class ModelRouter {
           candidateId: candidate.id,
           provider: candidate.provider,
           reason: "disabled",
+        });
+        continue;
+      }
+
+      // Pacote 14.8: guarda financeira fail-closed. Roda ANTES de qualquer
+      // outra consideracao de execucao e ANTES de qualquer chamada de rede:
+      // um candidato pago (ou promocional bloqueado, ou sem classificacao
+      // valida) nunca se torna um RouterDecision executavel no Zero-Cost
+      // Mode. A elegibilidade vem da configuracao do candidato, nunca do
+      // nome do provider.
+      const costEvaluation = evaluateRouterCostPolicy(
+        candidate,
+        this.costPolicy,
+      );
+      if (!costEvaluation.eligible) {
+        rejected.push({
+          candidateId: candidate.id,
+          provider: candidate.provider,
+          reason: costEvaluation.reason,
         });
         continue;
       }
