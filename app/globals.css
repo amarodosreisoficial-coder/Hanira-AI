@@ -1,20 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #070608;
-  --foreground: #f4f2f7;
-  --muted: #a8a3ad;
-  --panel: #0d0b10;
-  --panel-soft: #121015;
-  --border: rgba(255, 255, 255, 0.09);
+  --background: #09070d;
+  --foreground: #f6f3fa;
+  --card: #121018;
+  --card-foreground: #f6f3fa;
+  --popover: #17131e;
+  --popover-foreground: #f6f3fa;
+  --primary: #a98bf8;
+  --primary-foreground: #130b22;
+  --primary-glow: rgba(139, 92, 246, 0.24);
+  --secondary: #1b1722;
+  --secondary-foreground: #eee8f7;
+  --muted: #191620;
+  --muted-foreground: #9b94a6;
+  --accent: #1c1824;
+  --accent-foreground: #f6f3fa;
+  --destructive: #fb7185;
+  --border: rgba(231, 220, 244, 0.105);
+  --input: rgba(231, 220, 244, 0.13);
+  --ring: #b69bf9;
+  --sidebar: #0d0b11;
+  --composer: #15111b;
+  --user-message: #211c2a;
+  --success: #76d7aa;
+  --warning: #eabf7b;
+  --panel: var(--card);
+  --panel-soft: var(--muted);
   --violet: #8b5cf6;
   --violet-bright: #a78bfa;
+  --radius: 0.75rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-composer: var(--composer);
+  --color-user-message: var(--user-message);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: "Geist", "Geist Fallback", "Segoe UI", Arial, sans-serif;
+  --font-mono: "Geist Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: calc(var(--radius) * 0.875);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
 }
 
 * {
@@ -31,7 +78,8 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-family: "Geist", "Geist Fallback", "Segoe UI", Arial, sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -44,6 +92,15 @@ input {
 button,
 a {
   outline-offset: 3px;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -126,8 +183,278 @@ a {
   color: rgb(196 181 253);
 }
 
+.hanira-shell {
+  isolation: isolate;
+}
+
+.hanira-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 72% -12%, rgba(124, 78, 194, 0.13), transparent 38rem),
+    radial-gradient(circle at 34% 108%, rgba(88, 47, 130, 0.09), transparent 34rem);
+}
+
+.chat-scroll {
+  scrollbar-gutter: stable;
+}
+
+.chat-composer-shell::before {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  height: 8rem;
+  content: "";
+  background: linear-gradient(to bottom, transparent, var(--background) 42%);
+}
+
+.nira-presence {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 28px rgba(75, 34, 122, 0.14);
+}
+
+.nira-presence__halo {
+  background: radial-gradient(circle at 36% 28%, rgba(244, 235, 255, 0.48), rgba(155, 112, 241, 0.12) 46%, transparent 72%);
+}
+
+.nira-presence__core {
+  background: linear-gradient(135deg, #efe7ff 0%, #b291ff 42%, #7951ca 100%);
+  box-shadow: 0 0 14px rgba(174, 137, 255, 0.48);
+}
+
+.nira-presence.is-unavailable {
+  filter: saturate(0.35);
+  opacity: 0.78;
+}
+
+.nira-presence.is-thinking .nira-presence__halo {
+  animation: nira-breathe 1.8s ease-in-out infinite;
+}
+
+.nira-presence.is-responding .nira-presence__core {
+  animation: nira-turn 2.4s ease-in-out infinite;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.05rem;
+}
+
+.thinking-dots i {
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: thinking-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.chat-prose {
+  color: #d9d3e1;
+  font-size: 0.9375rem;
+  line-height: 1.78;
+  overflow-wrap: anywhere;
+}
+
+.chat-prose > * + * {
+  margin-top: 1rem;
+}
+
+.chat-prose h2,
+.chat-prose h3,
+.chat-prose h4 {
+  color: var(--foreground);
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+
+.chat-prose h2 {
+  font-size: 1.25rem;
+}
+
+.chat-prose h3 {
+  font-size: 1.1rem;
+}
+
+.chat-prose h4 {
+  font-size: 1rem;
+}
+
+.chat-prose p {
+  white-space: pre-wrap;
+}
+
+.chat-prose ul,
+.chat-prose ol {
+  padding-left: 1.35rem;
+}
+
+.chat-prose ul {
+  list-style: disc;
+}
+
+.chat-prose ol {
+  list-style: decimal;
+}
+
+.chat-prose li + li {
+  margin-top: 0.35rem;
+}
+
+.chat-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-color: rgba(169, 139, 248, 0.38);
+  text-underline-offset: 0.2em;
+}
+
+.chat-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.chat-prose :not(pre) > code {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--muted);
+  padding: 0.12rem 0.35rem;
+  color: #ddd0ff;
+  font-family: "Geist Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.86em;
+}
+
+.chat-prose blockquote {
+  border-left: 2px solid rgba(169, 139, 248, 0.5);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+.chat-code {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: #0b0910;
+}
+
+.chat-code > span {
+  display: block;
+  border-bottom: 1px solid var(--border);
+  padding: 0.45rem 0.8rem;
+  color: var(--muted-foreground);
+  font-family: "Geist Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chat-code pre {
+  overflow-x: auto;
+  padding: 1rem;
+}
+
+.chat-code code {
+  font-family: "Geist Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.chat-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+}
+
+.chat-table-wrap table {
+  width: 100%;
+  min-width: 28rem;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.chat-table-wrap th,
+.chat-table-wrap td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 0.8rem;
+  text-align: left;
+}
+
+.chat-table-wrap th {
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.chat-table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+@keyframes nira-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes nira-turn {
+  0%,
+  100% {
+    transform: rotate(45deg) scale(0.92);
+  }
+  50% {
+    transform: rotate(135deg) scale(1.08);
+  }
+}
+
+@keyframes thinking-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.15rem);
+  }
+}
+
 @keyframes shimmer {
   to {
     background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

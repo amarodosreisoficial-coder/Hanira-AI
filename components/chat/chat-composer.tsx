@@ -19,6 +19,7 @@ import {
   Mic,
   Paperclip,
   Square,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
@@ -39,6 +40,7 @@ import {
   mediaConfig,
 } from "@/lib/media/config";
 import { useChatStore } from "@/lib/stores/chat-store";
+import { toChatIssue, type ChatIssue } from "@/lib/chat/chat-errors";
 import {
   inferAttachmentTypeFromMimeType,
   validateMediaFile,
@@ -63,6 +65,7 @@ function previewUrlForFile(file: File, type: AttachmentType) {
 
 export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [error, setError] = useState("");
+  const [issue, setIssue] = useState<ChatIssue | null>(null);
   const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [recorderOpen, setRecorderOpen] = useState(false);
@@ -77,6 +80,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const store = useChatStore();
   const messageLength = getChatMessageLength(store.draft);
   const remainingCharacters = getRemainingChatMessageCharacters(store.draft);
+  const showOperationalIssue = Boolean(
+    issue && !store.activeConversation()?.messages.some((message) => message.failed),
+  );
 
   function showMessageLengthError() {
     setError(CHAT_MESSAGE_LENGTH_ERROR);
@@ -93,6 +99,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
 
   async function addFiles(files: File[]) {
     setError("");
+    setIssue(null);
     if (!mediaConfig.attachmentsEnabled) {
       setError("Os anexos estao desativados nesta instancia.");
       return;
@@ -166,12 +173,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     if (!conversation) return;
 
     setError("");
+    setIssue(null);
     setUploading(pendingMedia.length > 0);
     const abortController = new AbortController();
     abortRef.current = abortController;
     let attachments = attachmentOverride ?? [];
     let assistantId = "";
     let fullText = "";
+    let terminalError = false;
     try {
       if (pendingMedia.length) {
         if (store.mode === "supabase") {
@@ -259,16 +268,21 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               }),
             );
           },
-          onError: (message) => {
-            setError(message);
+          onError: (streamError) => {
+            const nextIssue = toChatIssue(streamError, {
+              online: navigator.onLine,
+            });
+            terminalError = true;
+            setIssue(nextIssue);
+            setError("");
             store.setDraft(content);
-            store.markMessageFailed(assistantId);
+            store.markMessageFailed(assistantId, nextIssue.code);
             window.dispatchEvent(new Event("hanira:response-error"));
           },
         },
         abortController.signal,
       );
-      if (!fullText && !abortController.signal.aborted) {
+      if (!fullText && !abortController.signal.aborted && !terminalError) {
         store.markMessageFailed(assistantId);
       }
     } catch (caught) {
@@ -279,11 +293,13 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         }
         return;
       }
-      const message =
-        caught instanceof Error ? caught.message : "Nao foi possivel enviar sua mensagem.";
-      setError(message);
+      const nextIssue = toChatIssue(caught, {
+        online: navigator.onLine,
+      });
+      setIssue(nextIssue);
+      setError("");
       store.setDraft(content);
-      if (assistantId) store.markMessageFailed(assistantId);
+      if (assistantId) store.markMessageFailed(assistantId, nextIssue.code);
       window.dispatchEvent(new Event("hanira:response-error"));
     } finally {
       abortRef.current = null;
@@ -301,6 +317,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           attachments?: Attachment[];
         }>
       ).detail;
+      setIssue(null);
       store.removeMessage(detail.assistantId);
       void submit(detail.content, true, detail.attachments);
     }
@@ -442,10 +459,23 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
-        className="mx-auto w-full max-w-3xl px-4 pb-5 sm:px-6"
+        className="chat-composer-shell relative z-20 mx-auto w-full max-w-[50rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-7 sm:pb-5"
       >
+        {showOperationalIssue && issue && (
+          <div
+            id="chat-operational-error"
+            role="alert"
+            className="mb-2 flex items-start gap-2.5 rounded-xl border border-warning/20 bg-card/95 px-3 py-2.5 shadow-lg shadow-black/10"
+          >
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">{issue.title}</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{issue.message}</p>
+            </div>
+          </div>
+        )}
         {error && (
-          <p role="alert" className="mb-2 text-center text-xs text-rose-300">
+          <p role="alert" className="mb-2 text-center text-xs text-destructive">
             {error}
           </p>
         )}
@@ -482,7 +512,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           </div>
         )}
-        <div className="rounded-[1.4rem] border border-white/[0.11] bg-[#121014] p-2 shadow-[0_20px_70px_rgba(0,0,0,.35)] transition focus-within:border-violet-400/30 focus-within:ring-4 focus-within:ring-violet-500/[0.04]">
+        <div className="rounded-[1.4rem] border border-border bg-composer p-2 shadow-[0_18px_60px_rgba(0,0,0,.3)] transition focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/5">
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-2 pb-2 pt-1">
               {pendingMedia.map((item) => (
@@ -530,10 +560,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             value={store.draft}
             rows={1}
             maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            aria-label="Mensagem para Hanira"
-            aria-describedby="chat-message-length"
+            aria-label="Mensagem para a Nira"
+            aria-describedby={
+              showOperationalIssue
+                ? "chat-message-length chat-operational-error"
+                : "chat-message-length"
+            }
             placeholder={
-              pendingMedia.length ? "Pergunte sobre o arquivo..." : "Converse com Hanira..."
+              pendingMedia.length ? "Pergunte sobre o arquivo..." : "Converse com a Nira..."
             }
             onChange={(event) => {
               const nextValue = event.target.value;
@@ -544,7 +578,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             }}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            className="block min-h-12 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-zinc-100 outline-none placeholder:text-zinc-600"
+            className="block min-h-12 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
           />
           <input
             ref={imageInputRef}
@@ -629,7 +663,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             <div className="flex items-center gap-3">
               <span
                 id="chat-message-length"
-                className={`text-[10px] ${remainingCharacters <= 200 ? "text-amber-300" : "text-zinc-600"}`}
+                className={`text-[10px] ${remainingCharacters <= 200 ? "text-warning" : "text-muted-foreground"}`}
               >
                 {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
               </span>
@@ -638,7 +672,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   type="button"
                   onClick={() => abortRef.current?.abort()}
                   aria-label="Interromper resposta"
-                  className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-rose-100"
+                  className="grid size-9 place-items-center rounded-xl bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Square className="size-3.5 fill-current" />
                 </button>
@@ -648,7 +682,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   onClick={() => void submit()}
                   disabled={!canSend}
                   aria-label="Enviar mensagem"
-                  className="grid size-9 place-items-center rounded-xl bg-white text-black transition hover:bg-violet-100 disabled:bg-white/[0.07] disabled:text-zinc-700"
+                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {uploading ? (
                     <LoaderCircle className="size-4 animate-spin" />
@@ -660,8 +694,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             </div>
           </div>
         </div>
-        <p className="mt-2.5 text-center text-[10px] text-zinc-700">
-          Hanira pode cometer erros. Considere verificar informacoes importantes.
+        <p className="mt-2.5 text-center text-[10px] text-muted-foreground/75">
+          A Nira pode cometer erros. Verifique informações importantes.
         </p>
       </div>
       <PrivacyDialog

@@ -14,6 +14,7 @@ import type {
   Conversation,
   LoadStatus,
 } from "@/types/chat";
+import type { ChatErrorCode } from "@/lib/chat/chat-errors";
 
 interface ChatState {
   conversations: Conversation[];
@@ -23,10 +24,12 @@ interface ChatState {
   error: string | null;
   isThinking: boolean;
   sidebarOpen: boolean;
+  sidebarCollapsed: boolean;
   draft: string;
   initialize: () => Promise<void>;
   setDraft: (draft: string) => void;
   setSidebarOpen: (open: boolean) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   newConversation: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -34,7 +37,7 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
   updateMessage: (id: string, content: string, pending?: boolean) => void;
-  markMessageFailed: (id: string) => void;
+  markMessageFailed: (id: string, errorCode?: ChatErrorCode) => void;
   removeMessage: (id: string) => void;
   removeAttachment: (messageId: string, attachmentId: string) => void;
   replaceConversationId: (temporaryId: string, id: string) => void;
@@ -63,6 +66,7 @@ export const useChatStore = create<ChatState>()(
       error: null,
       isThinking: false,
       sidebarOpen: false,
+      sidebarCollapsed: false,
       draft: "",
       initialize: async () => {
         if (get().status === "loading") return;
@@ -101,6 +105,7 @@ export const useChatStore = create<ChatState>()(
       },
       setDraft: (draft) => set({ draft }),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       newConversation: async () => {
         try {
           const conversation =
@@ -214,13 +219,13 @@ export const useChatStore = create<ChatState>()(
             ),
           })),
         })),
-      markMessageFailed: (id) =>
+      markMessageFailed: (id, errorCode = "unknown") =>
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
             messages: conversation.messages.map((message) =>
               message.id === id
-                ? { ...message, pending: false, failed: true }
+                ? { ...message, pending: false, failed: true, errorCode }
                 : message,
             ),
           })),
@@ -268,6 +273,7 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => ({
         conversations: state.mode === "demo" ? state.conversations : [],
         activeId: state.mode === "demo" ? state.activeId : null,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
     },
   ),

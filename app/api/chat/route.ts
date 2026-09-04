@@ -42,7 +42,7 @@ import { formatWeatherCurrent } from "@/lib/tools/weather-current";
 import { formatTimeCurrent } from "@/lib/tools/time-current";
 
 const SYSTEM_PROMPT =
-  "Voce e Hanira, uma inteligencia artificial elegante, acolhedora, inteligente e natural. Converse em portugues do Brasil por padrao. Seja clara, humana e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
+  "Voce e Nira, a camada de inteligencia da Hanira. Converse em portugues do Brasil por padrao. Seja clara, acolhedora e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
 
 class InvalidChatPayloadError extends Error {
   constructor() {
@@ -211,7 +211,7 @@ export async function POST(request: Request) {
     });
 
     return Response.json(
-      { error: message, requestId },
+      { error: message, code: publicError.code, requestId },
       {
         status,
         headers: { "X-Request-ID": requestId },
