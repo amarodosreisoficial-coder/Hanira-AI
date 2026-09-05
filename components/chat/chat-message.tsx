@@ -81,7 +81,7 @@ export function ChatMessage({
         )}
 
         {issue && (
-          <div className="mt-2 max-w-xl rounded-2xl border border-warning/20 bg-warning/5 p-4" role="alert">
+          <div className="mt-2 max-w-xl rounded-xl border border-warning/15 bg-warning/5 p-3.5" role="alert">
             <div className="flex gap-3">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
               <div>
@@ -101,7 +101,7 @@ export function ChatMessage({
                         }),
                       )
                     }
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg text-xs font-medium text-primary transition hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="mt-2.5 inline-flex items-center gap-2 rounded-lg text-xs font-medium text-primary transition hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <RotateCcw className="size-3.5" />
                     Tentar novamente

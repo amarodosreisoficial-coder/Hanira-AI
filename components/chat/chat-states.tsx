@@ -64,9 +64,9 @@ export function HaniraWelcome({
             key={title}
             type="button"
             onClick={() => onPrompt(prompt)}
-            className="group flex min-h-36 flex-col rounded-2xl border border-border bg-card/55 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="group flex min-h-32 flex-col rounded-2xl border border-border/60 bg-transparent p-4 text-left transition duration-200 hover:border-primary/25 hover:bg-card/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="grid size-9 place-items-center rounded-xl border border-border bg-muted text-muted-foreground transition group-hover:text-primary">
+            <span className="grid size-9 place-items-center rounded-xl border border-border/60 bg-transparent text-muted-foreground transition group-hover:border-primary/25 group-hover:text-primary">
               <Icon className="size-4" />
             </span>
             <span className="mt-auto flex items-end justify-between gap-3 pt-5">
@@ -103,7 +103,7 @@ export function NiraThinkingIndicator() {
   return (
     <div className="mb-8 flex items-center gap-3" role="status" aria-live="polite">
       <NiraPresence status="thinking" />
-      <div className="rounded-2xl border border-border bg-card/55 px-4 py-3">
+      <div className="rounded-2xl border border-border/50 bg-card/30 px-4 py-3">
         <p className="flex items-center gap-2 text-sm text-foreground">
           <Sparkles className="size-3.5 text-primary" />
           Nira está pensando

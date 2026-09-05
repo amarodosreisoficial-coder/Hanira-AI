@@ -86,11 +86,11 @@ export function Sidebar({ userName }: { userName: string }) {
             onClick={() => void store.newConversation()}
             title="Nova conversa"
             className={cn(
-              "flex h-11 w-full items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-3.5 text-sm font-medium text-primary transition hover:border-primary/35 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex h-11 w-full items-center gap-3 rounded-xl border border-border bg-card/60 px-3.5 text-sm font-medium text-foreground transition hover:border-primary/25 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               store.sidebarCollapsed && "lg:justify-center lg:px-0",
             )}
           >
-            <Plus className="size-4 shrink-0" />
+            <Plus className="size-4 shrink-0 text-primary" />
             <span className={cn(store.sidebarCollapsed && "lg:hidden")}>Nova conversa</span>
           </button>
 
@@ -183,11 +183,11 @@ export function Sidebar({ userName }: { userName: string }) {
             href="/settings/memory"
             title="Memória Hanira"
             className={cn(
-              "mt-7 flex items-center gap-3 rounded-xl border border-border bg-card/60 p-3 transition hover:border-primary/20 hover:bg-card",
+              "mt-7 flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3 transition hover:border-border hover:bg-accent",
               store.sidebarCollapsed && "lg:justify-center lg:p-2.5",
             )}
           >
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-muted-foreground">
               <Sparkles className="size-3.5" />
             </span>
             <div className={cn("min-w-0", store.sidebarCollapsed && "lg:hidden")}>
@@ -223,7 +223,7 @@ export function Sidebar({ userName }: { userName: string }) {
             </button>
           </form>
           <div className={cn("mt-2 flex items-center gap-3 rounded-xl px-3 py-2", store.sidebarCollapsed && "lg:justify-center lg:px-0")}>
-            <span className="grid size-8 shrink-0 place-items-center rounded-full border border-primary/20 bg-primary/15 text-xs font-semibold text-primary">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full border border-border bg-accent text-xs font-semibold text-foreground">
               {userName.charAt(0).toUpperCase()}
             </span>
             <div className={cn("min-w-0", store.sidebarCollapsed && "lg:hidden")}>
