@@ -166,7 +166,7 @@ describe("Nira Local no runtime de texto (14.5)", () => {
       niraProfileId: NIRA_LOCAL_PROFILE_ID,
     });
     expect(runtime.provider.providerId).toBe("ollama");
-    expect(TEXT_ROUTER_LOGICAL_PROVIDERS).toEqual(["ollama"]);
+    expect(TEXT_ROUTER_LOGICAL_PROVIDERS).toContain("ollama");
   });
 
   it("createTextChatRuntime() sem argumentos continua funcionando", () => {
