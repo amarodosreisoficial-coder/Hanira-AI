@@ -55,6 +55,8 @@ const serverEnvSchema = publicEnvSchema
     AI_ENGINE_OLLAMA_ENABLED: defaultedBooleanString("false"),
     OLLAMA_BASE_URL: optionalTrimmedString(),
     OLLAMA_MODEL: optionalTrimmedString(),
+    GROQ_API_KEY: optionalTrimmedString(),
+    GROQ_MODEL: optionalTrimmedString(),
     OPENAI_API_KEY: optionalTrimmedString(20),
     OPENAI_MODEL: optionalTrimmedString(),
     OPENAI_VISION_MODEL: optionalTrimmedString(),
@@ -79,22 +81,15 @@ const serverEnvSchema = publicEnvSchema
       }
     }
 
-    if (!env.AI_ENGINE_OLLAMA_ENABLED) {
+    const hasOllama =
+      env.AI_ENGINE_OLLAMA_ENABLED && Boolean(env.OLLAMA_BASE_URL && env.OLLAMA_MODEL);
+    const hasGroq = Boolean(env.GROQ_API_KEY);
+    if (!hasOllama && !hasGroq) {
       ctx.addIssue({
         code: "custom",
-        path: ["AI_ENGINE_OLLAMA_ENABLED"],
-        message: "O runtime principal atual exige AI_ENGINE_OLLAMA_ENABLED=true.",
+        path: ["text_runtime"],
+        message: "Configure ao menos um runtime textual executavel.",
       });
-    }
-
-    for (const name of ["OLLAMA_BASE_URL", "OLLAMA_MODEL"] as const) {
-      if (!env[name]) {
-        ctx.addIssue({
-          code: "custom",
-          path: [name],
-          message: `${name} e obrigatoria quando o runtime Ollama esta ativo.`,
-        });
-      }
     }
 
     const requireOpenAI = (
@@ -138,8 +133,10 @@ export interface ServerEnv extends PublicEnv {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   AI_ENGINE_OLLAMA_ENABLED: boolean;
-  OLLAMA_BASE_URL: string;
-  OLLAMA_MODEL: string;
+  OLLAMA_BASE_URL?: string;
+  OLLAMA_MODEL?: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   OPENAI_VISION_MODEL?: string;
@@ -187,6 +184,8 @@ export function getServerEnv(): ServerEnv {
     AI_ENGINE_OLLAMA_ENABLED: process.env.AI_ENGINE_OLLAMA_ENABLED,
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     OLLAMA_MODEL: process.env.OLLAMA_MODEL,
+    GROQ_API_KEY: process.env.GROQ_API_KEY,
+    GROQ_MODEL: process.env.GROQ_MODEL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL,

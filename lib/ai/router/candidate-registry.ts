@@ -38,7 +38,7 @@ const OLLAMA_DEFAULT_PRIORITY = 1;
 export interface RouterCandidateRegistryInput {
   // Modelo logico do candidato Ollama, proveniente da configuracao do
   // runtime ja validada (resolveOllamaRuntimeConfig()). O registry nao le env.
-  readonly ollamaModel: string;
+  readonly ollamaModel?: string;
   // Candidatos adicionais fornecidos externamente pela camada de composicao
   // (Pacote 14.4). Cada item segue o mesmo contrato de RouterCandidate.
   // Passa por validacao/normalizacao (normalizeExternalRouterCandidates)
@@ -86,6 +86,8 @@ function buildInternalCatalog(
   // laguna-code, longcat-agent) devem ser adicionados aqui em pacotes
   // proprios, com dados de configuracao injetados — nunca via strings
   // ficticias em runtime.
+  if (!input.ollamaModel) return [];
+
   return [
     {
       id: OLLAMA_DEFAULT_CANDIDATE_ID,
@@ -115,10 +117,7 @@ export function createRouterCandidateRegistry(
     });
   }
 
-  if (
-    typeof input.ollamaModel !== "string" ||
-    input.ollamaModel.trim().length === 0
-  ) {
+  if (input.ollamaModel !== undefined && input.ollamaModel.trim().length === 0) {
     throw new ModelRouterError({
       code: "invalid_configuration",
       message: "O registry de candidatos exige um model Ollama nao vazio.",

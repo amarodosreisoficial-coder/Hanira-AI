@@ -30,7 +30,9 @@ function mockGroqResponse(body: unknown, status = 200): Response {
 
 describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
   it("fluxo completo: Hanira -> Nira Cloud Free -> Router -> GroqProvider -> resposta normalizada", async () => {
-    setOllamaEnv();
+    process.env.AI_ENGINE_OLLAMA_ENABLED = "false";
+    delete process.env.OLLAMA_BASE_URL;
+    delete process.env.OLLAMA_MODEL;
     const apiKey = "gsk_test_integration_key";
     vi.stubEnv("GROQ_API_KEY", apiKey);
     vi.stubEnv("GROQ_MODEL", "");
@@ -64,6 +66,7 @@ describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
       NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
     );
     expect(runtime.provider).toBeInstanceOf(GroqProvider);
+    expect(runtime.baseUrl).toBeUndefined();
 
     const response = await runtime.provider.generate({
       messages: [{ role: "user", text: "Ola Nira!" }],
