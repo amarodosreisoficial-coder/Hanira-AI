@@ -1,4 +1,6 @@
 import type { AIProvider } from "@/lib/ai/provider";
+import { GroqProvider } from "@/lib/ai/providers/groq";
+import { createGroqProviderIfConfigured } from "@/lib/ai/providers/groq";
 import { logAIProviderErrorThrown } from "@/lib/ai/ai-provider-error-logging";
 import { OllamaProvider } from "@/lib/ai/providers/ollama";
 import { AIProviderError } from "@/lib/ai/types";
@@ -311,9 +313,32 @@ export function createTextChatRuntime(
     options?.niraProfileId ?? DEFAULT_NIRA_PROFILE_ID,
   );
 
+  const groqProvider = createGroqProviderIfConfigured();
+  const groqExternalCandidates =
+    groqProvider instanceof GroqProvider
+      ? [
+          {
+            id: "nira-cloud-free-default",
+            provider: "groq",
+            model: groqProvider.getDefaultModel(),
+            capabilities: ["text"] as const,
+            priority: 1,
+            enabled: true,
+            deployment: "cloud" as const,
+            costClass: "free" as const,
+            label: "Nira Cloud Free (Groq)",
+          },
+        ]
+      : [];
+
+  const allExternalCandidates = [
+    ...(options?.externalCandidates ?? []),
+    ...groqExternalCandidates,
+  ];
+
   const registry = createRouterCandidateRegistry({
     ollamaModel: config.model,
-    externalCandidates: options?.externalCandidates,
+    externalCandidates: allExternalCandidates,
   });
 
   const profileScope = getNiraProfileCandidateIds(niraProfile);
@@ -376,6 +401,11 @@ export function createTextChatRuntime(
         firstTokenTimeoutMs: config.firstTokenTimeoutMs,
         idleTimeoutMs: config.idleTimeoutMs,
         requestTimeoutMs: config.requestTimeoutMs,
+      }),
+    groq: ({ model }) =>
+      new GroqProvider({
+        apiKey: process.env.GROQ_API_KEY,
+        defaultModel: model,
       }),
   });
 

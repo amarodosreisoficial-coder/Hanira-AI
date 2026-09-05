@@ -19,7 +19,7 @@ import {
 // Allow-list de providers logicos elegiveis para o runtime de texto. Qualquer
 // id fora desta lista falha de forma controlada (sem fallback implicito e sem
 // expor secrets).
-export const TEXT_ROUTER_LOGICAL_PROVIDERS = ["ollama"] as const;
+export const TEXT_ROUTER_LOGICAL_PROVIDERS = ["ollama", "groq"] as const;
 
 export type TextRouterLogicalProviderId =
   (typeof TEXT_ROUTER_LOGICAL_PROVIDERS)[number];

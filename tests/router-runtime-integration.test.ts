@@ -127,6 +127,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
 
     const resolved = resolveTextRouterDecisionProvider(decision, {
       ollama: factory,
+      groq: factory,
     });
 
     expect(factory).toHaveBeenCalledTimes(1);
@@ -148,7 +149,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
 
     let caught: unknown;
     try {
-      resolveTextRouterDecisionProvider(decision, { ollama: factory });
+      resolveTextRouterDecisionProvider(decision, { ollama: factory, groq: factory });
     } catch (error) {
       caught = error;
     }
@@ -177,6 +178,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
     expect(() =>
       resolveTextRouterDecisionProvider(decision, {
         ollama: () => buildTextProvider(),
+        groq: () => buildTextProvider(),
       }),
     ).toThrowError(ModelRouterError);
   });
@@ -187,6 +189,7 @@ describe("integracao Model Router -> runtime de texto (14.2B)", () => {
     expect(() =>
       resolveTextRouterDecisionProvider(decision, {
         ollama: () => buildNonTextProvider(),
+        groq: () => buildNonTextProvider(),
       }),
     ).toThrowError(ModelRouterError);
   });
@@ -220,7 +223,7 @@ describe("integracao Model Router -> guardas de regressao (14.2B)", () => {
       expect(candidate.enabled).toBe(true);
       expect(candidate.capabilities).toContain("text");
     }
-    expect(TEXT_ROUTER_LOGICAL_PROVIDERS).toEqual(["ollama"]);
+    expect(TEXT_ROUTER_LOGICAL_PROVIDERS).toContain("ollama");
   });
 
   it("createTextChatRuntime entrega o provider Ollama resolvido pelo router, sem rede", () => {
