@@ -1,42 +1,261 @@
-# Roadmap
+# Hanira AI — Roadmap 2026
 
-Mapa de evolucao tecnica da plataforma, sem compromisso de prazo.
+Mapa estratégico de evolução do produto e da arquitetura. Nenhum item
+planejado deve ser tratado como implementado sem evidência no repositório.
 
-## Fase 1 - Documentacao e auditoria
+Labels: **P0** (agora) · **P1** (próximo) · **P2** (curto prazo) ·
+**P3** (depois) · **LAB** (experimental) · **HOLD** (adiado).
+Status: `[x]` feito · `[~]` em progresso · `[ ]` planejado.
 
-- consolidar documentacao;
-- eliminar contradicoes;
-- separar claramente implementado, scaffold e planejado.
+## Invariantes não negociáveis
 
-## Fase 2 - Porta de provider para chat textual
+1. Hanira ≠ provider. Hanira é o produto/plataforma.
+2. Nira ≠ modelo. Nira é a camada de inteligência; Groq, GPT-OSS, Qwen,
+   Gemini e Ollama são motores substituíveis.
+3. A memória da conversa pertence a Hanira, nunca ao modelo. O modelo pode
+   trocar entre turnos sem perder a conversa.
+4. Fallback pago automático é proibido. Decisão financeira acontece antes da
+   execução de rede (Zero-Cost Guard).
+5. `paid` e `unknown` sempre bloqueados; `promotional` bloqueado por padrão;
+   `free` só quando auditado/configurado. Sem capacidade free disponível →
+   resposta segura `capacity_unavailable` / alta demanda.
+6. Segredos apenas server-side. Nenhuma chave no cliente.
+7. Nira Cloud e Nira Local são capacidades separáveis.
+8. Isolamento de projeto absoluto: Hanira nunca compartilha repositório,
+   banco, segredos ou credenciais com outros projetos.
+9. Nenhum botão de UI existe sem capability real de backend.
+10. Sem cobrança oculta, cadastro de cartão ou upgrade automático de plano.
 
-- definir contrato minimo para geracao textual e streaming;
-- limitar a mudanca inicial ao fluxo de chat.
+## Modelo de produto
 
-## Fase 3 - Adaptador da implementacao atual
+- **Hanira** — produto/plataforma/aplicação.
+- **Nira** — inteligência: perfil/capability → Model Router → Zero-Cost
+  Guard → provider resolver → provider → modelo.
+- **Nira Cloud** (Groq hoje) e **Nira Local** (Ollama, opcional) coexistem.
+- O usuário percebe uma única inteligência: Nira.
 
-- encapsular OpenAI em adaptador dedicado;
-- reduzir imports diretos fora da camada apropriada.
+---
 
-## Fase 4 - Segundo provider
+## FASE 0 — HANIRA REAL (P0, em progresso)
 
-- adicionar um segundo provider em escopo controlado;
-- permitir troca por configuracao explicita.
+Milestone operacional atual: **primeiro chat Nira online real**.
 
-## Fase 5 - Fallback deterministico
+- [x] Separação de identidade Hanira/Nira
+- [x] Interface pública de chat moderna + harmonia visual
+- [x] Favicon/marca Hanira/Nira
+- [x] Autenticação preservada (Supabase)
+- [x] Model Router + Zero-Cost Guard
+- [x] Provider Groq integrado (runtime sem Ollama obrigatório)
+- [x] Perfil Nira Cloud Free + Nira Local preservado
+- [x] Erros de provider seguros; sem fallback pago
+- [~] Runtime de produção Groq: `HANIRA_DEMO_MODE=false`, `GROQ_API_KEY`
+  server-side, `GROQ_MODEL` configurável (`openai/gpt-oss-20b` como
+  primeiro motor), `AI_ENGINE_OLLAMA_ENABLED=false` para nuvem Groq-only
+- [ ] Verificação do ambiente Vercel (preview/production) e redeploy
+- [ ] Smoke test real autenticado do chat
+- [ ] Verificação de resposta e erros do provider
+- [ ] Estabilização do pacote
 
-- lista priorizada de modelos ou providers;
-- timeout;
-- classificacao de erros;
-- limite de tentativas;
-- protecao contra loops.
+> Produção só é considerada comprovada após o teste ao vivo.
 
-## Fase 6 - Memoria evolutiva
+## FASE 1 — ESTABILIDADE (P1)
 
-- evoluir o tratamento de contexto e memoria;
-- preservar isolamento entre contextos quando a modelagem multi-projeto existir.
+- [ ] Tratamento de erros e mensagens seguras end-to-end
+- [ ] Monitoramento/observabilidade básica
+- [ ] Quotas internas simples por usuário (ver seção Quotas)
+- [ ] Controle de contexto simples (ver Context Engine)
 
-## Fase 7 - Expansao multimodal
+## FASE 2 — GROQ MULTI-FREE (P1/P2)
 
-- levar a camada de provider para audio e visao;
-- avaliar ferramentas, embeddings e RAG em fases posteriores.
+**Nira Free Capacity Engine — versão simples.** Não construir o roteador
+gigante ainda.
+
+- Groq provider → múltiplos modelos free auditados
+- Sequência lógica: modelo free primário → fallback free → secundário free
+  (apenas candidatos classificados `FREE SAFE`)
+- Recursos planejados: registry de modelos, classe de custo, capability,
+  prioridade, cooldown, saúde, estado de rate-limit, fallback apenas entre
+  candidatos free elegíveis
+- Não hardcodar quotas temporárias na arquitetura; registry configurável
+- Famílias a avaliar (não fixar como permanentes): GPT-OSS, Qwen e outros
+  modelos Groq oficialmente free no momento da auditoria
+- Regras: auditoria oficial de pricing/rate-limits obrigatória; modelos
+  preview não viram dependência permanente cega; nenhum candidato pago entra
+  na cadeia de fallback
+
+## FASE 3 — SEGUNDO PROVIDER: GEMINI (P2)
+
+Google Gemini API / AI Studio Free Tier como segundo provider independente:
+
+```
+Nira → Zero-Cost Guard → Provider Router → Groq OU Gemini
+```
+
+Antes de implementar, auditoria R$0 obrigatória: modelos free atuais, RPM,
+TPM, RPD, exigência de cartão, ativação de billing, expiração do free tier,
+comportamento de overage, hard-stop, termos de dados/privacidade,
+disponibilidade regional. Não integrar com nomes de modelo desatualizados.
+
+Candidatos posteriores de pesquisa (classificar como `FREE SAFE`,
+`FREE TEMPORARY`, `PAID` ou `NOT SUITABLE`): OpenRouter Free, Cerebras,
+Mistral e outros provedores free legítimos. OpenRouter inicialmente como
+**LAB / fallback opcional**, não núcleo de produção.
+
+
+## FASE 4 — CONTEXT & MEMORY (P2)
+
+Princípio: o modelo não é a memória. Fluxo:
+
+```
+Usuário → store de conversas Hanira → Context Builder → modelo selecionado
+```
+
+- Context Engine: não reenviar conversas enormes a cada request
+- Estratégia inicial: instruções de sistema + rolling summary + janela de
+  mensagens recentes + request atual (janela configurável/token-aware —
+  "10 mensagens" não é constante arquitetural)
+- Evoluções: orçamento de tokens, memória semântica, preferências, memória
+  de projeto, fatos fixados, retrieval, embeddings/RAG (opcional, não
+  prioritário)
+
+## FASE 5 — ARMAZENAMENTO DE ARQUIVOS (P2/P3)
+
+- **Supabase**: autenticação, usuários, conversas, mensagens, preferências,
+  permissões, quotas, metadados, sumários, dados relacionais/texto
+- **Cloudflare R2**: objetos pesados (imagens, áudio, PDFs, documentos,
+  anexos, mídia gerada). Banco guarda object key, owner, MIME, tamanho,
+  checksum opcional, metadados, permissões, lifecycle
+- Upload preferencial: browser → signed upload URL → R2 (evitar relay de
+  mídia via Vercel)
+- Auditoria R$0 de pricing/limites do R2 antes de implementar
+
+## FASES 6–7 — VISION & VOICE (P3)
+
+Progressão: Text → Documents → Vision → Voice, cada capability roteada
+independentemente.
+
+- [ ] **Nira Vision**: compreensão de imagem + roteamento multimodal
+- [ ] **Nira Voice**: STT, TTS, UI de voz, controle de custo
+- Botões de imagem/anexo presentes na UI hoje: **UI PRESENT / BACKEND
+  PENDING** — não simulam funcionamento.
+
+## FASE 8 — API INTERNA (P3 / HOLD)
+
+Conceito de longo prazo: Hanira como camada de inteligência para outros
+produtos do usuário (ex.: `POST /nira/chat|documents|vision|voice`), sempre
+via contrato autenticado explícito. **Nunca** via repositório, banco ou
+segredos compartilhados. Status: FUTURO / após estabilidade web.
+
+### Integração ARIKEM Studio (FUTURO ONLY)
+
+Potenciais funções Nira: brainstorming de história, bibel canônico, memória
+de lore, perfis de personagem, checagem de continuidade, estrutura de
+enredo, arcos, planejamento de capítulos/cenas, diálogo, narração, quebra
+em páginas/painéis, prompt visual, revisão e consistência. Integração:
+ARIKEM → API autenticada Hanira/Nira. Este repositório não acessa o
+repositório ARIKEM.
+
+
+## FASE 9 — VERTICAIS DE PRODUTO (P3/HOLD)
+
+### Hanira Acadêmica / Nira Academic Copilot
+
+Copiloto — **não** "fábrica automática de trabalho acadêmico". O usuário
+permanece autor/responsável. Capacidades potenciais: exploração de tema,
+questão de pesquisa, formulação de objetivos, estrutura, capítulos,
+feedback de escrita, clareza/gramática, ABNT, referências, metodologia,
+slides, roteiro de defesa, questões simuladas, checklist de revisão, apoio
+de estudo.
+
+### Nira Course & Ebook Builder
+
+Transformar expertise/ideias em: estrutura de ebook, módulos, aulas,
+exercícios, resumos, quizzes, worksheets, outline de slides, roadmap de
+curso. Fluxo: ideia → outline → geração por seção → revisão do usuário →
+revisão → export. Rascunho gerado por IA é conteúdo editável, não verdade
+automática garantida.
+
+## FASE 11 — NIRA CREATOR LOCAL (LAB)
+
+Trilha experimental separada: UI local/privada → perfil Nira Creator →
+runtime Ollama/local. Experimentação privada, dados locais, sem dependência
+de nuvem, controle criativo alto, separado das regras do Hanira público.
+
+## FASE 12 — CREATOR 18+ (RESEARCH / NÃO PÚBLICO)
+
+Trilha de pesquisa para modo criativo adulto de material fictício legal.
+Exploração inicial: **LOCAL ONLY / PRIVATE**. Antes de qualquer versão
+pública: age assurance, jurisdição, leis aplicáveis, políticas de
+provider/hosting/pagamento, privacidade, retenção, moderação, prevenção de
+abuso, reporting, termos, ownership de conteúdo. Nunca documentado como
+"sem restrições"; nunca promete remoção de requisitos legais/de segurança.
+
+## Quotas internas (P1/P2, versão simples primeiro)
+
+Evitar que um usuário consuma toda a capacidade free. Tiers conceituais:
+visitante, usuário free registrado, admin/teste. Controles possíveis:
+mensagens/dia, requests/hora, orçamento de tokens, contexto máximo, output
+máximo, requests concorrentes, limites de anexo. Sem hardcode de plano pago.
+
+## Nira Economy Mode (P2/P3)
+
+Ativado sob pressão de capacidade, quota quase no limite, contexto grande
+ou capacidade free degradada. Ações: modelo free menor elegível, reduzir
+output máximo, reduzir janela de contexto, resumir mensagens antigas,
+desabilitar features opcionais caras, adiar processamento não crítico.
+**Nunca** migrar silenciosamente para serviço pago.
+
+
+## Observabilidade / dashboard de capacidade (P2/P3)
+
+Métricas: provider, modelo ativo, latência, taxa de sucesso, contagem 429,
+taxa de erro, fallbacks, estado da capacidade free, mensagens por usuário,
+estimativas de tokens, tamanho de contexto, distribuição de uso de modelos,
+disponibilidade. Status de custo por provider: FREE / PROMOTIONAL / PAID
+BLOCKED / UNKNOWN BLOCKED. Nenhum segredo exibido. "Custo evitado" só se o
+cálculo for preciso e claramente rotulado.
+
+## Privacidade (P2/P3)
+
+Export de conversa, deletar conversa, deletar conta/dados, deletar
+arquivos, política de retenção, transparência de provider (indicar
+internamente qual provider/modelo tratou cada turno), modos de privacidade
+configuráveis, modo privado/local, documentação do fluxo de dados.
+
+## Monetização futura (HOLD)
+
+O tier free é para Beta, validação, usuários iniciais e descoberta de
+produto — não assume escala ilimitada. Possibilidades futuras: planos
+pagos de quota maior, planos profissionais, verticais, copiloto acadêmico,
+ferramentas de criação, integrações empresariais, uso de API, features
+premium locais/privadas, serviços/consultoria. Nenhuma implementação de
+billing agora.
+
+## Filosofia de escala
+
+Não arquitetar hoje como se 10.000 usuários existissem. Medir antes de
+adicionar complexidade em cada estágio:
+
+- **Estágio A** (1–20 usuários reais) → estágio atual
+- **Estágio B** (20–100)
+- **Estágio C** (100–1.000)
+- **Estágio D** (1.000+)
+
+## Riscos e mitigações
+
+| Risco | Mitigação |
+| --- | --- |
+| R1: quotas de provider free mudam | registry em runtime + auditorias + sem fallback pago |
+| R2: falha de provider único | segundo provider no futuro |
+| R3: crescimento de tokens em conversas longas | Context Engine |
+| R4: crescimento de armazenamento de mídia | R2 / object storage |
+| R5: abuso consumindo quota free | quotas internas por usuário |
+| R6: complexidade prematura | pacotes incrementais |
+| R7: lock-in de provider/modelo | abstração Nira |
+| R8: mistura de credenciais entre projetos | isolamento estrito |
+
+## Fora de escopo agora (NOT NOW)
+
+Gemini, R2, roteador multi-provider, quotas, mudanças no Supabase (schema,
+RLS, migrations), API interna, instalação automática de Ollama, modo
+adulto, produtos acadêmico/ebook, novas dependências, billing/infra cloud.
