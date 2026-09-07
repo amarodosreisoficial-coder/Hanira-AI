@@ -52,6 +52,56 @@ describe("environment validation", () => {
     });
   });
 
+  it("aceita modo real com Groq sem exigir Ollama", async () => {
+    applyEnv({
+      HANIRA_DEMO_MODE: "false",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3002",
+      NEXT_PUBLIC_APP_VERSION: "0.4.0",
+      NEXT_PUBLIC_MAX_IMAGE_SIZE_MB: "10",
+      NEXT_PUBLIC_MAX_AUDIO_SIZE_MB: "25",
+      NEXT_PUBLIC_VOICE_ENABLED: "false",
+      NEXT_PUBLIC_VISION_ENABLED: "false",
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_example_key_12345",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_example_key_123456789",
+      AI_ENGINE_OLLAMA_ENABLED: "false",
+      OLLAMA_BASE_URL: undefined,
+      OLLAMA_MODEL: undefined,
+      GROQ_API_KEY: "gsk_test_only",
+      GROQ_MODEL: undefined,
+    });
+
+    const { getPublicEnv, getServerEnv } = await loadEnvModule();
+    expect(getServerEnv()).toMatchObject({
+      HANIRA_DEMO_MODE: false,
+      AI_ENGINE_OLLAMA_ENABLED: false,
+      GROQ_MODEL: undefined,
+    });
+    expect(JSON.stringify(getPublicEnv())).not.toContain("gsk_test_only");
+  });
+
+  it("rejeita modo real sem runtime textual executavel", async () => {
+    applyEnv({
+      HANIRA_DEMO_MODE: "false",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3002",
+      NEXT_PUBLIC_APP_VERSION: "0.4.0",
+      NEXT_PUBLIC_MAX_IMAGE_SIZE_MB: "10",
+      NEXT_PUBLIC_MAX_AUDIO_SIZE_MB: "25",
+      NEXT_PUBLIC_VOICE_ENABLED: "false",
+      NEXT_PUBLIC_VISION_ENABLED: "false",
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_example_key_12345",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_example_key_123456789",
+      AI_ENGINE_OLLAMA_ENABLED: "false",
+      OLLAMA_BASE_URL: undefined,
+      OLLAMA_MODEL: undefined,
+      GROQ_API_KEY: undefined,
+    });
+
+    const { getServerEnv } = await loadEnvModule();
+    expect(() => getServerEnv()).toThrow(/text_runtime/);
+  });
+
   it("usa defaults seguros para flags publicas ausentes", async () => {
     applyEnv({
       HANIRA_DEMO_MODE: "true",

@@ -647,6 +647,11 @@ async function createChatStream(
     status: 200,
     durationMs: Date.now() - startedAt,
     stage: "runtime_created",
+    ...(routed.niraProfileId ? { niraProfileId: routed.niraProfileId } : {}),
+    ...(routed.routingCandidateId
+      ? { routingCandidateId: routed.routingCandidateId }
+      : {}),
+    ...(routed.routingReason ? { routingReason: routed.routingReason } : {}),
     details: {
       baseUrl: routed.baseUrl,
       connectTimeoutMs: routed.connectTimeoutMs,

@@ -30,7 +30,9 @@ function mockGroqResponse(body: unknown, status = 200): Response {
 
 describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
   it("fluxo completo: Hanira -> Nira Cloud Free -> Router -> GroqProvider -> resposta normalizada", async () => {
-    setOllamaEnv();
+    process.env.AI_ENGINE_OLLAMA_ENABLED = "false";
+    delete process.env.OLLAMA_BASE_URL;
+    delete process.env.OLLAMA_MODEL;
     const apiKey = "gsk_test_integration_key";
     vi.stubEnv("GROQ_API_KEY", apiKey);
     vi.stubEnv("GROQ_MODEL", "");
@@ -64,6 +66,7 @@ describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
       NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
     );
     expect(runtime.provider).toBeInstanceOf(GroqProvider);
+    expect(runtime.baseUrl).toBeUndefined();
 
     const response = await runtime.provider.generate({
       messages: [{ role: "user", text: "Ola Nira!" }],
@@ -74,7 +77,7 @@ describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
     expect(url).toContain("/chat/completions");
 
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe("llama-3.3-70b-versatile");
+    expect(body.model).toBe("openai/gpt-oss-20b");
     expect(body.stream).toBe(false);
     expect(body.messages[0].role).toBe("user");
 
@@ -142,5 +145,45 @@ describe("Nira Cloud Free -> Groq integration (Package 15.0)", () => {
     ).rejects.toMatchObject({
       code: "authentication",
     });
+  });
+});
+
+describe("Nira Cloud Free no runtime (Package 16.3)", () => {
+  it("createTextChatRuntime() sem argumentos seleciona nira-cloud-free quando apenas Groq esta configurado", () => {
+    process.env.AI_ENGINE_OLLAMA_ENABLED = "false";
+    delete process.env.OLLAMA_BASE_URL;
+    delete process.env.OLLAMA_MODEL;
+    vi.stubEnv("GROQ_API_KEY", "gsk_test_auto_profile");
+    vi.stubEnv("GROQ_MODEL", "");
+
+    const runtime = createTextChatRuntime();
+
+    expect(runtime.nira.profileId).toBe(NIRA_CLOUD_FREE_PROFILE_ID);
+    expect(runtime.routing.candidateId).toBe(
+      NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
+    );
+    expect(runtime.routing.providerId).toBe(GROQ_PROVIDER_ID);
+    expect(runtime.provider).toBeInstanceOf(GroqProvider);
+  });
+
+  it("config do runtime nao expoe a chave Groq em nenhum campo", () => {
+    process.env.AI_ENGINE_OLLAMA_ENABLED = "false";
+    delete process.env.OLLAMA_BASE_URL;
+    delete process.env.OLLAMA_MODEL;
+    const apiKey = "gsk_test_secret_leak_probe_16_3";
+    vi.stubEnv("GROQ_API_KEY", apiKey);
+    vi.stubEnv("GROQ_MODEL", "");
+
+    const runtime = createTextChatRuntime();
+
+    const serialized = JSON.stringify({
+      nira: runtime.nira,
+      routing: runtime.routing,
+      providerId: runtime.providerId,
+      model: runtime.model,
+      baseUrl: runtime.baseUrl,
+    });
+    expect(serialized).not.toContain(apiKey);
+    expect(serialized).not.toContain("apiKey");
   });
 });

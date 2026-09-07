@@ -31,6 +31,11 @@ export interface RoutedChatProviderSelection {
   requestTimeoutMs?: number;
   attachmentCount: number;
   imageAttachmentCount: number;
+  // Pacote 16.3: metadata segura de identidade/roteamento Nira para
+  // observabilidade server-side (sem segredos, sem baseUrl sensivel).
+  niraProfileId?: string;
+  routingCandidateId?: string;
+  routingReason?: string;
 }
 
 function buildDocumentAwareUserText(options: {
@@ -84,6 +89,9 @@ export async function routeChatCapability(options: {
       requestTimeoutMs: runtime.requestTimeoutMs,
       attachmentCount: 0,
       imageAttachmentCount: 0,
+      niraProfileId: runtime.nira?.profileId,
+      routingCandidateId: runtime.routing?.candidateId,
+      routingReason: runtime.routing?.reason,
     };
   }
 
@@ -211,5 +219,8 @@ export async function routeChatCapability(options: {
     requestTimeoutMs: runtime.requestTimeoutMs,
     attachmentCount: options.attachments.length,
     imageAttachmentCount: 0,
+    niraProfileId: runtime.nira?.profileId,
+    routingCandidateId: runtime.routing?.candidateId,
+    routingReason: runtime.routing?.reason,
   };
 }

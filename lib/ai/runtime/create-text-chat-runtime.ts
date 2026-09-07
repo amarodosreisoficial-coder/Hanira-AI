@@ -13,6 +13,7 @@ import type {
 } from "@/lib/ai/router/types";
 import {
   DEFAULT_NIRA_PROFILE_ID,
+  NIRA_CLOUD_FREE_PROFILE_ID,
   getNiraProfileCandidateIds,
   resolveNiraProfile,
 } from "@/lib/ai/nira/profiles";
@@ -68,11 +69,11 @@ export interface TextChatRuntimeRoutingMetadata {
 export interface TextChatRuntimeConfig {
   provider: AIProvider;
   model: string;
-  baseUrl: string;
-  connectTimeoutMs: number;
-  firstTokenTimeoutMs: number;
-  idleTimeoutMs: number;
-  requestTimeoutMs: number;
+  baseUrl?: string;
+  connectTimeoutMs?: number;
+  firstTokenTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  requestTimeoutMs?: number;
   keepAlive?: string;
   providerId: string;
   // Identidade Nira do runtime (Pacote 14.5): perfil logico em uso.
@@ -283,7 +284,15 @@ export function resolveOllamaRuntimeConfig(): OllamaRuntimeConfig {
 export function createTextChatRuntime(
   options?: TextChatRuntimeCreateOptions,
 ): TextChatRuntimeConfig {
-  const config = resolveOllamaRuntimeConfig();
+  const groqProvider = createGroqProviderIfConfigured();
+  const ollamaConfig =
+    process.env.AI_ENGINE_OLLAMA_ENABLED === "true" &&
+    process.env.OLLAMA_BASE_URL?.trim() &&
+    process.env.OLLAMA_MODEL?.trim()
+      ? resolveOllamaRuntimeConfig()
+      : groqProvider
+        ? undefined
+        : resolveOllamaRuntimeConfig();
 
   // Pacotes 14.2B/14.3: a selecao do provider de texto passa pelo Model
   // Router alimentado pelo registry tipado de candidatos; ambos permanecem
@@ -310,10 +319,9 @@ export function createTextChatRuntime(
   // ModelRouterError(capacity_unavailable) — sem fingir disponibilidade e sem
   // fazer fallback silencioso para outra capacidade.
   const niraProfile = resolveNiraProfile(
-    options?.niraProfileId ?? DEFAULT_NIRA_PROFILE_ID,
+    options?.niraProfileId ??
+      (groqProvider ? NIRA_CLOUD_FREE_PROFILE_ID : DEFAULT_NIRA_PROFILE_ID),
   );
-
-  const groqProvider = createGroqProviderIfConfigured();
   const groqExternalCandidates =
     groqProvider instanceof GroqProvider
       ? [
@@ -337,7 +345,7 @@ export function createTextChatRuntime(
   ];
 
   const registry = createRouterCandidateRegistry({
-    ollamaModel: config.model,
+    ollamaModel: ollamaConfig?.model,
     externalCandidates: allExternalCandidates,
   });
 
@@ -395,12 +403,12 @@ export function createTextChatRuntime(
   const provider = resolveTextRouterDecisionProvider(decision, {
     ollama: ({ model }) =>
       new OllamaProvider({
-        baseUrl: config.baseUrl,
+        baseUrl: ollamaConfig?.baseUrl,
         defaultModel: model,
-        connectTimeoutMs: config.connectTimeoutMs,
-        firstTokenTimeoutMs: config.firstTokenTimeoutMs,
-        idleTimeoutMs: config.idleTimeoutMs,
-        requestTimeoutMs: config.requestTimeoutMs,
+        connectTimeoutMs: ollamaConfig?.connectTimeoutMs,
+        firstTokenTimeoutMs: ollamaConfig?.firstTokenTimeoutMs,
+        idleTimeoutMs: ollamaConfig?.idleTimeoutMs,
+        requestTimeoutMs: ollamaConfig?.requestTimeoutMs,
       }),
     groq: ({ model }) =>
       new GroqProvider({
@@ -411,13 +419,13 @@ export function createTextChatRuntime(
 
   return {
     provider,
-    model: config.model,
-    baseUrl: config.baseUrl,
-    connectTimeoutMs: config.connectTimeoutMs,
-    firstTokenTimeoutMs: config.firstTokenTimeoutMs,
-    idleTimeoutMs: config.idleTimeoutMs,
-    requestTimeoutMs: config.requestTimeoutMs,
-    keepAlive: config.keepAlive,
+    model: decision.selected.model,
+    baseUrl: ollamaConfig?.baseUrl,
+    connectTimeoutMs: ollamaConfig?.connectTimeoutMs,
+    firstTokenTimeoutMs: ollamaConfig?.firstTokenTimeoutMs,
+    idleTimeoutMs: ollamaConfig?.idleTimeoutMs,
+    requestTimeoutMs: ollamaConfig?.requestTimeoutMs,
+    keepAlive: ollamaConfig?.keepAlive,
     providerId: provider.providerId,
     nira: Object.freeze({
       profileId: niraProfile.id,

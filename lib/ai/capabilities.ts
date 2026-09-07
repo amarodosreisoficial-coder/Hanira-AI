@@ -116,7 +116,14 @@ export function getServerAICapabilities(): AICapabilities {
   const openAIKeyMissing = !env.OPENAI_API_KEY;
 
   return {
-    text: env.AI_ENGINE_OLLAMA_ENABLED && env.OLLAMA_MODEL && env.OLLAMA_BASE_URL
+    text: env.GROQ_API_KEY
+      ? {
+          enabled: true,
+          status: "available",
+          provider: "groq",
+          model: env.GROQ_MODEL,
+        }
+      : env.AI_ENGINE_OLLAMA_ENABLED && env.OLLAMA_MODEL && env.OLLAMA_BASE_URL
       ? {
           enabled: true,
           status: "available",
@@ -128,7 +135,7 @@ export function getServerAICapabilities(): AICapabilities {
           status: "misconfigured",
           provider: "ollama",
           model: env.OLLAMA_MODEL,
-          reason: "Runtime textual Ollama incompleto.",
+          reason: "Runtime textual indisponivel.",
         },
     vision: availabilityResult(
       env.NEXT_PUBLIC_VISION_ENABLED,
