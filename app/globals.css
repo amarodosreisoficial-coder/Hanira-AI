@@ -247,7 +247,7 @@ select:focus-visible {
   background: radial-gradient(circle at 36% 28%, rgba(244, 235, 255, 0.40), rgba(155, 112, 241, 0.08) 46%, transparent 72%);
 }
 
-.nira-presence__core {
+.nira-presence__symbol {
   background: linear-gradient(135deg, #efe7ff 0%, #b291ff 42%, #7951ca 100%);
   box-shadow: 0 0 10px rgba(174, 137, 255, 0.35);
 }
@@ -261,7 +261,7 @@ select:focus-visible {
   animation: nira-breathe 1.8s ease-in-out infinite;
 }
 
-.nira-presence.is-responding .nira-presence__core {
+.nira-presence.is-responding .nira-presence__symbol {
   animation: nira-turn 2.4s ease-in-out infinite;
 }
 
@@ -373,6 +373,19 @@ select:focus-visible {
   border: 1px solid var(--border);
   border-radius: 0.9rem;
   background: #0b0910;
+}
+
+/* Nira composer — one unified surface, no double frame */
+.nira-composer {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32);
+}
+
+.nira-composer textarea {
+  line-height: 1.6;
+}
+
+.compose-surface:focus-within {
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.42);
 }
 
 .chat-code > span {

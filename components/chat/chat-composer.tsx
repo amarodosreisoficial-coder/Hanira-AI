@@ -521,9 +521,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           </div>
         )}
-        <div className="rounded-[1.4rem] border border-border bg-composer p-2 transition focus-within:border-primary/30">
+        <div className="compose-surface nira-composer rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none">
           {pendingMedia.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto px-2 pb-2 pt-1">
+            <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
               {pendingMedia.map((item) => (
                 <div
                   key={item.id}
@@ -587,7 +587,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             }}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            className="block min-h-12 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
           />
           <input
             ref={imageInputRef}
@@ -691,7 +691,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   onClick={() => void submit()}
                   disabled={!canSend}
                   aria-label="Enviar mensagem"
-                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {uploading ? (
                     <LoaderCircle className="size-4 animate-spin" />

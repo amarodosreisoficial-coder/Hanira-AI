@@ -65,7 +65,7 @@ não há prova de trace server-side em produção; nada foi fabricado.
   `niraProfileId`, `routingCandidateId`, `routingReason` nos logs
   server-side; evento `start` do stream agora carrega `profile` seguro
 - [x] Chat real autenticado respondeu com sucesso (Pacote 16.3/16.4)
-- [~] Verificação de trace de provider em produção (logs Vercel)
+- [~] Verificação de trace de provider em logs Vercel (necessita acesso ao projeto hanira-ai na Vercel)
 - [x] UI ciente do runtime real (Pacote 16.4): badge derivado de evidência
   do stream — `Nira Online` (cloud) / `Nira Local` / `Modo demonstração`;
   estado desconhecido não exibe badge; nunca mostra provider/modelo
