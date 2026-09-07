@@ -62,8 +62,13 @@ export function deleteConversationRequest(id: string) {
   });
 }
 
+export interface StreamStartMeta {
+  mode?: string;
+  profile?: string;
+}
+
 export interface StreamHandlers {
-  onStart?: (conversationId: string) => void;
+  onStart?: (conversationId: string, meta?: StreamStartMeta) => void;
   onDelta: (delta: string) => void;
   onDone?: (conversationId: string) => void;
   onError?: (error: ChatRequestError) => void;
@@ -119,9 +124,14 @@ export async function streamChatMessage(
         delta?: string;
         message?: string;
         code?: ChatErrorCode;
+        mode?: string;
+        profile?: string;
       };
       if (event.type === "start" && event.conversationId) {
-        handlers.onStart?.(event.conversationId);
+        handlers.onStart?.(event.conversationId, {
+          mode: event.mode,
+          profile: event.profile,
+        });
       } else if (event.type === "delta" && event.delta) {
         handlers.onDelta(event.delta);
       } else if (event.type === "done" && event.conversationId) {

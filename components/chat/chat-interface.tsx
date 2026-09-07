@@ -14,6 +14,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceConversationModal } from "@/components/voice/voice-conversation-modal";
 import { useChatStore } from "@/lib/stores/chat-store";
+import { niraRuntimeBadge } from "@/lib/chat/runtime-state";
+import { cn } from "@/lib/utils";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import type { UserSettings } from "@/types/settings";
 
@@ -86,9 +88,9 @@ export function ChatInterface({ userName }: { userName: string }) {
               </IconButton>
             )}
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-baseline gap-2">
                 <span className="truncate text-sm font-semibold tracking-tight">Hanira</span>
-                <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                <span className="hidden text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground sm:inline">
                   Nira Intelligence
                 </span>
               </div>
@@ -115,13 +117,22 @@ export function ChatInterface({ userName }: { userName: string }) {
                 <span className="hidden sm:inline">Conversa por voz</span>
               </button>
             )}
-            <div
-              className="hidden items-center gap-2 rounded-full border border-border bg-card/55 px-3 py-1.5 sm:flex"
-              aria-label="Perfil ativo: Nira Local"
-            >
-              <span className="size-1.5 rounded-full bg-primary" />
-              <span className="text-[10px] font-medium text-muted-foreground">Nira Local</span>
-            </div>
+            {(() => {
+              const badge = niraRuntimeBadge(store.runtimeState);
+              if (!badge.label) return null;
+              return (
+                <div
+                  className="hidden items-center gap-2 px-1 sm:flex"
+                  aria-label={`Estado do runtime: ${badge.label}`}
+                  data-runtime-state={badge.state}
+                >
+                  <span className={cn("size-1.5 rounded-full", badge.dotClassName)} />
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {badge.label}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         </header>
 

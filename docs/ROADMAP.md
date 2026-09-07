@@ -36,9 +36,16 @@ Status: `[x]` feito · `[~]` em progresso · `[ ]` planejado.
 
 ---
 
-## FASE 0 — HANIRA REAL (P0, em progresso)
+## FASE 0 — HANIRA REAL (P0)
 
-Milestone operacional atual: **primeiro chat Nira online real**.
+Milestone operacional: **primeiro chat Nira online real** — CONQUISTADO.
+
+Status oficial (Pacote 16.4): **APLICAÇÃO COM RESPOSTA REAL VERIFICADA ·
+TRACE DE PROVIDER EM PRODUÇÃO PENDENTE**. Evidência: chat autenticado real
+respondeu via Groq (`openai/gpt-oss-20b`) após restauração do Supabase;
+validação em nível de runtime/provider feita por live smoke local
+(`HANIRA_GROQ_LIVE_SMOKE=true`). Logs de produção ainda não inspecionados —
+não há prova de trace server-side em produção; nada foi fabricado.
 
 - [x] Separação de identidade Hanira/Nira
 - [x] Interface pública de chat moderna + harmonia visual
@@ -48,19 +55,26 @@ Milestone operacional atual: **primeiro chat Nira online real**.
 - [x] Provider Groq integrado (runtime sem Ollama obrigatório)
 - [x] Perfil Nira Cloud Free + Nira Local preservado
 - [x] Erros de provider seguros; sem fallback pago
-- [~] Runtime de produção Groq: `HANIRA_DEMO_MODE=false`, `GROQ_API_KEY`
+- [x] Runtime de produção Groq: `HANIRA_DEMO_MODE=false`, `GROQ_API_KEY`
   server-side, `GROQ_MODEL` configurável (default técnico atual:
   `openai/gpt-oss-20b`, verificado ao vivo no Pacote 16.3;
   `llama-3.3-70b-versatile` retornou 404 model_not_found e foi aposentado;
   `GROQ_MODEL` pode sobrescrever), `AI_ENGINE_OLLAMA_ENABLED=false`
   para nuvem Groq-only
-- [~] Observabilidade segura do roteamento Nira em `/api/chat`:
+- [x] Observabilidade segura do roteamento Nira em `/api/chat`:
   `niraProfileId`, `routingCandidateId`, `routingReason` nos logs
-  server-side (sem segredos)
-- [~] Verificação do ambiente Vercel (preview/production) e redeploy
-- [ ] Smoke test real autenticado do chat no deployment
-- [ ] Verificação de resposta e erros do provider no deployment
-- [ ] Estabilização do pacote
+  server-side; evento `start` do stream agora carrega `profile` seguro
+- [x] Chat real autenticado respondeu com sucesso (Pacote 16.3/16.4)
+- [~] Verificação de trace de provider em produção (logs Vercel)
+- [x] UI ciente do runtime real (Pacote 16.4): badge derivado de evidência
+  do stream — `Nira Online` (cloud) / `Nira Local` / `Modo demonstração`;
+  estado desconhecido não exibe badge; nunca mostra provider/modelo
+- [x] Refinamento visual premium (Pacote 16.4): menos cards/bordas, menos
+  roxo, composer integrado, header simplificado, sidebar mais leve
+- [x] Resiliência de autenticação (Pacote 16.4): falhas DNS/rede do Supabase
+  classificadas como indisponibilidade temporária amigável
+- [x] Validação automatizada (Pacote 16.4): `npm run verify:release` e
+  matriz de testes de runtime/erros (sem rede na suíte normal)
 
 > Produção só é considerada comprovada após o teste ao vivo.
 

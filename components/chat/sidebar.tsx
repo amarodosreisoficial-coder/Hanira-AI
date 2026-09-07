@@ -86,7 +86,7 @@ export function Sidebar({ userName }: { userName: string }) {
             onClick={() => void store.newConversation()}
             title="Nova conversa"
             className={cn(
-              "flex h-11 w-full items-center gap-3 rounded-xl border border-border bg-card/60 px-3.5 text-sm font-medium text-foreground transition hover:border-primary/25 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               store.sidebarCollapsed && "lg:justify-center lg:px-0",
             )}
           >
@@ -183,7 +183,7 @@ export function Sidebar({ userName }: { userName: string }) {
             href="/settings/memory"
             title="Memória Hanira"
             className={cn(
-              "mt-7 flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3 transition hover:border-border hover:bg-accent",
+              "mt-7 flex items-center gap-3 rounded-xl p-3 transition hover:bg-accent",
               store.sidebarCollapsed && "lg:justify-center lg:p-2.5",
             )}
           >

@@ -787,6 +787,7 @@ async function createChatStream(
     conversationId,
     requestId,
     mode: routed.mode,
+    profile: routed.niraProfileId,
     onComplete: async ({ assistantContent }) => {
       await persistAssistantResponse({
         supabase,

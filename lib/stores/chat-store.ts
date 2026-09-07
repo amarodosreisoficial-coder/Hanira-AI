@@ -15,6 +15,7 @@ import type {
   LoadStatus,
 } from "@/types/chat";
 import type { ChatErrorCode } from "@/lib/chat/chat-errors";
+import type { NiraRuntimeState } from "@/lib/chat/runtime-state";
 
 interface ChatState {
   conversations: Conversation[];
@@ -26,8 +27,12 @@ interface ChatState {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   draft: string;
+  // Pacote 16.4: estado de runtime Nira derivado de evidencia real do
+  // stream/backend. A UI nunca adivinha o runtime com texto estatico.
+  runtimeState: NiraRuntimeState;
   initialize: () => Promise<void>;
   setDraft: (draft: string) => void;
+  setRuntimeState: (state: NiraRuntimeState) => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   newConversation: () => Promise<void>;
@@ -68,6 +73,7 @@ export const useChatStore = create<ChatState>()(
       sidebarOpen: false,
       sidebarCollapsed: false,
       draft: "",
+      runtimeState: "unknown",
       initialize: async () => {
         if (get().status === "loading") return;
         set({ status: "loading", error: null });
@@ -78,6 +84,7 @@ export const useChatStore = create<ChatState>()(
             const conversations = existing.length ? existing : [localConversation()];
             set({
               mode: "demo",
+              runtimeState: "demo",
               conversations,
               activeId: get().activeId ?? conversations[0].id,
               status: "ready",
@@ -265,6 +272,7 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
       setThinking: (isThinking) => set({ isThinking }),
+      setRuntimeState: (runtimeState) => set({ runtimeState }),
       activeConversation: () =>
         get().conversations.find((item) => item.id === get().activeId) ?? null,
     }),
