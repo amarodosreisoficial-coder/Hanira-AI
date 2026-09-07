@@ -49,11 +49,17 @@ Milestone operacional atual: **primeiro chat Nira online real**.
 - [x] Perfil Nira Cloud Free + Nira Local preservado
 - [x] Erros de provider seguros; sem fallback pago
 - [~] Runtime de produção Groq: `HANIRA_DEMO_MODE=false`, `GROQ_API_KEY`
-  server-side, `GROQ_MODEL` configurável (`openai/gpt-oss-20b` como
-  primeiro motor), `AI_ENGINE_OLLAMA_ENABLED=false` para nuvem Groq-only
-- [ ] Verificação do ambiente Vercel (preview/production) e redeploy
-- [ ] Smoke test real autenticado do chat
-- [ ] Verificação de resposta e erros do provider
+  server-side, `GROQ_MODEL` configurável (default técnico atual:
+  `openai/gpt-oss-20b`, verificado ao vivo no Pacote 16.3;
+  `llama-3.3-70b-versatile` retornou 404 model_not_found e foi aposentado;
+  `GROQ_MODEL` pode sobrescrever), `AI_ENGINE_OLLAMA_ENABLED=false`
+  para nuvem Groq-only
+- [~] Observabilidade segura do roteamento Nira em `/api/chat`:
+  `niraProfileId`, `routingCandidateId`, `routingReason` nos logs
+  server-side (sem segredos)
+- [~] Verificação do ambiente Vercel (preview/production) e redeploy
+- [ ] Smoke test real autenticado do chat no deployment
+- [ ] Verificação de resposta e erros do provider no deployment
 - [ ] Estabilização do pacote
 
 > Produção só é considerada comprovada após o teste ao vivo.

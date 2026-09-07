@@ -1,5 +1,9 @@
 export const GROQ_PROVIDER_ID = "groq";
-export const GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile";
+// Auditoria ao vivo (Pacote 16.3): llama-3.3-70b-versatile retorna 404
+// model_not_found na API Groq real. openai/gpt-oss-20b (free) verificado
+// ao vivo. Siga auditando antes de trocar; GROQ_MODEL sobrescreve este
+// default tecnico.
+export const GROQ_DEFAULT_MODEL = "openai/gpt-oss-20b";
 export const GROQ_API_BASE_URL = "https://api.groq.com/openai/v1";
 
 export const GROQ_TEXT_CAPABILITIES = ["text-generation", "text-streaming"] as const;
