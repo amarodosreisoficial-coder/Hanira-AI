@@ -80,15 +80,37 @@ não há prova de trace server-side em produção; nada foi fabricado.
 
 ## FASE 1 — ESTABILIDADE (P1)
 
-- [ ] Tratamento de erros e mensagens seguras end-to-end
-- [ ] Monitoramento/observabilidade básica
-- [ ] Quotas internas simples por usuário (ver seção Quotas)
-- [ ] Controle de contexto simples (ver Context Engine)
+- [x] Tratamento de erros e mensagens seguras end-to-end (Pacotes 16.4/16.5:
+  erros públicos normalizados sem vazamento de provider/billing, resiliência
+  de autenticação, matriz de validação de runtime sem rede)
+- [x] Monitoramento/observabilidade básica (Pacote 16.5: métricas de
+  capacidade em memória + seção `capacity` no diagnóstico autenticado; apenas
+  dados escalares, sem segredos)
+- [x] Quotas internas simples por usuário (Pacote 16.5: limite diário
+  configurável via `HANIRA_USER_DAILY_MESSAGE_LIMIT`, em memória, 0 desativa,
+  sem tiers/planos e sem billing)
+- [x] Controle de contexto simples (orçamento de histórico/memórias em
+  `lib/ai/runtime/chat-context-budget.ts`)
 
 ## FASE 2 — GROQ MULTI-FREE (P1/P2)
 
 **Nira Free Capacity Engine — versão simples.** Não construir o roteador
 gigante ainda.
+
+Status (Pacote 16.5 — fundação implementada; detalhes em
+`docs/NIRA_CAPACITY_ENGINE.md`):
+
+- [x] Registry de capacidade free configurável do perfil `nira-cloud-free`:
+  primário auditado + extras declarados por env, todos `free` POR CONSTRUÇÃO
+- [x] Estado de capacidade por candidato com sinais reais de runtime
+  (`rate_limited`/`unhealthy` + cooldown configurável; ativa o vocabulário
+  reservado do router no Pacote 14.8)
+- [x] Fallback apenas entre candidatos free elegíveis do escopo do perfil
+  (free → free; Zero-Cost Guard continua bloqueando paid/promotional/unknown)
+- [~] Múltiplos modelos free auditados: primário `GROQ_MODEL` verificado ao
+  vivo (Pacote 16.3); modelos extra exigem auditoria do operador antes de
+  entrar na env — nada é assumido free pelo nome
+- [ ] Auditoria oficial de pricing/rate-limits de segundos candidatos
 
 - Groq provider → múltiplos modelos free auditados
 - Sequência lógica: modelo free primário → fallback free → secundário free

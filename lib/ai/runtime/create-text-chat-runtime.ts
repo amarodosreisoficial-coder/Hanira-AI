@@ -8,15 +8,22 @@ import type { ExternalRouterCandidateConfig } from "@/lib/ai/router/candidate-co
 import { createRouterCandidateRegistry } from "@/lib/ai/router/candidate-registry";
 import { ModelRouterError } from "@/lib/ai/router/errors";
 import type {
+  RouterCandidate,
   RouterDecision,
   RouterDecisionReason,
+  RouterRejection,
 } from "@/lib/ai/router/types";
 import {
   DEFAULT_NIRA_PROFILE_ID,
+  NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
   NIRA_CLOUD_FREE_PROFILE_ID,
   getNiraProfileCandidateIds,
   resolveNiraProfile,
 } from "@/lib/ai/nira/profiles";
+import { getAvailabilityGate } from "@/lib/ai/capacity/capacity-state";
+import {
+  resolveFreeCapacityCandidates,
+} from "@/lib/ai/capacity/free-capacity-registry";
 import {
   createTextModelRouter,
   resolveTextRouterDecisionProvider,
@@ -322,26 +329,37 @@ export function createTextChatRuntime(
     options?.niraProfileId ??
       (groqProvider ? NIRA_CLOUD_FREE_PROFILE_ID : DEFAULT_NIRA_PROFILE_ID),
   );
-  const groqExternalCandidates =
+  // Pacote 16.5 (Nira Free Capacity Engine): a cadeia free do perfil
+  // nira-cloud-free vem do registry de capacidade (lib/ai/capacity/
+  // free-capacity-registry.ts): candidato padrao auditado (GROQ_MODEL) +
+  // candidatos extra configurados via HANIRA_FREE_TEXT_CANDIDATES, todos com
+  // costClass "free" POR CONSTRUCAO. Sem Groq configurado, nenhum candidato
+  // cloud e registrado (comportamento preservado dos pacotes anteriores).
+  const groqDefaultCandidate: RouterCandidate | undefined =
     groqProvider instanceof GroqProvider
-      ? [
-          {
-            id: "nira-cloud-free-default",
-            provider: "groq",
-            model: groqProvider.getDefaultModel(),
-            capabilities: ["text"] as const,
-            priority: 1,
-            enabled: true,
-            deployment: "cloud" as const,
-            costClass: "free" as const,
-            label: "Nira Cloud Free (Groq)",
-          },
-        ]
-      : [];
+      ? {
+          id: "nira-cloud-free-default",
+          provider: "groq",
+          model: groqProvider.getDefaultModel(),
+          capabilities: ["text"],
+          priority: 1,
+          enabled: true,
+          deployment: "cloud",
+          costClass: "free",
+          label: "Nira Cloud Free (Groq)",
+        }
+      : undefined;
+
+  const freeCapacityCandidates = groqDefaultCandidate
+    ? resolveFreeCapacityCandidates({ defaultCandidate: groqDefaultCandidate })
+    : {
+        candidates: [] as readonly RouterCandidate[],
+        extraCandidateIds: [] as readonly string[],
+      };
 
   const allExternalCandidates = [
     ...(options?.externalCandidates ?? []),
-    ...groqExternalCandidates,
+    ...freeCapacityCandidates.candidates,
   ];
 
   const registry = createRouterCandidateRegistry({
@@ -349,7 +367,17 @@ export function createTextChatRuntime(
     externalCandidates: allExternalCandidates,
   });
 
-  const profileScope = getNiraProfileCandidateIds(niraProfile);
+  // Pacote 16.5: o escopo do perfil nira-cloud-free passa a incluir os
+  // candidatos free EXTRA configurados (fundacao do fallback free -> free da
+  // Fase 2). O escopo continua FECHADO: nada fora dele e elegivel (sem
+  // fallback cruzado entre perfis/capacidades diferentes).
+  const profileScope =
+    niraProfile.id === NIRA_CLOUD_FREE_PROFILE_ID
+      ? Object.freeze([
+          NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
+          ...freeCapacityCandidates.extraCandidateIds,
+        ])
+      : getNiraProfileCandidateIds(niraProfile);
   const scopedCandidates = registry
     .getCandidatesForCapability("text")
     .filter((candidate) => profileScope.includes(candidate.id));
@@ -369,9 +397,44 @@ export function createTextChatRuntime(
     });
   }
 
+  // Pacote 16.5 (Nira Capacity Engine): portao de disponibilidade transiente.
+  // Candidatos com cooldown ativo (rate_limited/unhealthy, a partir de sinais
+  // REAIS de runtime reportados pela rota de chat) sao excluidos da decisao
+  // ANTES do select. O fallback continua DENTRO do escopo do perfil e sob a
+  // mesma politica financeira do router: a cadeia e free -> free, NUNCA
+  // free -> pago (Zero-Cost Guard inalterado).
+  const capacityRejections: RouterRejection[] = [];
+  const capacityReadyCandidates = scopedCandidates.filter((candidate) => {
+    const gate = getAvailabilityGate(candidate.id);
+    if (gate.available) {
+      return true;
+    }
+    capacityRejections.push({
+      candidateId: candidate.id,
+      provider: candidate.provider,
+      reason: "capacity_cooldown",
+    });
+    return false;
+  });
+
+  if (capacityReadyCandidates.length === 0) {
+    throw new ModelRouterError({
+      code: "capacity_unavailable",
+      message:
+        "Todos os candidatos do perfil Nira estao em cooldown de capacidade.",
+      metadata: {
+        requestedCapability: "text",
+        niraProfileId: niraProfile.id,
+        preferredCandidateId: niraProfile.preferredCandidateId,
+        candidatesConsidered: scopedCandidates.length,
+        rejected: capacityRejections,
+      },
+    });
+  }
+
   let decision: RouterDecision;
   try {
-    decision = createTextModelRouter(scopedCandidates).select({
+    decision = createTextModelRouter(capacityReadyCandidates).select({
       capability: "text",
       preferredCandidateId: niraProfile.preferredCandidateId,
     });

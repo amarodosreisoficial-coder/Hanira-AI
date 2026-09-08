@@ -29,6 +29,13 @@ import {
 } from "@/lib/logging/server";
 import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { checkUserMessageQuota } from "@/lib/security/user-quota";
+import { recordCapacityEvent } from "@/lib/observability/capacity-metrics";
+import {
+  recordCandidateFailure,
+  recordCandidateSuccess,
+} from "@/lib/ai/capacity/capacity-state";
+import { ModelRouterError } from "@/lib/ai/router/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validation/chat";
 import { getOwnedAttachments } from "@/services/attachments";
@@ -113,6 +120,38 @@ export async function POST(request: Request) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
 
+    // Pacote 16.5 (Fase 1 - quotas internas simples por usuario): limite
+    // diario em memoria, verificado ANTES de qualquer execucao de IA. O erro
+    // publico segue o vocabulario de capacidade do produto (invariante 5 do
+    // roadmap: sem capacidade disponivel -> resposta segura de alta demanda).
+    const quota = checkUserMessageQuota(user.id);
+    if (!quota.allowed) {
+      logServerEvent({
+        level: "warn",
+        requestId,
+        route: "/api/chat",
+        event: "quota_limited",
+        status: 429,
+        durationMs: Date.now() - startedAt,
+      });
+      recordCapacityEvent({ outcome: "quota_limited_response" });
+      return Response.json(
+        {
+          error:
+            "Voce atingiu o limite diario de mensagens da Hanira. Tente novamente amanha.",
+          code: "capacity_unavailable",
+          requestId,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(quota.retryAfterSeconds),
+            "X-Request-ID": requestId,
+          },
+        },
+      );
+    }
+
     return await createChatStream(
       request,
       user.id,
@@ -180,6 +219,15 @@ export async function POST(request: Request) {
           headers: { "X-Request-ID": requestId },
         },
       );
+    }
+
+    // Pacote 16.5: respostas de capacidade (capacity_unavailable) alimentam a
+    // observabilidade basica; nenhuma infraestrutura externa e acessada aqui.
+    if (
+      error instanceof ModelRouterError &&
+      error.code === "capacity_unavailable"
+    ) {
+      recordCapacityEvent({ outcome: "capacity_unavailable_response" });
     }
 
     const publicError = toPublicAIError(error);
@@ -661,6 +709,16 @@ async function createChatStream(
       capability: routed.capability,
     },
   });
+  // Pacote 16.5: observabilidade basica - registra a selecao do router para as
+  // metricas de capacidade (apenas ids logicos, sem segredos).
+  recordCapacityEvent({
+    outcome: "selected",
+    ...(routed.routingCandidateId
+      ? { candidateId: routed.routingCandidateId }
+      : {}),
+    providerId: routed.providerId,
+    modelId: routed.model,
+  });
   const providerRequest =
     routed.capability === "text"
       ? buildTextChatProviderRequest({
@@ -789,6 +847,17 @@ async function createChatStream(
     mode: routed.mode,
     profile: routed.niraProfileId,
     onComplete: async ({ assistantContent }) => {
+      // Pacote 16.5 (Nira Capacity Engine): sucesso real limpa cooldown do
+      // candidato selecionado e alimenta as metricas de capacidade.
+      if (routed.routingCandidateId) {
+        recordCandidateSuccess(routed.routingCandidateId);
+        recordCapacityEvent({
+          outcome: "success",
+          candidateId: routed.routingCandidateId,
+          providerId: routed.providerId,
+          modelId: routed.model,
+        });
+      }
       await persistAssistantResponse({
         supabase,
         conversationId,
@@ -816,6 +885,24 @@ async function createChatStream(
     onFailed: async (error, safeError) => {
       const providerError = error instanceof AIProviderError ? error : null;
       const errorCode = providerError?.code;
+      // Pacote 16.5 (Nira Capacity Engine): sinal de capacidade a partir do
+      // erro classificado do provider. Apenas erros DE PROVIDER alimentam o
+      // estado de capacidade: falha de persistencia nao e instabilidade de
+      // candidate e nao pode gerar cooldown.
+      if (routed.routingCandidateId && providerError) {
+        recordCandidateFailure(routed.routingCandidateId, {
+          code: errorCode ?? "unknown",
+          retryable: providerError.retryable,
+        });
+        recordCapacityEvent({
+          outcome:
+            providerError.code === "rate_limit" ? "rate_limited" : "failure",
+          candidateId: routed.routingCandidateId,
+          providerId: routed.providerId,
+          modelId: routed.model,
+          ...(errorCode ? { errorCode } : {}),
+        });
+      }
       const metadataStage = providerError?.metadata?.stage;
       const isTimeout = errorCode === "timeout";
       const event =
