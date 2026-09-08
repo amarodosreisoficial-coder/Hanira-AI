@@ -40,6 +40,7 @@ import {
   mediaConfig,
 } from "@/lib/media/config";
 import { useChatStore } from "@/lib/stores/chat-store";
+import { resolveNiraRuntimeState } from "@/lib/chat/runtime-state";
 import { toChatIssue, type ChatIssue } from "@/lib/chat/chat-errors";
 import {
   inferAttachmentTypeFromMimeType,
@@ -251,10 +252,18 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               : undefined,
         },
         {
-          onStart: (serverConversationId) => {
+          onStart: (serverConversationId, meta) => {
             if (serverConversationId !== conversation.id) {
               store.replaceConversationId(conversation.id, serverConversationId);
             }
+            // Pacote 16.4: badge de runtime deriva de evidencia real do
+            // stream (mode/profile), nunca de texto estatico na UI.
+            store.setRuntimeState(
+              resolveNiraRuntimeState({
+                mode: meta?.mode,
+                niraProfileId: meta?.profile,
+              }),
+            );
           },
           onDelta: (delta) => {
             fullText += delta;
@@ -512,9 +521,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           </div>
         )}
-        <div className="rounded-[1.4rem] border border-border bg-composer p-2 shadow-[0_18px_60px_rgba(0,0,0,.3)] transition focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/5">
+        <div className="compose-surface nira-composer rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none">
           {pendingMedia.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto px-2 pb-2 pt-1">
+            <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
               {pendingMedia.map((item) => (
                 <div
                   key={item.id}
@@ -578,7 +587,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             }}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            className="block min-h-12 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
           />
           <input
             ref={imageInputRef}
@@ -621,7 +630,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 onClick={() => documentInputRef.current?.click()}
                 aria-label="Adicionar documento"
                 title="Adicionar documento"
-                className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-amber-300 disabled:text-zinc-700"
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
               >
                 <Paperclip className="size-[18px]" />
               </button>
@@ -631,7 +640,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 onClick={() => imageInputRef.current?.click()}
                 aria-label="Adicionar imagem"
                 title="Adicionar imagem"
-                className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-violet-300 disabled:text-zinc-700"
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
               >
                 <ImagePlus className="size-[18px]" />
               </button>
@@ -641,7 +650,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 onClick={() => void requestMediaAccess("camera")}
                 aria-label="Tirar foto"
                 title="Tirar foto"
-                className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-violet-300 disabled:text-zinc-700"
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
               >
                 <Camera className="size-[18px]" />
               </button>
@@ -655,7 +664,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 onClick={() => void requestMediaAccess("microphone")}
                 aria-label="Gravar voz"
                 title={settings.voiceEnabled ? "Gravar voz" : "Ative a voz nas configuracoes"}
-                className="rounded-xl p-2.5 text-zinc-500 transition hover:bg-white/[0.05] hover:text-violet-300 disabled:text-zinc-700"
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
               >
                 <Mic className="size-[18px]" />
               </button>
@@ -682,7 +691,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   onClick={() => void submit()}
                   disabled={!canSend}
                   aria-label="Enviar mensagem"
-                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {uploading ? (
                     <LoaderCircle className="size-4 animate-spin" />

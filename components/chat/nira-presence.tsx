@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export type NiraPresenceStatus =
@@ -26,11 +27,19 @@ export function NiraPresence({
         status === "responding" && "is-responding",
         status === "unavailable" && "is-unavailable",
         className,
-      )}
+            )}
       aria-hidden="true"
     >
       <span className="nira-presence__halo absolute inset-[14%] rounded-[32%]" />
-      <span className="nira-presence__core relative block size-[34%] rotate-45 rounded-[28%]" />
+      <span className="nira-presence__symbol relative block size-[34%] rounded-[28%]">
+        <Image
+          src="/hanira-symbol.svg"
+          alt=""
+          fill
+          sizes="16px"
+          className="object-contain"
+        />
+      </span>
     </span>
   );
 }

@@ -56,6 +56,9 @@ export interface CreateTextChatProviderResponseOptions {
   conversationId: string;
   requestId: string;
   mode: string;
+  // Pacote 16.4: identidade Nira segura (profileId) exposta no evento `start`
+  // para que a UI derive o badge de runtime de evidencia real, sem segredos.
+  profile?: string;
   onComplete?: (result: {
     assistantContent: string;
     finishEvent: Extract<AIStreamEvent, { type: "finish" }>;
@@ -272,6 +275,7 @@ export function createTextChatProviderResponse(
           streamEvent("start", {
             conversationId: options.conversationId,
             mode: options.mode,
+            ...(options.profile ? { profile: options.profile } : {}),
             requestId: options.requestId,
           }),
         ),
