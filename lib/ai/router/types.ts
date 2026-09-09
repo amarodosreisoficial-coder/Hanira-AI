@@ -114,6 +114,10 @@ export const ROUTER_REJECTION_REASONS = [
   "cost_class_unknown",
   "cost_blocked_paid",
   "cost_blocked_promotional",
+  // Pacote 16.5 (Nira Capacity Engine): candidato em cooldown transiente
+  // (rate_limited/unhealthy), filtrado pelo portao de capacidade do runtime
+  // ANTES do select. Nao executa rede e nao e uma decisao financeira.
+  "capacity_cooldown",
 ] as const;
 
 export type RouterRejectionReason = (typeof ROUTER_REJECTION_REASONS)[number];

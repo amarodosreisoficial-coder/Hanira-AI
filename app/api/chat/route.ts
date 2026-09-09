@@ -29,6 +29,17 @@ import {
 } from "@/lib/logging/server";
 import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { checkUserMessageQuota } from "@/lib/security/user-quota";
+import {
+  createConcurrencyLockReleaser,
+  tryAcquireConcurrencyLock,
+} from "@/lib/security/concurrency-guard";
+import { recordCapacityEvent } from "@/lib/observability/capacity-metrics";
+import {
+  recordCandidateFailure,
+  recordCandidateSuccess,
+} from "@/lib/ai/capacity/capacity-state";
+import { ModelRouterError } from "@/lib/ai/router/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chatRequestSchema } from "@/lib/validation/chat";
 import { getOwnedAttachments } from "@/services/attachments";
@@ -113,6 +124,38 @@ export async function POST(request: Request) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
 
+    // Pacote 16.5 (Fase 1 - quotas internas simples por usuario): limite
+    // diario em memoria, verificado ANTES de qualquer execucao de IA. O erro
+    // publico segue o vocabulario de capacidade do produto (invariante 5 do
+    // roadmap: sem capacidade disponivel -> resposta segura de alta demanda).
+    const quota = checkUserMessageQuota(user.id);
+    if (!quota.allowed) {
+      logServerEvent({
+        level: "warn",
+        requestId,
+        route: "/api/chat",
+        event: "quota_limited",
+        status: 429,
+        durationMs: Date.now() - startedAt,
+      });
+      recordCapacityEvent({ outcome: "quota_limited_response" });
+      return Response.json(
+        {
+          error:
+            "Voce atingiu o limite diario de mensagens da Hanira. Tente novamente amanha.",
+          code: "capacity_unavailable",
+          requestId,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(quota.retryAfterSeconds),
+            "X-Request-ID": requestId,
+          },
+        },
+      );
+    }
+
     return await createChatStream(
       request,
       user.id,
@@ -180,6 +223,15 @@ export async function POST(request: Request) {
           headers: { "X-Request-ID": requestId },
         },
       );
+    }
+
+    // Pacote 16.5: respostas de capacidade (capacity_unavailable) alimentam a
+    // observabilidade basica; nenhuma infraestrutura externa e acessada aqui.
+    if (
+      error instanceof ModelRouterError &&
+      error.code === "capacity_unavailable"
+    ) {
+      recordCapacityEvent({ outcome: "capacity_unavailable_response" });
     }
 
     const publicError = toPublicAIError(error);
@@ -297,15 +349,50 @@ async function createChatStream(
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("UNAUTHENTICATED");
 
-  logServerEvent({
-    level: "info",
-    requestId,
-    route: "/api/chat",
-    event: "context_resolution_started",
-    status: 200,
-    durationMs: Date.now() - startedAt,
-    stage: "context_resolution",
-  });
+  // Pacote 16.5: Concurrency Guard - previne multiple requests simultaneas
+  // do mesmo usuario (double-submit acidental). Lock liberado em todos os
+  // caminhos terminais (early returns, callbacks onComplete/onFailed/
+  // onCancelled e catch). Estado em memoria, nao autoritativo.
+  const lockAcquired = tryAcquireConcurrencyLock(userId, requestId);
+  if (!lockAcquired) {
+    logServerEvent({
+      level: "warn",
+      requestId,
+      route: "/api/chat",
+      event: "concurrency_limited",
+      status: 429,
+      durationMs: Date.now() - startedAt,
+      stage: "concurrency_guard",
+    });
+    return Response.json(
+      {
+        error:
+          "Nira está atendendo muitas solicitações agora. Tente novamente em instantes.",
+        code: "temporarily_limited",
+        requestId,
+      },
+      {
+        status: 429,
+        headers: {
+          "X-Request-ID": requestId,
+          "Retry-After": "1",
+        },
+      },
+    );
+  }
+
+  const releaseLock = createConcurrencyLockReleaser(userId, requestId);
+
+  try {
+    logServerEvent({
+      level: "info",
+      requestId,
+      route: "/api/chat",
+      event: "context_resolution_started",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      stage: "context_resolution",
+    });
 
   const chatContext = await resolveProjectChatContext({
     supabase,
@@ -352,15 +439,17 @@ async function createChatStream(
     (message) => message.role === "assistant",
   );
 
-  if (existingAssistant) {
-    return createStoredResponseStream(
-      chatContext.projectId,
-      conversationId,
-      requestId,
-      existingAssistant.content,
-      startedAt,
-    );
-  }
+    if (existingAssistant) {
+      const response = createStoredResponseStream(
+        chatContext.projectId,
+        conversationId,
+        requestId,
+        existingAssistant.content,
+        startedAt,
+      );
+      releaseLock();
+      return response;
+    }
 
   let shouldInsertUser = !existingRequest?.some(
     (message) => message.role === "user",
@@ -481,6 +570,7 @@ async function createChatStream(
         mode: routedTool.tool,
         text: deterministicText,
         onComplete: async (assistantContent) => {
+          releaseLock();
           await persistAssistantResponse({
             supabase,
             conversationId,
@@ -535,6 +625,7 @@ async function createChatStream(
       requestId,
       mode: routedTool.tool,
       onComplete: async (assistantContent) => {
+        releaseLock();
         await persistAssistantResponse({
           supabase,
           conversationId,
@@ -547,6 +638,10 @@ async function createChatStream(
         });
       },
       onOutcome: async (outcome) => {
+        // Seguro chamar sempre: onOutcome dispara em todos os terminais
+        // (synthesized, deterministic_fallback, cancelled); o releaser evita
+        // double-release com onComplete no caso de sucesso.
+        releaseLock();
         const event = outcome.kind === "synthesized"
           ? "tool_synthesis_completed"
           : outcome.kind === "cancelled"
@@ -583,6 +678,7 @@ async function createChatStream(
       mode: routedTool.tool,
       text: routedTool.result.error.message,
       onComplete: async (assistantContent) => {
+        releaseLock();
         await persistAssistantResponse({
           supabase,
           conversationId,
@@ -603,9 +699,12 @@ async function createChatStream(
       : "I could not resolve that location's time zone right now. Please try again shortly.";
     return createDeterministicTextResponse({
       request, conversationId, requestId, mode: routedTool.tool, text: message,
-      onComplete: async (assistantContent) => persistAssistantResponse({ supabase, conversationId,
-        userId, requestId, projectId: chatContext.projectId, assistantContent,
-        userMessage: payload.message, startedAt }),
+      onComplete: async (assistantContent) => {
+        releaseLock();
+        await persistAssistantResponse({ supabase, conversationId,
+          userId, requestId, projectId: chatContext.projectId, assistantContent,
+          userMessage: payload.message, startedAt });
+      },
     });
   }
 
@@ -615,6 +714,7 @@ async function createChatStream(
     conversationId,
     requestId,
     onComplete: async (assistantContent) => {
+      releaseLock();
       await persistAssistantResponse({
         supabase,
         conversationId,
@@ -627,7 +727,10 @@ async function createChatStream(
       });
     },
   });
-  if (currentWeatherFallback) return currentWeatherFallback;
+  if (currentWeatherFallback) {
+    releaseLock();
+    return currentWeatherFallback;
+  }
 
   const routed = await routeChatCapability({
     systemPrompt,
@@ -660,6 +763,16 @@ async function createChatStream(
       requestTimeoutMs: routed.requestTimeoutMs,
       capability: routed.capability,
     },
+  });
+  // Pacote 16.5: observabilidade basica - registra a selecao do router para as
+  // metricas de capacidade (apenas ids logicos, sem segredos).
+  recordCapacityEvent({
+    outcome: "selected",
+    ...(routed.routingCandidateId
+      ? { candidateId: routed.routingCandidateId }
+      : {}),
+    providerId: routed.providerId,
+    modelId: routed.model,
   });
   const providerRequest =
     routed.capability === "text"
@@ -789,6 +902,18 @@ async function createChatStream(
     mode: routed.mode,
     profile: routed.niraProfileId,
     onComplete: async ({ assistantContent }) => {
+      releaseLock();
+      // Pacote 16.5 (Nira Capacity Engine): sucesso real limpa cooldown do
+      // candidato selecionado e alimenta as metricas de capacidade.
+      if (routed.routingCandidateId) {
+        recordCandidateSuccess(routed.routingCandidateId);
+        recordCapacityEvent({
+          outcome: "success",
+          candidateId: routed.routingCandidateId,
+          providerId: routed.providerId,
+          modelId: routed.model,
+        });
+      }
       await persistAssistantResponse({
         supabase,
         conversationId,
@@ -814,8 +939,27 @@ async function createChatStream(
       });
     },
     onFailed: async (error, safeError) => {
+      releaseLock();
       const providerError = error instanceof AIProviderError ? error : null;
       const errorCode = providerError?.code;
+      // Pacote 16.5 (Nira Capacity Engine): sinal de capacidade a partir do
+      // erro classificado do provider. Apenas erros DE PROVIDER alimentam o
+      // estado de capacidade: falha de persistencia nao e instabilidade de
+      // candidate e nao pode gerar cooldown.
+      if (routed.routingCandidateId && providerError) {
+        recordCandidateFailure(routed.routingCandidateId, {
+          code: errorCode ?? "unknown",
+          retryable: providerError.retryable,
+        });
+        recordCapacityEvent({
+          outcome:
+            providerError.code === "rate_limit" ? "rate_limited" : "failure",
+          candidateId: routed.routingCandidateId,
+          providerId: routed.providerId,
+          modelId: routed.model,
+          ...(errorCode ? { errorCode } : {}),
+        });
+      }
       const metadataStage = providerError?.metadata?.stage;
       const isTimeout = errorCode === "timeout";
       const event =
@@ -849,6 +993,7 @@ async function createChatStream(
       });
     },
     onCancelled: async () => {
+      releaseLock();
       logServerEvent({
         level: "info",
         requestId,
@@ -865,6 +1010,14 @@ async function createChatStream(
       });
     },
   });
+  } catch (error) {
+    // Concurrency lock must be released on any synchronous throw
+    // (e.g. resolveProjectChatContext, routeChatCapability, provider
+    // response construction). Streaming callbacks release the lock in
+    // their own onComplete/onFailed/onCancelled paths.
+    releaseLock();
+    throw error;
+  }
 }
 
 async function persistAssistantResponse(options: {

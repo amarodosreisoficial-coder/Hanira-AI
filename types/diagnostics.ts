@@ -28,4 +28,8 @@ export interface SystemDiagnostics {
   speech: DiagnosticCapability;
   attachments: DiagnosticCapability;
   tables: Record<string, boolean>;
+  // Pacote 16.5: observabilidade basica de capacidade (Nira Capacity Engine).
+  // Opcional e presente apenas no modo producao; contem apenas dados
+  // escalares seguros (ids logicos, contadores, estados), nunca segredos.
+  capacity?: import("@/lib/observability/capacity-metrics").CapacityMetricsSnapshot;
 }

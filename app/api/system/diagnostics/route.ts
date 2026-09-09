@@ -9,6 +9,7 @@ import {
 } from "@/lib/logging/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOpenAIClient } from "@/services/openai";
+import { getCapacityMetricsSnapshot } from "@/lib/observability/capacity-metrics";
 import type { SystemDiagnostics } from "@/types/diagnostics";
 
 const REQUIRED_TABLES = [
@@ -156,6 +157,9 @@ export async function GET(request: Request) {
     speech: capabilities.speech,
     attachments: capabilities.attachments,
     tables,
+    // Pacote 16.5: observabilidade basica da capacidade Nira (contadores e
+    // estados em memoria; sem segredos, sem baseUrl, sem conteudo de usuario).
+    capacity: getCapacityMetricsSnapshot(),
     schemaVersion,
     appUrl: env.NEXT_PUBLIC_APP_URL,
     appVersion: env.NEXT_PUBLIC_APP_VERSION,

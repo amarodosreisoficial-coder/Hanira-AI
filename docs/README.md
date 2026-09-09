@@ -24,6 +24,8 @@ Base documental tecnica do repositorio.
   Mapeia o acoplamento atual a OpenAI e orienta a ordem de extracao futura.
 - [MODEL_ROUTER.md](MODEL_ROUTER.md) - `Planejado` e `Em revisao`.
   Detalha o componente futuro de roteamento.
+- [NIRA_CAPACITY_ENGINE.md](NIRA_CAPACITY_ENGINE.md) - `Implementado`.
+  Documenta o estado de capacidade, a cadeia free e as quotas do Pacote 16.5.
 - [FUTURE_ARCHITECTURE.md](FUTURE_ARCHITECTURE.md) - `Planejado` e `Em revisao`.
   Resume a direcao arquitetural de medio prazo.
 - [MULTI_PROJECT.md](MULTI_PROJECT.md) - `Planejado` e `Em revisao`.

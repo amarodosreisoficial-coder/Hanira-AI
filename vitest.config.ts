@@ -5,6 +5,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
+      // Next.js fornece "server-only" no build; vitest requiere un stub.
+      "server-only": fileURLToPath(
+        new URL("./tests/helpers/server-only.ts", import.meta.url),
+      ),
     },
   },
   test: {
