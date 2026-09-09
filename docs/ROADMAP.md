@@ -47,6 +47,11 @@ validação em nível de runtime/provider feita por live smoke local
 (`HANIRA_GROQ_LIVE_SMOKE=true`). Logs de produção ainda não inspecionados —
 não há prova de trace server-side em produção; nada foi fabricado.
 
+> **Production `runtime_created` trace: PENDING HUMAN VALIDATION.** O evento
+> `runtime_created` (server-side, verificado na suíte de testes) ainda não foi
+> observado em logs reais do Vercel; não foi fabricada nenhuma verificação de
+> deploy. Validar manualmente no painel da Vercel (projeto hanira-ai).
+
 - [x] Separação de identidade Hanira/Nira
 - [x] Interface pública de chat moderna + harmonia visual
 - [x] Favicon/marca Hanira/Nira
@@ -91,6 +96,9 @@ não há prova de trace server-side em produção; nada foi fabricado.
   sem tiers/planos e sem billing)
 - [x] Controle de contexto simples (orçamento de histórico/memórias em
   `lib/ai/runtime/chat-context-budget.ts`)
+- [x] `verify:capacity` (`npm run verify:capacity`, Pacote 16.5): valida
+  limites de capacidade, concorrência, contexto, perfil `nira-cloud-free` e
+  invariante Zero-Cost; sem chamada de rede e sem saída de segredos
 
 ## FASE 2 — GROQ MULTI-FREE (P1/P2)
 
