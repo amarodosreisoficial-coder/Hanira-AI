@@ -406,6 +406,12 @@ async function throwForHttpError(
   const errorBody = await response.text();
   const message = parseGroqErrorBody(safeJsonParse(errorBody));
 
+  // Pacote 16.6 (Groq Multi-Free): captura SANITIZADA de headers de
+  // rate-limit (apenas valores numericos uteis derivados; NENHUM header cru
+  // e armazenado, logado ou exposto). Alimenta o cooldown do candidato
+  // (Retry-After) via metadata do erro classificado.
+  const providerRateLimit = captureGroqRateLimitMetadata(response.headers);
+
   throw toGroqProviderError(
     {
       status: response.status,
@@ -415,9 +421,91 @@ async function throwForHttpError(
       provider: GROQ_PROVIDER_ID,
       model,
       statusCode: response.status,
-      metadata: { reason: "http-error" },
+      metadata: {
+        reason: "http-error",
+        ...(providerRateLimit ? { providerRateLimit } : {}),
+      },
     },
   );
+}
+
+// Headers de rate-limit documentados pelo provider (Pacote 16.6). A leitura e
+// best-effort e sanitizada: a ausencia de qualquer header e um cenario normal
+// e nunca gera erro.
+const RATE_LIMIT_RETRY_AFTER_HEADER = "retry-after";
+const RATE_LIMIT_NUMERIC_HEADERS = Object.freeze([
+  ["remainingRequests", "x-ratelimit-remaining-requests"],
+  ["remainingTokens", "x-ratelimit-remaining-tokens"],
+] as const);
+const RATE_LIMIT_DURATION_HEADERS = Object.freeze([
+  ["resetRequestsMs", "x-ratelimit-reset-requests"],
+  ["resetTokensMs", "x-ratelimit-reset-tokens"],
+] as const);
+
+// Duracoes do estilo documentado ("2s", "1m", "500ms", "1h").
+const DURATION_MS_PATTERN = /^(\d+)(ms|s|m|h)$/;
+
+function parseDurationToMs(value: string): number | undefined {
+  const match = DURATION_MS_PATTERN.exec(value.trim().toLowerCase());
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  if (!Number.isSafeInteger(amount)) return undefined;
+  switch (match[2]) {
+    case "ms":
+      return amount;
+    case "s":
+      return amount * 1000;
+    case "m":
+      return amount * 60_000;
+    case "h":
+      return amount * 3_600_000;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Extrai APENAS valores sanitizados e uteis dos headers de rate-limit.
+ * Retorna undefined quando nada util existe. Nunca inclui headers crus,
+ * textos arbitrarios ou valores nao numericos.
+ */
+export function captureGroqRateLimitMetadata(
+  headers: Headers,
+): Record<string, number> | undefined {
+  const captured: Record<string, number> = {};
+
+  const retryAfter = headers.get(RATE_LIMIT_RETRY_AFTER_HEADER);
+  if (retryAfter !== null) {
+    const trimmed = retryAfter.trim();
+    // Formato de segundos ("30") com fallback para duracao ("30s").
+    const seconds = /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : NaN;
+    const ms =
+      Number.isFinite(seconds) && seconds >= 0
+        ? Math.round(seconds * 1000)
+        : parseDurationToMs(trimmed);
+    if (typeof ms === "number" && Number.isSafeInteger(ms) && ms >= 0) {
+      captured.retryAfterMs = ms;
+    }
+  }
+
+  for (const [key, headerName] of RATE_LIMIT_NUMERIC_HEADERS) {
+    const raw = headers.get(headerName);
+    if (raw !== null && /^\d+$/.test(raw.trim())) {
+      captured[key] = Number(raw.trim());
+    }
+  }
+
+  for (const [key, headerName] of RATE_LIMIT_DURATION_HEADERS) {
+    const raw = headers.get(headerName);
+    if (raw !== null) {
+      const ms = parseDurationToMs(raw);
+      if (ms !== undefined) {
+        captured[key] = ms;
+      }
+    }
+  }
+
+  return Object.keys(captured).length > 0 ? captured : undefined;
 }
 
 function safeJsonParse(value: string): unknown {

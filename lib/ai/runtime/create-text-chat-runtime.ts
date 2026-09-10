@@ -15,15 +15,24 @@ import type {
 } from "@/lib/ai/router/types";
 import {
   DEFAULT_NIRA_PROFILE_ID,
-  NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
   NIRA_CLOUD_FREE_PROFILE_ID,
   getNiraProfileCandidateIds,
   resolveNiraProfile,
 } from "@/lib/ai/nira/profiles";
 import { getAvailabilityGate } from "@/lib/ai/capacity/capacity-state";
 import {
+  DEFAULT_FREE_CAPACITY_POLICY,
+  PREVIEW_MODELS_ENV,
   resolveFreeCapacityCandidates,
+  resolveFreeCapacityRoutingPolicy,
+  type FreeCapacityRegistryResult,
 } from "@/lib/ai/capacity/free-capacity-registry";
+import {
+  assertGroqModelNotDeprecated,
+  buildGroqSecondaryFreeCandidate,
+  GROQ_FREE_SECONDARY_MODEL,
+  isPreviewGroqModel,
+} from "@/lib/ai/capacity/groq-free-candidates";
 import {
   createTextModelRouter,
   resolveTextRouterDecisionProvider,
@@ -329,33 +338,80 @@ export function createTextChatRuntime(
     options?.niraProfileId ??
       (groqProvider ? NIRA_CLOUD_FREE_PROFILE_ID : DEFAULT_NIRA_PROFILE_ID),
   );
-  // Pacote 16.5 (Nira Free Capacity Engine): a cadeia free do perfil
-  // nira-cloud-free vem do registry de capacidade (lib/ai/capacity/
-  // free-capacity-registry.ts): candidato padrao auditado (GROQ_MODEL) +
-  // candidatos extra configurados via HANIRA_FREE_TEXT_CANDIDATES, todos com
-  // costClass "free" POR CONSTRUCAO. Sem Groq configurado, nenhum candidato
-  // cloud e registrado (comportamento preservado dos pacotes anteriores).
-  const groqDefaultCandidate: RouterCandidate | undefined =
-    groqProvider instanceof GroqProvider
-      ? {
-          id: "nira-cloud-free-default",
-          provider: "groq",
-          model: groqProvider.getDefaultModel(),
-          capabilities: ["text"],
-          priority: 1,
-          enabled: true,
-          deployment: "cloud",
-          costClass: "free",
-          label: "Nira Cloud Free (Groq)",
-        }
-      : undefined;
+  // Pacote 16.6 (Groq Multi-Free / Free Capacity Engine): a cadeia free do
+  // perfil nira-cloud-free vem do registry de capacidade (lib/ai/capacity/
+  // free-capacity-registry.ts):
+  //   primario auditado (GROQ_MODEL, costClass "free" POR CONSTRUCAO)
+  //     -> secundario free DE PRODUCAO (catalogo 16.6: openai/gpt-oss-120b,
+  //        id nira-cloud-free-secondary-1, prioridade 2; opt-out por env)
+  //     -> candidatos extra configurados via HANIRA_FREE_TEXT_CANDIDATES
+  // Sem Groq configurado, nenhum candidato cloud e registrado (comportamento
+  // preservado dos pacotes anteriores). Modelos aposentados falham de forma
+  // deterministica; modelos preview exigem opt-in explicito e NUNCA sao
+  // default de producao.
+  let groqDefaultCandidate: RouterCandidate | undefined;
+  let freeCapacityCandidates: FreeCapacityRegistryResult = {
+    candidates: Object.freeze([]),
+    chainCandidateIds: Object.freeze([]),
+    extraCandidateIds: Object.freeze([]),
+    previewBlockedIds: Object.freeze([]),
+    policy: DEFAULT_FREE_CAPACITY_POLICY,
+  };
 
-  const freeCapacityCandidates = groqDefaultCandidate
-    ? resolveFreeCapacityCandidates({ defaultCandidate: groqDefaultCandidate })
-    : {
-        candidates: [] as readonly RouterCandidate[],
-        extraCandidateIds: [] as readonly string[],
-      };
+  if (groqProvider instanceof GroqProvider) {
+    // Politica free multi-candidato (le env, fail-closed em valor invalido).
+    const policy = resolveFreeCapacityRoutingPolicy();
+    const primaryModel = groqProvider.getDefaultModel();
+
+    // Guard de modelos aposentados: GROQ_MODEL deprecated falha de forma
+    // deterministica (fail-closed, com diagnostico; nada e executado).
+    assertGroqModelNotDeprecated({
+      model: primaryModel,
+      role: "primario da cadeia free (GROQ_MODEL)",
+    });
+
+    // Modelo preview conhecido como PRIMARIO exige opt-in explicito: sem
+    // opt-in falha com diagnostico (nunca ativacao silenciosa e nunca
+    // degradacao silenciosa para outro modelo — o operador configurou este
+    // primario explicitamente).
+    if (isPreviewGroqModel(primaryModel) && !policy.allowPreviewModels) {
+      throw new ModelRouterError({
+        code: "invalid_configuration",
+        message: `O modelo "${primaryModel}" (GROQ_MODEL) e um Free Plan Preview e exige opt-in explicito (${PREVIEW_MODELS_ENV}=true). Nada foi executado (fail-closed).`,
+      });
+    }
+    const primaryLifecycle = isPreviewGroqModel(primaryModel)
+      ? ("preview" as const)
+      : ("production" as const);
+
+    groqDefaultCandidate = {
+      id: "nira-cloud-free-default",
+      provider: "groq",
+      model: primaryModel,
+      capabilities: ["text"],
+      priority: 1,
+      enabled: true,
+      deployment: "cloud",
+      costClass: "free",
+      lifecycle: primaryLifecycle,
+      label: "Nira Cloud Free (Groq)",
+    };
+
+    // Candidato secundario free DE PRODUCAO (catalogo 16.6), ligado por
+    // padrao. Nunca duplicado quando o primario ja e o mesmo modelo (mesmo
+    // engine = mesmo destino de quota; fallback existe por resiliencia, nao
+    // por evasion de quota).
+    const knownCandidates =
+      policy.secondaryEnabled && primaryModel !== GROQ_FREE_SECONDARY_MODEL
+        ? [buildGroqSecondaryFreeCandidate()]
+        : [];
+
+    freeCapacityCandidates = resolveFreeCapacityCandidates({
+      defaultCandidate: groqDefaultCandidate,
+      knownCandidates,
+      policy,
+    });
+  }
 
   const allExternalCandidates = [
     ...(options?.externalCandidates ?? []),
@@ -367,15 +423,20 @@ export function createTextChatRuntime(
     externalCandidates: allExternalCandidates,
   });
 
-  // Pacote 16.5: o escopo do perfil nira-cloud-free passa a incluir os
-  // candidatos free EXTRA configurados (fundacao do fallback free -> free da
-  // Fase 2). O escopo continua FECHADO: nada fora dele e elegivel (sem
-  // fallback cruzado entre perfis/capacidades diferentes).
+  // Pacote 16.5: o escopo do perfil nira-cloud-free passa a incluir TODA a
+  // cadeia free aceita (Pacote 16.6: secundario de producao + extras; preview
+  // sem opt-in e filtrado ANTES e nunca entra no escopo). O slot logico
+  // preferido (nira-cloud-free-default) SEMPRE permanece no escopo — mesmo sem
+  // cadeia registrada (ex.: sem Groq configurado), provas financeiras com
+  // candidatos injetados continuam validas. O escopo continua FECHADO: nada
+  // fora dele e elegivel (sem fallback cruzado entre perfis/capacidades).
   const profileScope =
     niraProfile.id === NIRA_CLOUD_FREE_PROFILE_ID
       ? Object.freeze([
-          NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
-          ...freeCapacityCandidates.extraCandidateIds,
+          niraProfile.preferredCandidateId,
+          ...freeCapacityCandidates.chainCandidateIds.filter(
+            (candidateId) => candidateId !== niraProfile.preferredCandidateId,
+          ),
         ])
       : getNiraProfileCandidateIds(niraProfile);
   const scopedCandidates = registry
@@ -434,7 +495,13 @@ export function createTextChatRuntime(
 
   let decision: RouterDecision;
   try {
-    decision = createTextModelRouter(capacityReadyCandidates).select({
+    // Pacote 16.6: a politica de lifecycle (opt-in de preview) aplicada na
+    // construcao da cadeia e re-aplicada NO router, em defesa extra. Um
+    // candidato preview nunca chega ao Provider Resolver sem opt-in, mesmo se
+    // algum caminho de configuracao o injetar diretamente.
+    decision = createTextModelRouter(capacityReadyCandidates, {
+      allowPreviewModels: freeCapacityCandidates.policy.allowPreviewModels,
+    }).select({
       capability: "text",
       preferredCandidateId: niraProfile.preferredCandidateId,
     });

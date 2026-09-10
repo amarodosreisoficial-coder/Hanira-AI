@@ -128,6 +128,15 @@ export function recordCandidateSuccess(candidateId: string): void {
  *   registrado (lastErrorCode), SEM cooldown: configuracao/contrato errado nao
  *   se resolve esperando.
  *
+ * Pacote 16.6 (Groq Multi-Free): `retryAfterMs` (quando o provider expoe
+ * Retry-After parseavel, capturado de forma SANITIZADA pelo provider) melhora
+ * o cooldown de rate_limit. Regras:
+ * - valor ausente/nao-numerico/negativo -> ignora (usa o cooldown configurado);
+ * - valor FORA dos limites configurados (1s-600s) -> LIMITADO aos limites
+ *   (nunca estende o cooldown alem do maximo, nunca abaixo do minimo);
+ * - NUNCA afeta o cooldown de outros candidatos (saude e por candidato);
+ * - NENHUM valor de header cru e armazenado ou logado (so o ms derivado).
+ *
  * O cooldown mais recente vence: um sinal que nao gera cooldown nao apaga um
  * cooldown transiente ainda ativo (evita que erros deterministicos abram
  * brecha para repique imediato em candidato claramente instavel).
@@ -137,6 +146,7 @@ export function recordCandidateFailure(
   options: {
     readonly code?: string;
     readonly retryable?: boolean;
+    readonly retryAfterMs?: number;
   } = {},
 ): void {
   if (!candidateId) return;
@@ -152,7 +162,8 @@ export function recordCandidateFailure(
 
   if (code === "rate_limit") {
     record.state = "rate_limited";
-    record.cooldownUntilMs = now + resolveRateLimitCooldownMs();
+    record.cooldownUntilMs =
+      now + resolveBoundedRetryAfterMs(options.retryAfterMs, () => resolveRateLimitCooldownMs());
   } else if (
     TRANSIENT_CAPACITY_CODES.has(code) &&
     options.retryable !== false
@@ -171,6 +182,26 @@ export function recordCandidateFailure(
   }
 
   capacityRecords.set(candidateId, record);
+}
+
+/**
+ * Converte um Retry-After (ms) do provider em cooldown efetivo, LIMITADO aos
+ * limites configurados. Entrada invalida -> fallback do cooldown configurado.
+ */
+function resolveBoundedRetryAfterMs(
+  retryAfterMs: number | undefined,
+  fallback: () => number,
+): number {
+  const limits = CAPACITY_COOLDOWN_LIMITS.rateLimit;
+  if (
+    typeof retryAfterMs !== "number" ||
+    !Number.isFinite(retryAfterMs) ||
+    retryAfterMs <= 0
+  ) {
+    return fallback();
+  }
+  const bounded = Math.min(Math.max(Math.round(retryAfterMs), limits.min), limits.max);
+  return bounded;
 }
 
 export interface AvailabilityGate {

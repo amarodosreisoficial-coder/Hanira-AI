@@ -36,6 +36,13 @@ import {
 } from "@/lib/security/concurrency-guard";
 import { recordCapacityEvent } from "@/lib/observability/capacity-metrics";
 import {
+  ROUTING_TRACE_EVENTS,
+  routingRejectionsOf,
+  toRoutingTraceLogFields,
+  type RoutingTraceEvent,
+  type RoutingTraceMeta,
+} from "@/lib/observability/routing-trace";
+import {
   recordCandidateFailure,
   recordCandidateSuccess,
 } from "@/lib/ai/capacity/capacity-state";
@@ -54,6 +61,39 @@ import { formatTimeCurrent } from "@/lib/tools/time-current";
 
 const SYSTEM_PROMPT =
   "Voce e Nira, a camada de inteligencia da Hanira. Converse em portugues do Brasil por padrao. Seja clara, acolhedora e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
+
+// Pacote 16.6 (Groq Multi-Free): request-scoped routing trace. Registra a
+// avaliacao de candidatos free-only com metadata ALLOW-LISTED (apenas ids
+// logicos, razoes e tempos — ver lib/observability/routing-trace.ts). NUNCA
+// loga prompt, texto gerado, segredos ou conteudo de usuario. Para o usuario
+// a identidade continua sendo "Nira": provider/modelo e detalhe de log.
+function logRoutingTrace(input: {
+  readonly requestId: string;
+  readonly event: RoutingTraceEvent;
+  readonly status: number;
+  readonly durationMs: number;
+  readonly level?: "info" | "warn";
+  readonly meta?: RoutingTraceMeta;
+}): void {
+  if (!(ROUTING_TRACE_EVENTS as readonly string[]).includes(input.event)) {
+    // Evento desconhecido e erro de programacao — fail-closed (nunca logado
+    // como se fosse um evento do vocabulario).
+    throw new Error(`Evento de routing trace desconhecido: ${input.event}.`);
+  }
+  logServerEvent({
+    level: input.level ?? "info",
+    requestId: input.requestId,
+    route: "/api/chat",
+    event: "routing_trace",
+    status: input.status,
+    durationMs: input.durationMs,
+    stage: "nira_routing",
+    details: {
+      traceEvent: input.event,
+      ...toRoutingTraceLogFields(input.meta ?? {}),
+    },
+  });
+}
 
 class InvalidChatPayloadError extends Error {
   constructor() {
@@ -232,6 +272,31 @@ export async function POST(request: Request) {
       error.code === "capacity_unavailable"
     ) {
       recordCapacityEvent({ outcome: "capacity_unavailable_response" });
+      // Pacote 16.6: routing trace do esgotamento da cadeia free-only — cada
+      // candidato avaliado/rejeitado e o esgotamento final, com metadata
+      // allow-listed (ids logicos + razoes; nunca mensagens brutas de erro).
+      for (const rejection of routingRejectionsOf(error)) {
+        logRoutingTrace({
+          requestId,
+          event: "candidate_considered",
+          status: 503,
+          durationMs: Date.now() - startedAt,
+          level: "warn",
+          meta: {
+            candidateId: rejection.candidateId,
+            provider: rejection.provider,
+            reason: rejection.reason,
+          },
+        });
+      }
+      logRoutingTrace({
+        requestId,
+        event: "routing_exhausted",
+        status: 503,
+        durationMs: Date.now() - startedAt,
+        level: "warn",
+        meta: { reason: error.code },
+      });
     }
 
     const publicError = toPublicAIError(error);
@@ -732,6 +797,14 @@ async function createChatStream(
     return currentWeatherFallback;
   }
 
+  // Pacote 16.6: routing trace — inicio da avaliacao de roteamento Nira.
+  logRoutingTrace({
+    requestId,
+    event: "routing_started",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+  });
+
   const routed = await routeChatCapability({
     systemPrompt,
     context: chatContext.conversationMessages,
@@ -774,6 +847,32 @@ async function createChatStream(
     providerId: routed.providerId,
     modelId: routed.model,
   });
+  // Pacote 16.6: routing trace — candidato selecionado; quando a preferencia
+  // do perfil nao era elegivel (ex.: cooldown do primario), registra tambem o
+  // fallback deterministico free-only (free -> free, nunca free -> pago).
+  const routingTraceMeta: RoutingTraceMeta = {
+    niraProfileId: routed.niraProfileId,
+    candidateId: routed.routingCandidateId,
+    provider: routed.providerId,
+    model: routed.model,
+    reason: routed.routingReason,
+  };
+  logRoutingTrace({
+    requestId,
+    event: "candidate_selected",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    meta: routingTraceMeta,
+  });
+  if (routed.routingReason === "selected_after_invalid_preference") {
+    logRoutingTrace({
+      requestId,
+      event: "fallback_selected",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      meta: routingTraceMeta,
+    });
+  }
   const providerRequest =
     routed.capability === "text"
       ? buildTextChatProviderRequest({
@@ -947,9 +1046,20 @@ async function createChatStream(
       // estado de capacidade: falha de persistencia nao e instabilidade de
       // candidate e nao pode gerar cooldown.
       if (routed.routingCandidateId && providerError) {
+        // Pacote 16.6: Retry-After SANITIZADO do provider (quando exposto nos
+        // headers do erro classificado) melhora o cooldown de rate_limit,
+        // limitado aos limites configurados (1s-600s). Nenhum header cru.
+        const rateLimitMetadata = providerError.metadata?.providerRateLimit;
+        const retryAfterMs =
+          rateLimitMetadata instanceof Object &&
+          typeof (rateLimitMetadata as { retryAfterMs?: unknown }).retryAfterMs ===
+            "number"
+            ? (rateLimitMetadata as { retryAfterMs: number }).retryAfterMs
+            : undefined;
         recordCandidateFailure(routed.routingCandidateId, {
           code: errorCode ?? "unknown",
           retryable: providerError.retryable,
+          retryAfterMs,
         });
         recordCapacityEvent({
           outcome:
@@ -958,6 +1068,21 @@ async function createChatStream(
           providerId: routed.providerId,
           modelId: routed.model,
           ...(errorCode ? { errorCode } : {}),
+        });
+        // Pacote 16.6: routing trace — falha classificada do candidato.
+        // Apenas razao operacional atravessa (nunca mensagem bruta do erro).
+        logRoutingTrace({
+          requestId,
+          event: "candidate_failed",
+          status: safeError.status,
+          durationMs: Date.now() - startedAt,
+          level: "warn",
+          meta: {
+            candidateId: routed.routingCandidateId,
+            provider: routed.providerId,
+            model: routed.model,
+            reason: errorCode ?? safeError.type,
+          },
         });
       }
       const metadataStage = providerError?.metadata?.stage;

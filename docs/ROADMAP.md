@@ -105,20 +105,33 @@ não há prova de trace server-side em produção; nada foi fabricado.
 **Nira Free Capacity Engine — versão simples.** Não construir o roteador
 gigante ainda.
 
-Status (Pacote 16.5 — fundação implementada; detalhes em
-`docs/NIRA_CAPACITY_ENGINE.md`):
+Status (**Pacote 16.6 — Groq Multi-Free / Free Capacity Engine** implementado;
+detalhes em `docs/NIRA_CAPACITY_ENGINE.md`):
 
 - [x] Registry de capacidade free configurável do perfil `nira-cloud-free`:
   primário auditado + extras declarados por env, todos `free` POR CONSTRUÇÃO
 - [x] Estado de capacidade por candidato com sinais reais de runtime
   (`rate_limited`/`unhealthy` + cooldown configurável; ativa o vocabulário
-  reservado do router no Pacote 14.8)
+  reservado do router no Pacote 14.8/16.5)
 - [x] Fallback apenas entre candidatos free elegíveis do escopo do perfil
   (free → free; Zero-Cost Guard continua bloqueando paid/promotional/unknown)
-- [~] Múltiplos modelos free auditados: primário `GROQ_MODEL` verificado ao
-  vivo (Pacote 16.3); modelos extra exigem auditoria do operador antes de
-  entrar na env — nada é assumido free pelo nome
-- [ ] Auditoria oficial de pricing/rate-limits de segundos candidatos
+- [x] Múltiplos modelos free auditados (**Pacote 16.6**): primário `GROQ_MODEL`
+  (default técnico `openai/gpt-oss-20b`) → secundário **free de produção**
+  `openai/gpt-oss-120b` (prioridade 2) → extras declarados por env
+  (`HANIRA_FREE_TEXT_CANDIDATES`), ordem determinística, sem colisão de
+  engines, preview/deprecated isolados
+- [x] Catálogo conhecido de modelos free da Groq (`groq-free-candidates.ts`):
+  lifecycle `production`/`preview` e guard fail-closed de modelos aposentados
+  (deprecated bloqueados em qualquer posição da cadeia)
+- [x] Gate de lifecycle no router (`model-router.ts`): preview exige opt-in
+  explícito (`HANIRA_ALLOW_PREVIEW_MODELS=true`); `deprecated`/`disabled` nunca
+  elegíveis, com ou sem opt-in
+- [x] Observabilidade `verify:free-router` (Pacote 16.6): valida a cadeia free
+  sem rede, sem providers e sem segredos
+- [x] Routing trace request-scoped (`routing-trace.ts`, Pacote 16.6): allow-list
+  fechada de eventos/metadata; nunca loga prompt, resposta, API key, cookie ou
+  Authorization header
+- [ ] Auditoria oficial de pricing/rate-limits contínua de novos candidatos
 
 - Groq provider → múltiplos modelos free auditados
 - Sequência lógica: modelo free primário → fallback free → secundário free
@@ -239,6 +252,58 @@ pública: age assurance, jurisdição, leis aplicáveis, políticas de
 provider/hosting/pagamento, privacidade, retenção, moderação, prevenção de
 abuso, reporting, termos, ownership de conteúdo. Nunca documentado como
 "sem restrições"; nunca promete remoção de requisitos legais/de segurança.
+
+## FASE 13 — NIRA IMAGE (FUTURE / ESTRATÉGIA APROVADA)
+
+**Documentação apenas.** Nenhuma implementação agora (não iniciar no Pacote
+16.6). Estratégia futura de geração/edição de imagem da Nira com a mesma
+disciplina da camada de texto: FREE-FIRST, Zero-Cost Guard e **sem fallback
+silencioso para pago**.
+
+Arquitetura futura prevista:
+
+```
+Capability Router
+  ├── Text Router  (texto; implementado nos Pacotes 14.x-16.6)
+  └── Image Router (imagem; FUTURO)
+        ├── ImageProvider (abstração de provider de imagem)
+        ├── Provider Registry
+        ├── Model Catalog (catálogo de modelos de imagem)
+        ├── Image Cost Policy (mesma disciplina R$0 da camada de texto)
+        └── Mock provider (provê imagem determinística em modo demo/teste)
+```
+
+Princípios herdados da camada de texto (obrigatórios para imagem):
+
+- **FREE-FIRST**: a cadeia de imagem tenta primeiro candidatos gratuitos
+  auditados; **nunca** fallback silencioso para provider pago;
+- **Zero-Cost Guard**: candidato pago/promocional/sem classificação nunca
+  vira decisão executável (fail-closed, UNKNOWN != FREE);
+- **Capability flags futuras** (metadados declarativos do provider/Model
+  Catalog, não planejados em código agora):
+  `textToImage`, `imageEdit`, `referenceImage`, `multipleReferences`,
+  `characterConsistency`, `identityPreservation`, `aspectRatio`,
+  `resolution`, `asyncGeneration`.
+
+### Sequência futura planejada (SOMENTE após aprovações/após o Pacote 16.6)
+
+- **Package 16.7 — Nira Image Architecture Foundation + Mock**: abstrações
+  `ImageProvider`, Provider Registry, Model Catalog e um **Mock provider**
+  determinístico (sem rede, sem chave) para validar o router de imagem;
+- **Package 16.8 — Cloudflare Workers AI Image Provider** após auditoria
+  R$0 **fresca** (modelos/tiers atuais, quotas, billing, termos, dados,
+  disponibilidade regional, hard-stop);
+- **Package 16.9 — Image Free-First Capacity Router**: roteamento de imagem
+  free-first reutilizando o estado de capacidade/cooldown;
+- **Package 17.0 — Hanira Image UX**: interface de produto para geração/
+  edição de imagem;
+- **Package 17.1 — Runware**: pesquisa/integração como candidato;
+- **Package 17.2 — Qwen Image / Image Edit**: pesquisa/integração como
+  candidato.
+
+**Não implementar agora:** providers de imagem, ImageProvider, Image Router,
+keys de imagem, Mock provider ou qualquer dependência/instalação relacionada.
+Nenhum trabalho de imagem acontece neste Pacote 16.6.
 
 ## Quotas internas (P1/P2, versão simples primeiro)
 

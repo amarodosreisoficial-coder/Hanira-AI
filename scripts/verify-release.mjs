@@ -36,6 +36,10 @@ function runGitDiffCheck() {
 run("typecheck", ["run", "typecheck"]);
 run("lint", ["run", "lint"]);
 run("test", ["test"]);
+// Pacote 16.6: invariantes do Free Capacity Engine (Groq Multi-Free) e
+// capacidade/Zero-Cost na release. Sem rede e sem segredos.
+run("verify:free-router", ["run", "verify:free-router"]);
+run("verify:capacity", ["run", "verify:capacity"]);
 if (!skipBuild) run("build", ["run", "build"]);
 runGitDiffCheck();
 
