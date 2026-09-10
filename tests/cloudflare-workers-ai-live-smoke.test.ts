@@ -10,7 +10,17 @@ it.skipIf(!enabled || !credentialsPresent)("generates one controlled real Cloudf
     prompt: "A simple blue circle centered on a white background.", operation: "generate",
     modelId: CLOUDFLARE_FLUX_KLEIN_MODEL_ID, width: 512, height: 512,
   });
-  expect(result.success).toBe(true);
+  const safeDiagnostic = JSON.stringify({
+    success: result.success,
+    errorCode: result.errorCode,
+    providerId: result.providerId,
+    modelId: result.modelId,
+    mock: result.mock,
+    mimeType: result.mimeType,
+    durationMs: result.durationMs,
+    payloadBytes: result.success ? result.imageData?.byteLength : undefined,
+  });
+  expect(result.success, safeDiagnostic).toBe(true);
   expect(result.mock).toBe(false);
   expect(result.mimeType).toMatch(/^image\//);
   expect(result.imageData?.byteLength).toBeGreaterThan(0);
