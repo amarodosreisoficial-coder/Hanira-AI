@@ -95,7 +95,7 @@ describe("image domain types", () => {
 describe("image model catalog", () => {
   it("1. valid mock provider registration", () => {
     const catalog = createImageModelCatalog();
-    expect(catalog.models).toHaveLength(1);
+    expect(catalog.models.length).toBeGreaterThanOrEqual(1);
     expect(catalog.getModel(IMAGE_MOCK_MODEL_ID)).toBeDefined();
   });
 
@@ -149,8 +149,7 @@ describe("image model catalog", () => {
   it("finds models by capabilities", () => {
     const catalog = createImageModelCatalog();
     const result = catalog.findByCapabilities(["textToImage", "imageEdit"]);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(IMAGE_MOCK_MODEL_ID);
+    expect(result.map((model) => model.id)).toContain(IMAGE_MOCK_MODEL_ID);
   });
 
   it("returns empty for unsupported capabilities", () => {

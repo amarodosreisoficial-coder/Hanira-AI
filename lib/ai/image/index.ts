@@ -8,5 +8,7 @@ export * from "@/lib/ai/image/provider";
 export * from "@/lib/ai/image/provider-registry";
 export * from "@/lib/ai/image/capability-router";
 export * from "@/lib/ai/image/mock-provider";
+export * from "@/lib/ai/image/cloudflare-workers-ai-provider";
+export * from "@/lib/ai/image/runtime";
 export * from "@/lib/ai/image/observability";
 export * from "@/lib/ai/image/capacity";

@@ -43,13 +43,13 @@ const safeReadFile = (p) => {
   log(hasScript, "verify:image-foundation registrado no package.json.");
 }
 
-// 2. Apenas provider MOCK existe em lib/ai/image.
+// 2. Apenas providers explicitamente auditados existem em lib/ai/image.
 {
   const imageDir = path.join(root, "lib", "ai", "image");
   const files = fs.readdirSync(imageDir).filter((f) => f.endsWith(".ts"));
-  const forbidden = ["cloudflare", "runware", "openai", "gemini", "qwen", "seedream"];
-  const onlyMock = files.every((f) => !forbidden.some((name) => f.toLowerCase().includes(name)));
-  log(onlyMock, "Apenas provider MOCK presente em lib/ai/image.");
+  const forbidden = ["runware", "openai", "gemini", "qwen", "seedream"];
+  const onlyAudited = files.every((f) => !forbidden.some((name) => f.toLowerCase().includes(name)));
+  log(onlyAudited, "Somente providers de imagem auditados presentes.");
 }
 
 // 3. Sem chaves reais de provider de imagem no codebase.

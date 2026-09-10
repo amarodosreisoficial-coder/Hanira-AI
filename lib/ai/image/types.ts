@@ -58,6 +58,12 @@ export function isImageAspectRatio(value: unknown): value is ImageAspectRatio {
 export interface ImageReferenceInput {
   readonly id?: string;
   readonly mimeType?: string;
+  // Dados locais recebidos por um limite autenticado do Hanira. URLs remotas
+  // nunca sao um formato valido de referencia.
+  readonly data?: Blob;
+  readonly sizeBytes?: number;
+  readonly width?: number;
+  readonly height?: number;
 }
 
 // Modos de roteamento (arquitetura apenas). FREE_FIRST e o unico modo operacional
@@ -121,6 +127,7 @@ export const IMAGE_ERROR_CODES = [
   "authentication",
   "rate_limit",
   "timeout",
+  "provider_unavailable",
   "provider_error",
   "unknown",
 ] as const;
@@ -148,6 +155,9 @@ export interface ImageResult {
   readonly actualCost?: number;
   readonly currency?: string;
   readonly durationMs?: number;
+  // Payload efemero, mantido apenas no servidor para a futura camada de entrega.
+  // Nao e persistido nem enviado para logs/observabilidade.
+  readonly imageData?: ArrayBuffer;
   readonly errorCode?: ImageErrorCode;
   readonly errorMessage?: string;
 }

@@ -159,7 +159,14 @@ export class ImageCapabilityRouter {
       height: request.height,
       aspectRatio: request.aspectRatio,
       negativePrompt: request.negativePrompt,
-      references: (request.references ?? []).map((r) => ({ id: r.id ?? "", mimeType: r.mimeType ?? "image/png" })),
+      references: (request.references ?? []).map((r) => ({
+        id: r.id ?? "",
+        mimeType: r.mimeType ?? "image/png",
+        data: r.data,
+        sizeBytes: r.sizeBytes,
+        width: r.width,
+        height: r.height,
+      })),
       seed: request.seed,
       qualityMode: request.qualityMode,
     };

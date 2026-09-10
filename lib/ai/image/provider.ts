@@ -57,6 +57,10 @@ export interface ImageProviderRequest {
 export interface ImageProviderReference {
   readonly id: string;
   readonly mimeType: string;
+  readonly data?: Blob;
+  readonly sizeBytes?: number;
+  readonly width?: number;
+  readonly height?: number;
 }
 
 // Base opcional para providers compartilharem logica de capacidade.

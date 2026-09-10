@@ -48,6 +48,8 @@ export const IMAGE_MOCK_PROVIDER_ID = "nira-image-mock";
 
 // Id logico estavel do modelo MOCK.
 export const IMAGE_MOCK_MODEL_ID = "nira-image-mock-default";
+export const CLOUDFLARE_WORKERS_AI_PROVIDER_ID = "cloudflare-workers-ai";
+export const CLOUDFLARE_FLUX_KLEIN_MODEL_ID = "nira-image-flux-klein";
 
 // Capacidades MOCK (declaradas explicitamente como MOCK semantics).
 const MOCK_CAPABILITIES: readonly ImageCapability[] = Object.freeze([
@@ -79,9 +81,32 @@ export const IMAGE_MOCK_MODEL: ImageModelDefinition = Object.freeze({
   }),
 });
 
+// API naming is deliberately confined to the adapter; this stable logical ID
+// keeps Nira independent from a provider's model naming.
+export const CLOUDFLARE_FLUX_KLEIN_MODEL: ImageModelDefinition = Object.freeze({
+  id: CLOUDFLARE_FLUX_KLEIN_MODEL_ID,
+  providerId: CLOUDFLARE_WORKERS_AI_PROVIDER_ID,
+  displayName: "Nira Image Flux Klein",
+  lifecycle: "production",
+  capabilities: Object.freeze([
+    "textToImage", "imageEdit", "referenceImage", "multipleReferences",
+    "aspectRatio", "resolution",
+  ] as const),
+  costClass: "free",
+  enabled: true,
+  limits: Object.freeze({
+    maxReferences: 4,
+    minWidth: 256,
+    maxWidth: 1920,
+    minHeight: 256,
+    maxHeight: 1920,
+    supportedMimeTypes: Object.freeze(["image/png", "image/jpeg", "image/webp"]),
+  }),
+});
+
 // Catalogo completo (apenas MOCK em 16.7). Congelado e imutavel.
 export const IMAGE_MODEL_CATALOG: readonly ImageModelDefinition[] =
-  Object.freeze([IMAGE_MOCK_MODEL]);
+  Object.freeze([IMAGE_MOCK_MODEL, CLOUDFLARE_FLUX_KLEIN_MODEL]);
 
 function freezeModel(model: ImageModelDefinition): ImageModelDefinition {
   return Object.freeze({

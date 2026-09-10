@@ -317,9 +317,13 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
   - testes (`tests/image-foundation.test.ts`): 32+ casos cobrindo registro,
     duplicacao, malformacao, custo, capacidades, mock, observabilidade;
   - script `verify:image-foundation` valida invariantes sem rede.
-- **Package 16.8 — Cloudflare Workers AI Image Provider** após auditoria
-  R$0 **fresca** (modelos/tiers atuais, quotas, billing, termos, dados,
-  disponibilidade regional, hard-stop);
+- **Package 16.8 — Cloudflare Workers AI Image Provider**: **implementado**
+  com o adapter server-only `CloudflareWorkersAIImageProvider` para
+  `@cf/black-forest-labs/flux-2-klein-4b`; suporta texto, edição e até quatro
+  referências locais validadas. Mantém `free` somente enquanto a elegibilidade
+  for re-auditada; não há fallback pago/promocional, DB, storage ou UI.
+  O smoke real é opt-in (`HANIRA_LIVE_IMAGE_SMOKE=1`) e nunca roda na suíte
+  normal.
 - **Package 16.9 — Image Free-First Capacity Router**: roteamento de imagem
   free-first reutilizando o estado de capacidade/cooldown;
 - **Package 17.0 — Hanira Image UX**: interface de produto para geração/
@@ -327,6 +331,8 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
 - **Package 17.1 — Runware**: pesquisa/integração como candidato;
 - **Package 17.2 — Qwen Image / Image Edit**: pesquisa/integração como
   candidato.
+- **Nira Video**: **FUTURO / REQUIRES PROVIDER + FREE-TIER + COST + SAFETY
+  AUDIT**. Nenhuma geração de vídeo é implementada ou declarada gratuita.
 
 **Não implementar neste pacote:** providers reais de imagem (Cloudflare,
 Runware, Qwen, OpenAI, Gemini, etc.), keys de imagem, SDKs externos, DB,
