@@ -290,6 +290,33 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
 - **Package 16.7 — Nira Image Architecture Foundation + Mock**: abstrações
   `ImageProvider`, Provider Registry, Model Catalog e um **Mock provider**
   determinístico (sem rede, sem chave) para validar o router de imagem;
+  **implementado** (Pacote 16.7, branch `pacote-16-7-nira-image-foundation`):
+  - tipos de dominio provider-independent (`types.ts`): `ImageOperation`,
+    `ImageCapability`, `ImageRequest`, `ImageResult`, `ImageReferenceInput`,
+    modos de roteamento e ciclo de vida;
+  - erros tipados (`errors.ts`): `ImageRouterError` + razoes de rejeicao seguras;
+  - politica de custo (`cost-policy.ts`): reaproveita ZERO_COST_ROUTER_POLICY
+    (paid/promotional/unknown bloqueados, free elegivel);
+  - catalogo de modelos (`model-catalog.ts`): `ImageModelDefinition` com
+    capacidades/limits, MOCK unico elegivel;
+  - abstracao de provider (`provider.ts`): `ImageProvider` + `BaseImageProvider`
+    (sem implementacao real, apenas mock);
+  - provider registry (`provider-registry.ts`): registro deterministico,
+    rejeita duplicados e malformados, bloqueia unknown;
+  - capability router (`capability-router.ts`): fluxo request -> capacidades
+    requeridas -> modelos compativeis -> custo -> disponibilidade ->
+    selecao deterministica; valida prompt vazio e operacao invalida;
+  - mock provider (`mock-provider.ts`): deterministico, mock=true, custo zero,
+    sem rede, suporta falhas/capacidade simuladas;
+  - observabilidade (`observabilidade.ts`): vocabulario fechado
+    (`image_routing_started`, `image_candidate_considered`,
+    `image_candidate_selected`, `image_candidate_rejected`,
+    `image_generation_completed`, `image_generation_failed`,
+    `image_routing_exhausted`), allow-list fechada;
+  - capacidade (`capacity.ts`): reaproveita Capacity Engine (16.5/16.6);
+  - testes (`tests/image-foundation.test.ts`): 32+ casos cobrindo registro,
+    duplicacao, malformacao, custo, capacidades, mock, observabilidade;
+  - script `verify:image-foundation` valida invariantes sem rede.
 - **Package 16.8 — Cloudflare Workers AI Image Provider** após auditoria
   R$0 **fresca** (modelos/tiers atuais, quotas, billing, termos, dados,
   disponibilidade regional, hard-stop);
@@ -301,9 +328,10 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
 - **Package 17.2 — Qwen Image / Image Edit**: pesquisa/integração como
   candidato.
 
-**Não implementar agora:** providers de imagem, ImageProvider, Image Router,
-keys de imagem, Mock provider ou qualquer dependência/instalação relacionada.
-Nenhum trabalho de imagem acontece neste Pacote 16.6.
+**Não implementar neste pacote:** providers reais de imagem (Cloudflare,
+Runware, Qwen, OpenAI, Gemini, etc.), keys de imagem, SDKs externos, DB,
+storage, UI de imagem (Pacote 17.0). O Pacote 16.7 implementa exclusivamente a
+arquitetura provider-independent + Mock, sem geracao real de imagem.
 
 ## Quotas internas (P1/P2, versão simples primeiro)
 
