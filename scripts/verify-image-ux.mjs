@@ -1,0 +1,6 @@
+#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const route = read("app/api/image/route.ts"), ui = read("components/chat/nira-image-composer.tsx"), composer = read("components/chat/chat-composer.tsx"), validation = read("lib/validation/image-request.ts"), pkg = read("package.json");
+for (const [label, source, needle] of [["image route", route, "getSessionUser"], ["generic runtime", route, "createProductionImageRouter"], ["no client Cloudflare", ui, "Cloudflare"], ["composer integration", composer, "NiraImageComposer"], ["max references", validation, "IMAGE_REFERENCE_MAX_COUNT"], ["accepted MIME", validation, "ACCEPTED_IMAGE_MIME_TYPES"], ["generic ratios", ui, "IMAGE_ASPECT_RATIO_PRESETS"], ["no public Cloudflare env", `${route}${ui}`, "NEXT_PUBLIC_CLOUDFLARE"]]) { const found = source.includes(needle); if (label === "no client Cloudflare" || label === "no public Cloudflare env" ? found : !found) throw new Error(`verify:image-ux failed: ${label}`); console.log(`OK ${label}`); }
+if (!pkg.includes("verify:image-ux")) throw new Error("missing script"); console.log("verify:image-ux complete: offline, no network.");

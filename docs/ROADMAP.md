@@ -329,7 +329,10 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
   cooldown por candidato e observabilidade segura. A verificacao de producao do
   Cloudflare continua **PENDENTE** ate um smoke real bem-sucedido.
   free-first reutilizando o estado de capacidade/cooldown;
-- **Package 17.0 — Hanira Image UX**: interface de produto para geração/
+- **Package 17.0 — Hanira Image UX**: **implementado** — modo explícito no
+  composer, referências efêmeras, presets de proporção, API autenticada e card
+  de resultado sem storage. Cloudflare Workers AI permanece com verificação
+  de produção **PENDENTE** até um smoke real bem-sucedido.
   edição de imagem;
 - **Package 17.1 — Runware**: pesquisa/integração como candidato;
 - **Package 17.2 — Qwen Image / Image Edit**: pesquisa/integração como

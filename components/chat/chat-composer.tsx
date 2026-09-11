@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
+import { NiraImageComposer } from "@/components/chat/nira-image-composer";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
   CHAT_MESSAGE_LENGTH_ERROR,
@@ -470,6 +471,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         onDrop={handleDrop}
         className="chat-composer-shell relative z-20 mx-auto w-full max-w-[50rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-7 sm:pb-5"
       >
+        <NiraImageComposer />
         {showOperationalIssue && issue && (
           <div
             id="chat-operational-error"

@@ -44,6 +44,7 @@ run("verify:capacity", ["run", "verify:capacity"]);
 run("verify:image-foundation", ["run", "verify:image-foundation"]);
 run("verify:cloudflare-image", ["run", "verify:cloudflare-image"]);
 run("verify:image-free-router", ["run", "verify:image-free-router"]);
+run("verify:image-ux", ["run", "verify:image-ux"]);
 if (!skipBuild) run("build", ["run", "build"]);
 runGitDiffCheck();
 
