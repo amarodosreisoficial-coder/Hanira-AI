@@ -7,6 +7,10 @@ import {
   NIRA_CLOUD_FREE_PROFILE_ID,
 } from "../lib/ai/nira/profiles";
 import {
+  GROQ_FREE_SECONDARY_CANDIDATE_ID,
+  GROQ_FREE_SECONDARY_MODEL,
+} from "../lib/ai/capacity/groq-free-candidates";
+import {
   recordCandidateFailure,
   resetCapacityStateForTests,
 } from "../lib/ai/capacity/capacity-state";
@@ -24,11 +28,17 @@ function setCloudOnlyEnv(primaryModel: string): void {
   process.env.GROQ_MODEL = primaryModel;
   process.env.AI_ENGINE_OLLAMA_ENABLED = "false";
   delete process.env[FREE_EXTRA_CANDIDATES_ENV];
+  delete process.env.HANIRA_FREE_SECONDARY_ENABLED;
+  delete process.env.HANIRA_ALLOW_PREVIEW_MODELS;
 }
 
-function configureSecondaryCandidate(): void {
+// Pacote 16.6: id EXTRA sem colidir com o id do candidato secundario DE
+// PRODUCAO embutido (GROQ_FREE_SECONDARY_CANDIDATE_ID = secondary-1).
+const EXTRA_CANDIDATE_ID = "nira-cloud-free-secondary-9";
+
+function configureExtraCandidate(): void {
   process.env[FREE_EXTRA_CANDIDATES_ENV] = JSON.stringify([
-    { id: "nira-cloud-free-secondary-1", model: "modelo-secundario-auditado" },
+    { id: EXTRA_CANDIDATE_ID, model: "modelo-secundario-auditado" },
   ]);
 }
 
@@ -56,16 +66,15 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
     expect(runtime.nira.profileId).toBe(NIRA_CLOUD_FREE_PROFILE_ID);
   });
 
-  it("primario em cooldown -> seleciona o candidato free extra (fallback free -> free)", () => {
+  it("Pacote 16.6: primario em cooldown -> seleciona o secundario free DE PRODUCAO embutido (free -> free)", () => {
     setCloudOnlyEnv("modelo-primario-auditado");
-    configureSecondaryCandidate();
     recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
       code: "rate_limit",
     });
 
     const runtime = createTextChatRuntime();
-    expect(runtime.routing.candidateId).toBe("nira-cloud-free-secondary-1");
-    expect(runtime.model).toBe("modelo-secundario-auditado");
+    expect(runtime.routing.candidateId).toBe(GROQ_FREE_SECONDARY_CANDIDATE_ID);
+    expect(runtime.model).toBe(GROQ_FREE_SECONDARY_MODEL);
     expect(runtime.providerId).toBe("groq");
     // A preferencia do perfil existe, mas esta em cooldown: o router reporta
     // que a selecao caiu para o melhor candidato por prioridade apos a
@@ -73,13 +82,33 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
     expect(runtime.routing.reason).toBe("selected_after_invalid_preference");
   });
 
-  it("todos os candidatos em cooldown -> capacity_unavailable com rejected capacity_cooldown", () => {
+  it("Pacote 16.6: primario + secundario em cooldown -> seleciona o EXTRA free declarado (prioridade deterministica)", () => {
     setCloudOnlyEnv("modelo-primario-auditado");
-    configureSecondaryCandidate();
+    configureExtraCandidate();
     recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
       code: "rate_limit",
     });
-    recordCandidateFailure("nira-cloud-free-secondary-1", {
+    recordCandidateFailure(GROQ_FREE_SECONDARY_CANDIDATE_ID, {
+      code: "rate_limit",
+    });
+
+    const runtime = createTextChatRuntime();
+    expect(runtime.routing.candidateId).toBe(EXTRA_CANDIDATE_ID);
+    expect(runtime.model).toBe("modelo-secundario-auditado");
+    expect(runtime.providerId).toBe("groq");
+    expect(runtime.routing.reason).toBe("selected_after_invalid_preference");
+  });
+
+  it("todos os candidatos em cooldown -> capacity_unavailable com rejected capacity_cooldown", () => {
+    setCloudOnlyEnv("modelo-primario-auditado");
+    configureExtraCandidate();
+    recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
+      code: "rate_limit",
+    });
+    recordCandidateFailure(GROQ_FREE_SECONDARY_CANDIDATE_ID, {
+      code: "rate_limit",
+    });
+    recordCandidateFailure(EXTRA_CANDIDATE_ID, {
       code: "provider_error",
     });
 
@@ -92,7 +121,12 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
         reason: "capacity_cooldown",
       },
       {
-        candidateId: "nira-cloud-free-secondary-1",
+        candidateId: GROQ_FREE_SECONDARY_CANDIDATE_ID,
+        provider: "groq",
+        reason: "capacity_cooldown",
+      },
+      {
+        candidateId: EXTRA_CANDIDATE_ID,
         provider: "groq",
         reason: "capacity_cooldown",
       },
@@ -101,11 +135,14 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
 
   it("nenhum candidato pago entra na cadeia, mesmo com toda a cadeia free em cooldown", () => {
     setCloudOnlyEnv("modelo-primario-auditado");
-    configureSecondaryCandidate();
+    configureExtraCandidate();
     recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
       code: "rate_limit",
     });
-    recordCandidateFailure("nira-cloud-free-secondary-1", {
+    recordCandidateFailure(GROQ_FREE_SECONDARY_CANDIDATE_ID, {
+      code: "rate_limit",
+    });
+    recordCandidateFailure(EXTRA_CANDIDATE_ID, {
       code: "rate_limit",
     });
 
@@ -131,18 +168,19 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
     );
     expect(rejectedIds).toEqual([
       NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID,
-      "nira-cloud-free-secondary-1",
+      GROQ_FREE_SECONDARY_CANDIDATE_ID,
+      EXTRA_CANDIDATE_ID,
     ]);
     expect(rejectedIds).not.toContain("cloud-pago-fora-do-escopo");
   });
 
   it("cooldown de candidatos cloud NAO afeta o perfil nira-local (escopo isolado)", () => {
     setCloudOnlyEnv("modelo-primario-auditado");
-    configureSecondaryCandidate();
+    configureExtraCandidate();
     recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
       code: "rate_limit",
     });
-    recordCandidateFailure("nira-cloud-free-secondary-1", {
+    recordCandidateFailure(GROQ_FREE_SECONDARY_CANDIDATE_ID, {
       code: "rate_limit",
     });
 
@@ -164,14 +202,14 @@ describe("Nira Capacity Engine - fallback free -> free no runtime (16.5)", () =>
     vi.setSystemTime(now);
 
     setCloudOnlyEnv("modelo-primario-auditado");
-    configureSecondaryCandidate();
+    configureExtraCandidate();
     recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, {
       code: "rate_limit",
     });
 
     const duringCooldown = createTextChatRuntime();
     expect(duringCooldown.routing.candidateId).toBe(
-      "nira-cloud-free-secondary-1",
+      GROQ_FREE_SECONDARY_CANDIDATE_ID,
     );
 
     vi.advanceTimersByTime(60_000 + 1);

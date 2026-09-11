@@ -48,6 +48,34 @@ export function isRouterDeployment(value: unknown): value is RouterDeployment {
   return (ROUTER_DEPLOYMENTS as readonly string[]).includes(value as string);
 }
 
+// Ciclo de vida do candidato (Pacote 16.6 - Groq Multi-Free / Free Capacity
+// Engine). Metadado declarativo do candidato, usado pelo gate de lifecycle do
+// router (antes de qualquer resolucao de provider/rede):
+// - "production": elegivel normalmente (valor implicito quando ausente —
+//   compatibilidade total com candidatos dos Pacotes 14.x-16.5);
+// - "preview": Free Plan Preview (ex.: Qwen Preview da Groq). NAO e elegivel
+//   por padrao; exige opt-in explicito (HANIRA_ALLOW_PREVIEW_MODELS=true).
+//   Preview NUNCA se torna candidato default de producao silenciosamente;
+// - "deprecated": modelo aposentado pelo provider. NUNCA e elegivel;
+// - "disabled": NUNCA e elegivel (equivalente duro de enabled: false).
+export const ROUTER_CANDIDATE_LIFECYCLES = [
+  "production",
+  "preview",
+  "deprecated",
+  "disabled",
+] as const;
+
+export type RouterCandidateLifecycle =
+  (typeof ROUTER_CANDIDATE_LIFECYCLES)[number];
+
+export function isRouterCandidateLifecycle(
+  value: unknown,
+): value is RouterCandidateLifecycle {
+  return (ROUTER_CANDIDATE_LIFECYCLES as readonly string[]).includes(
+    value as string,
+  );
+}
+
 // Ponte declarativa entre o contrato do router e a porta AIProvider ja
 // existente (lib/ai/types.ts). Usada no futuro pelo composition root para
 // consultar candidate capabilities vindas de AIProviderCapabilities.
@@ -77,10 +105,14 @@ export interface RouterCandidate {
   readonly enabled: boolean;
   // Classificacao opcional de implantacao para observabilidade.
   readonly deployment?: RouterDeployment;
-  // Classificacao financeira explicita do candidato (Pacote 14.8). A ausencia
-  // NAO significa gratuito: candidato sem classificacao e desconhecido e a
-  // politica de custo zero o bloqueia (fail-closed, UNKNOWN != FREE).
+  // Pacote 14.8: classificacao financeira explicita do candidato (Pacote 14.8).
+  // A ausencia NAO significa gratuito: candidato sem classificacao e
+  // desconhecido e a politica de custo zero o bloqueia (fail-closed, UNKNOWN
+  // != FREE).
   readonly costClass?: RouterCostClass;
+  // Pacote 16.6: ciclo de vida declarado do candidato. A ausencia significa
+  // "production" (compatibilidade com candidatos ja existentes).
+  readonly lifecycle?: RouterCandidateLifecycle;
   // Rotulo opcional de observabilidade (sem conteudo sensivel).
   readonly label?: string;
 }
@@ -118,6 +150,12 @@ export const ROUTER_REJECTION_REASONS = [
   // (rate_limited/unhealthy), filtrado pelo portao de capacidade do runtime
   // ANTES do select. Nao executa rede e nao e uma decisao financeira.
   "capacity_cooldown",
+  // Pacote 16.6 (Groq Multi-Free): gate de lifecycle do router. Roda APOS a
+  // guarda financeira e ANTES de qualquer resolucao de provider (sem rede).
+  // Preview exige opt-in explicito; deprecated/disabled nunca sao elegiveis.
+  "lifecycle_preview_blocked",
+  "lifecycle_deprecated",
+  "lifecycle_disabled",
 ] as const;
 
 export type RouterRejectionReason = (typeof ROUTER_REJECTION_REASONS)[number];

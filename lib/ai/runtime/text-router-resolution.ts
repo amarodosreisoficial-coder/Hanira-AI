@@ -45,8 +45,11 @@ export type TextRouterProviderFactories = Readonly<
 
 export function createTextModelRouter(
   candidates: readonly RouterCandidate[],
+  options: { readonly allowPreviewModels?: boolean } = {},
 ): ModelRouter {
-  return new ModelRouter(candidates);
+  return new ModelRouter(candidates, {
+    allowPreviewModels: options.allowPreviewModels,
+  });
 }
 
 function requireTextDecision(decision: RouterDecision): void {

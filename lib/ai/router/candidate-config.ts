@@ -2,6 +2,7 @@ import { ModelRouterError } from "@/lib/ai/router/errors";
 import {
   isRouterCapability,
   isRouterCostClass,
+  isRouterCandidateLifecycle,
   isRouterDeployment,
   type RouterCandidate,
 } from "@/lib/ai/router/types";
@@ -121,6 +122,18 @@ function validateExternalCandidate(
     );
   }
 
+  // Pacote 16.6: lifecycle presente precisa ser valido. A ausencia significa
+  // "production" (compatibilidade); o gate de lifecycle no router aplica a
+  // politica de preview/deprecated/disabled antes de qualquer execucao.
+  if (
+    candidate.lifecycle !== undefined &&
+    !isRouterCandidateLifecycle(candidate.lifecycle)
+  ) {
+    invalidExternalConfig(
+      `Candidato externo "${candidate.id}" possui lifecycle invalido.`,
+    );
+  }
+
   if (candidate.label !== undefined && typeof candidate.label !== "string") {
     invalidExternalConfig(
       `Candidato externo "${candidate.id}" possui label invalido.`,
@@ -139,6 +152,9 @@ function validateExternalCandidate(
       : {}),
     ...(candidate.costClass !== undefined
       ? { costClass: candidate.costClass }
+      : {}),
+    ...(candidate.lifecycle !== undefined
+      ? { lifecycle: candidate.lifecycle }
       : {}),
     ...(candidate.label !== undefined ? { label: candidate.label } : {}),
   });
