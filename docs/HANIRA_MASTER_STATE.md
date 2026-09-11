@@ -1,7 +1,20 @@
 # HANIRA AI — MASTER STATE REPORT
 ## Recovery Snapshot — Package 17.x
 
-Finalização auditada em 2026-09-11: código em `87bb1d5`, snapshot ainda não rastreado por regra explícita. Nenhum novo smoke foi executado nesta rodada; a produção Cloudflare permanece UNVERIFIED.
+Sincronização inicial do Package 17.2 em 2026-09-11: o Package 17.1 foi mergeado pelo PR #17 no commit `100379f`; o commit `94d0e18` está incorporado à `main`. A verificação de produção do Flux registrada no 17.1C permanece PASS. O Package 17.2 — Identity + Brand + PWA + Social Install Experience — está em desenvolvimento na branch dedicada.
+
+## Package 17.2 local completion (2026-09-11)
+
+- Branch: `pacote-17-2-identity-brand-pwa-social`; base `100379f`.
+- Identidade: system prompt canônico define Nira como inteligência da Hanira AI, credita Ronne Maicon Amaro dos Reis e separa identidade de provider/modelo com transparência técnica.
+- Marca: fonte canônica `public/hanira-symbol.png`; logo canônico `public/hanira-logo-primary.png`. Favicon, 192, 512, maskable 512, Apple 180 e social 1200×630 são derivados da marca existente.
+- PWA: manifest nativo Next.js, `display: standalone`, install prompt somente após ação do usuário, orientação iOS realista, detecção de standalone e dismiss por sessão.
+- Service worker: NOT NEEDED. Não há requisito offline; nenhuma rota privada, auth, conversa, mensagem, anexo ou conteúdo gerado entra em cache.
+- Social: Open Graph, Twitter/X large card e WhatsApp metadata usam um asset público genérico; canonical usa `NEXT_PUBLIC_APP_URL` quando público e `VERCEL_PROJECT_PRODUCTION_URL` como fallback de produção. Preview URL não é canonical permanente.
+- Validação final em Next.js 16.3.3: 665 testes passed / 7 skipped; 70 arquivos passed / 1 skipped. Typecheck PASS. Lint PASS com 6 warnings preexistentes e 0 errors. Build PASS. Todos os verificadores offline e `git diff --check` PASS.
+- Browser/E2E: 2/2 PASS para desktop/mobile, metadata, manifest/assets, prompt nativo simulado, orientação iOS e standalone. Nenhum prompt de IA/provider foi enviado.
+- Dependências, providers, modelos, banco, migrations, storage, billing e recursos pagos: NONE.
+- Validação manual restante: instalação em dispositivos Android/iOS reais e cache do WhatsApp após publicação em Preview.
 
 ## Package 17.1B diagnostic update (2026-09-11)
 
@@ -38,12 +51,12 @@ Hanira AI é o produto/plataforma. Nira é a inteligência da Hanira; provider e
 
 ## 3. CURRENT GIT STATE
 
-- Branch: `pacote-17-1-image-production-beta`
-- HEAD: `87bb1d584d12c5561ff2a750843b3368a1c4cb89` (`87bb1d5`)
-- `origin/main`: `4a63ede24f4921876ae0b15eb579b05b973f2eae` (`4a63ede`)
+- Branch: `pacote-17-2-identity-brand-pwa-social`
+- Base/previous HEAD: `100379f615f91b506f7d46e9373f0cc591bf22f1` (`100379f`)
+- `origin/main`: `100379f615f91b506f7d46e9373f0cc591bf22f1` (`100379f`)
 - Working tree: clean antes e depois da auditoria
 - Untracked/secrets versionados: none found
-- HEAD 17.1 ainda não aparece como branch remota; não foi feito push nesta auditoria.
+- Project lock do 17.2: PASS; `main` e `origin/main` estavam sincronizadas antes da criação da branch.
 
 ## 4. PACKAGE TIMELINE
 
@@ -57,9 +70,10 @@ Hanira AI é o produto/plataforma. Nira é a inteligência da Hanira; provider e
 | 16.8.1 Smoke automation | same branch / `711b689` | Implementado; `.env.local` autoload e diagnóstico seguro. Smoke real falhou. |
 | 16.9 Free-First Image Router | `pacote-16-9-image-free-first-router` / `c875998` | Implementado e pushed; seleção free-first, custo/capacidade antes da rede, failover somente free. |
 | 17.0 Image UX | `pacote-17-0-image-ux` / `92457c3` | Implementado e pushed; `/api/image`, composer explícito, referências, ratios, card/download/regenerate. |
-| 17.1 Production Beta Hardening | `pacote-17-1-image-production-beta` / `87bb1d5` | Commit local; hardening de concorrência, duplicate-click e diagnóstico. Não mergeado/pushed. Cloudflare smoke falhou duas vezes controladas. |
+| 17.1 Production Beta Hardening | `pacote-17-1-image-production-beta` / `94d0e18`; merge `100379f` | Concluído e mergeado via PR #17. Hardening de concorrência/duplicate-click, correção multipart/JSON Base64 e verificação de produção Flux PASS. |
+| 17.2 Identity + Brand + PWA + Social | `pacote-17-2-identity-brand-pwa-social` | Implementado e validado localmente; aguardando commit/push e Preview para revisão humana. |
 
-No pacote posterior a 17.1 foi encontrado.
+Package 17.2 é o pacote atual.
 
 ## 5. PACKAGE 16.9 — EXACT STATE
 
@@ -71,7 +85,7 @@ No pacote posterior a 17.1 foi encontrado.
 
 ## 7. PACKAGE 17.1 — EXACT STATE
 
-`87bb1d5` adiciona trava per-user reutilizando o concurrency guard e bloqueio síncrono de clique duplicado no composer, atualiza UX/verificador e registra que o Cloudflare continua pendente. Não há provider novo, billing, migration ou storage. Estado: IMPLEMENTED LOCALLY, NOT PUSHED/NOT MERGED.
+`87bb1d5` adicionou trava per-user reutilizando o concurrency guard e bloqueio síncrono de clique duplicado no composer. `94d0e18` corrigiu o transporte multipart e o decode JSON Base64 do Flux; a verificação controlada de produção passou. O conjunto foi mergeado via PR #17 em `100379f`. Não houve provider novo, billing, migration ou storage.
 
 ## 8. CURRENT APPLICATION CAPABILITIES
 
@@ -86,10 +100,9 @@ No pacote posterior a 17.1 foi encontrado.
 - Composer responsivo com anexos existentes, voz e documentos conforme flags.
 - Imagem: UX/API/router implementados, testes offline verdes.
 
-### Implemented but production-unverified
+### Production verification
 
-- Geração real Cloudflare Workers AI: adapter e endpoint existem, mas os dois smokes controlados retornaram `provider_unavailable` sem HTTP status. Produção NÃO verificada.
-- Imagem end-to-end com credenciais reais: UNVERIFIED.
+- Geração real Cloudflare Workers AI/Flux: PASS pontual no 17.1C, com adapter, endpoint e caminho free-first validados por um smoke controlado. Não repetir smoke sem necessidade concreta.
 
 ### Partial / planned
 
@@ -110,7 +123,7 @@ Chat: usuário → sessão → `/api/chat` → contexto/memória → capability/
 
 - Groq: implementado, cloud text, configurável por `GROQ_API_KEY`/`GROQ_MODEL`; default e cadeia free auditados em `lib/ai/capacity`.
 - Ollama: implementado, local/experimental, endpoint configurável; não é fallback silencioso do perfil cloud.
-- Cloudflare Workers AI: implementado para imagem, logical model `nira-image-flux-klein`, API model `@cf/black-forest-labs/flux-2-klein-4b`, cost class `free` por política explícita; configuração externa obrigatória; produção não verificada.
+- Cloudflare Workers AI: implementado para imagem, logical model `nira-image-flux-klein`, API model `@cf/black-forest-labs/flux-2-klein-4b`, cost class `free` por política explícita; configuração externa obrigatória; produção verificada pontualmente no 17.1C.
 - MockImageProvider: test/development only; não é fallback produtivo.
 - OpenAI/client services existem no repositório, mas não são caminho de imagem free-first atual.
 
@@ -153,7 +166,7 @@ Anexos de imagem, áudio e documentos/PDF têm validação e caminhos de chat ex
 - `npm run lint`: PASS com 6 warnings preexistentes, 0 errors.
 - `npm run build`: iniciado e compilação otimizada reportou sucesso; saída final completa não foi capturada pelo runner.
 - Offline verifiers: capacity, free-router, image-foundation, cloudflare-image, image-free-router e image-ux PASS.
-- Live smoke: explicitamente gated; duas chamadas controladas no pacote 17.1, ambas falharam.
+- Live smoke: explicitamente gated; o único smoke final do 17.1C passou (649 testes normais passaram e 7 foram ignorados naquele baseline).
 
 ## 21. SECURITY STATUS
 
@@ -161,9 +174,7 @@ Anexos de imagem, áudio e documentos/PDF têm validação e caminhos de chat ex
 
 ## 22. KNOWN BUGS
 
-1. Cloudflare Workers AI live request falha antes de resposta HTTP com `provider_unavailable`; causa transport-level estruturada não disponível.
-2. A UI de imagem está implementada, mas geração real não está operacionalmente comprovada.
-3. Build runner não entregou resumo final completo, embora tenha compilado com sucesso.
+Nenhum defeito ativo de Cloudflare permaneceu após o 17.1C. A verificação de produção é pontual e deve ser tratada como tal. Validações manuais de PWA e cache de previews sociais permanecem parte do Package 17.2.
 
 ## 23. TECHNICAL DEBT
 
@@ -174,23 +185,22 @@ Anexos de imagem, áudio e documentos/PDF têm validação e caminhos de chat ex
 
 ## 24. OPEN WORK
 
-- Corrigir configuração/conectividade externa Cloudflare sem inventar credenciais.
-- Executar um smoke bem-sucedido controlado antes de declarar produção verificada.
-- Decidir posteriormente se `87bb1d5` deve ser pushed/mergeado.
+- Commitar e publicar somente a branch do Package 17.2.
+- Validar instalação Android/iOS e previews sociais em URL publicada, sem deploy de produção neste pacote.
 
 ## 25. ROADMAP — DONE / IN PROGRESS / NEXT / LATER
 
 ### DONE
 
-16.4–16.9 e 17.0 implementados conforme commits e código; 17.1 beta hardening commitado localmente.
+16.4–17.1 implementados; 17.1 mergeado via PR #17 em `100379f`, com Flux production verification PASS.
 
 ### IN PROGRESS
 
-17.1 production activation/Cloudflare verification: bloqueado por indisponibilidade externa do provider.
+17.2 implementado e validado localmente; aguardando commit/push da branch.
 
 ### NEXT
 
-Validar/corrigir conectividade Cloudflare e repetir somente quando houver mudança concreta de configuração; então revisar push/merge do 17.1.
+Publicar a branch do 17.2 e revisar o Preview; merge continua sendo decisão humana.
 
 ### LATER
 
@@ -198,7 +208,7 @@ Image persistence/gallery, provider audits Runware/Qwen, richer PWA/social metad
 
 ## 26. EXACT NEXT RECOMMENDED ACTION
 
-Obter do ambiente Cloudflare uma causa HTTP/transport confiável (sem imprimir segredo), corrigir somente configuração externa se necessário, e executar um único smoke controlado. Se continuar sem resposta HTTP, manter `CLOUDFLARE PRODUCTION VERIFIED: NO`.
+Publicar somente a branch do Package 17.2 e validar Preview antes de qualquer decisão humana de merge.
 
 ## 27. IMPORTANT DO-NOT-DO RULES
 
@@ -206,27 +216,27 @@ Não fazer fallback paid/promotional/unknown; não expor segredos/prompts/binary
 
 ## 28. RECOVERY SUMMARY FOR CHATGPT
 
-Hanira está em uma arquitetura free-first com chat Groq/Ollama, memória/contexto persistidos e imagem Cloudflare atrás de router zero-cost. UX/API de imagem existe, mas o provider real ainda não foi validado em produção. O estado atual é seguro e funcional offline, com um commit 17.1 local não pushed.
+Hanira está em uma arquitetura free-first com chat Groq/Ollama, memória/contexto persistidos e imagem Cloudflare atrás de router zero-cost. UX/API de imagem existe e o Flux foi verificado pontualmente em produção no 17.1C. O 17.1 está mergeado; o 17.2 consolida identidade, marca, PWA e metadata social.
 
 ## CHATGPT RECOVERY BLOCK
 
 - PROJECT: Hanira AI / Nira
 - PATH: `C:\Projetos\hanira-app`
 - REMOTE: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- CURRENT BRANCH: `pacote-17-1-image-production-beta`
-- CURRENT HEAD: `87bb1d5` plus pending 17.1C commit
-- MAIN HEAD: `4a63ede`
-- LAST COMPLETED PACKAGE: 17.0 pushed; 17.1C pending commit/push
-- CURRENT PACKAGE: 17.1 Image Production Activation + Beta Hardening
-- CURRENT STATUS: production image generation verified by one controlled smoke
+- CURRENT BRANCH: `pacote-17-2-identity-brand-pwa-social`
+- CURRENT BASE HEAD: `100379f`
+- MAIN HEAD: `100379f`
+- LAST COMPLETED PACKAGE: 17.1 merged via PR #17; Flux production verification PASS
+- CURRENT PACKAGE: 17.2 Identity + Brand + PWA + Social Install Experience
+- CURRENT STATUS: implementação e gates locais PASS; aguardando commit/push da branch
 - ACTIVE PROVIDER: Cloudflare Workers AI for image; Groq for cloud text; Ollama optional local
 - ACTIVE MODEL: image logical `nira-image-flux-klein` → `@cf/black-forest-labs/flux-2-klein-4b`
 - ZERO-COST STATUS: paid/promotional/unknown blocked; free-only routing
-- PWA STATUS: responsive UI/assets; manifest/service worker/install/maskable/social metadata unverified/not found
+- PWA STATUS: manifest/install/maskable/Apple/social implementados; service worker NOT NEEDED por privacidade e ausência de requisito offline
 - MEMORY STATUS: persistent conversation + scoped memory/context; no embeddings/RAG evidence
-- IDENTITY STATUS: Hanira=product, Nira=intelligence; named developer identity unverified
+- IDENTITY STATUS: Hanira=product, Nira=intelligence; developer Ronne Maicon Amaro dos Reis definido no prompt canônico e coberto por testes
 - LAST MAJOR FEATURES: free-first image router, authenticated image API, image composer/result card, beta concurrency guard, Flux JSON response decoding
 - OPEN ISSUES: no active Cloudflare transport issue; production verification is point-in-time and should be monitored
-- NEXT ACTION: human preview review, then merge only with explicit authorization
-- DO NOT TOUCH: main, other projects, DB/Supabase/Vercel, credentials, paid providers, storage, Package 17.2
+- NEXT ACTION: concluir 17.2, push da branch e revisão humana do Preview/PR
+- DO NOT TOUCH: main, other projects, DB/Supabase/Vercel, credentials, paid providers or storage
 - DO NOT MIX PROJECTS: ARIKEM Studio, EntreUS, Amaro dos Reis Parfum or any other repository

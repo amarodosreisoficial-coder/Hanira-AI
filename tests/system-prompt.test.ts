@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { buildSystemPrompt } from "../lib/ai/runtime/system-prompt";
+import {
+  buildSystemPrompt,
+  NIRA_IDENTITY_INSTRUCTIONS,
+} from "../lib/ai/runtime/system-prompt";
 
 describe("system prompt seguro", () => {
   it("monta blocos em ordem deterministica sem duplicacao", () => {
@@ -34,6 +37,24 @@ describe("system prompt seguro", () => {
     expect(prompt).toContain("Base fixa");
     expect(prompt).not.toContain("Personalizacao validada");
     expect(prompt).not.toContain("Memorias relevantes");
+  });
+
+  it("preserva a identidade canônica da Nira e seu desenvolvedor", () => {
+    const prompt = buildSystemPrompt({
+      baseInstructions: "Base fixa",
+      projectLabel: "Hanira AI",
+    });
+
+    expect(prompt).toContain("### Identidade canonica da Nira");
+    expect(prompt).toContain("Voce e a Nira, a inteligencia da Hanira AI");
+    expect(prompt).toContain("Ronne Maicon Amaro dos Reis");
+    expect(prompt).toContain("quem criou, desenvolveu ou e o seu desenvolvedor");
+    expect(prompt).toContain("Nao se apresente como ChatGPT, OpenAI, Groq, GPT");
+    expect(prompt).toContain("providers e modelos sao infraestrutura tecnica substituivel");
+    expect(prompt).toContain("nao negue o uso de terceiros");
+    expect(NIRA_IDENTITY_INSTRUCTIONS).not.toContain(
+      "Eu nunca uso modelos de terceiros",
+    );
   });
 
   it("orienta idioma, limites de dados atuais e ausencia de placeholders", () => {
