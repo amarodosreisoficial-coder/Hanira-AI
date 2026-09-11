@@ -7,6 +7,7 @@ export function createDeterministicTextResponse(options: {
   mode: string;
   text: string;
   onComplete?: (text: string) => Promise<void> | void;
+  onCancelled?: () => Promise<void> | void;
 }) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -23,7 +24,11 @@ export function createDeterministicTextResponse(options: {
           if (!options.request.signal.aborted) {
             controller.enqueue(encoder.encode(streamEvent("done", { conversationId: options.conversationId })));
           }
+        } else {
+          await options.onCancelled?.();
         }
+      } else {
+        await options.onCancelled?.();
       }
       controller.close();
     },

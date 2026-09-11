@@ -20,7 +20,12 @@ import {
   resolveProjectForConversationCreation,
 } from "@/services/project-service";
 import { findActivePersonalityByProject } from "@/services/personality-service";
-import { buildChatContextBudget, CHAT_CONTEXT_LIMITS, limitMemoryContext } from "@/lib/ai/runtime/chat-context-budget";
+import {
+  buildChatContextBudgetResult,
+  CHAT_CONTEXT_LIMITS,
+  limitMemoryContextResult,
+  type ContextBudgetMetadata,
+} from "@/lib/ai/runtime/chat-context-budget";
 
 const MAX_CONTEXT_MESSAGES = CHAT_CONTEXT_LIMITS.maxHistoryMessages;
 
@@ -67,6 +72,12 @@ export interface ProjectChatContext {
   conversationMessages: TextChatContextMessage[];
   personalityInstructions?: string;
   historyMessageCount: number;
+  contextBudget: ContextBudgetMetadata & {
+    memoryCount: number;
+    selectedMemoryCount: number;
+    memoryCharacters: number;
+    memoryTruncated: boolean;
+  };
   legacyScopeUsed: boolean;
 }
 
@@ -292,11 +303,12 @@ export async function resolveProjectChatContext(options: {
   if (messagesError) throw messagesError;
   if (settingsError) throw settingsError;
 
-  const conversationMessages = buildChatContextBudget(sanitizeConversationMessages(
+  const historyBudget = buildChatContextBudgetResult(sanitizeConversationMessages(
     Array.isArray(messages)
       ? (messages as Array<Record<string, unknown>>)
       : undefined,
   ));
+  const memoryBudget = limitMemoryContextResult(memories);
   if (activePersonality && activePersonality.projectId !== conversation.projectId) {
     logPersonalityScopeMismatch({
       requestId: options.requestId,
@@ -343,10 +355,17 @@ export async function resolveProjectChatContext(options: {
     conversationId: conversation.id,
     personalityId: activePersonality?.id,
     systemInstructions: "",
-    relevantMemories: limitMemoryContext(memories),
-    conversationMessages,
+    relevantMemories: memoryBudget.memories,
+    conversationMessages: historyBudget.messages,
     personalityInstructions: personalityInstructions || undefined,
-    historyMessageCount: conversationMessages.length,
+    historyMessageCount: historyBudget.messages.length,
+    contextBudget: {
+      ...historyBudget.metadata,
+      memoryCount: memoryBudget.metadata.memoriesConsidered,
+      selectedMemoryCount: memoryBudget.metadata.memoriesIncluded,
+      memoryCharacters: memoryBudget.metadata.charactersIncluded,
+      memoryTruncated: memoryBudget.metadata.truncated,
+    },
     legacyScopeUsed: conversation.legacyScopeUsed,
   } satisfies ProjectChatContext;
 }

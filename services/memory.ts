@@ -33,6 +33,9 @@ interface MemoryRow {
   id?: unknown;
   content: string;
   importance: number;
+  scope?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
 }
 
 export type MemoryScope = "global" | "project";
@@ -89,25 +92,42 @@ async function listProjectConversationIds(options: {
     .map((conversation: Record<string, unknown>) => conversation.id as string);
 }
 
-function rankMemories(memories: MemoryRow[], message: string) {
-  const terms = new Set(
-    message
-      .toLocaleLowerCase("pt-BR")
-      .split(/\W+/)
-      .filter((term) => term.length > 3),
-  );
+function significantTerms(value: string) {
+  return new Set(value.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR").split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 3));
+}
 
-  return memories
-    .map((memory) => ({
-      content: memory.content,
-      score:
-        memory.importance +
-        [...terms].filter((term) =>
-          memory.content.toLocaleLowerCase("pt-BR").includes(term),
-        ).length * 2,
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+function timestampOf(memory: MemoryRow) {
+  const raw = typeof memory.updated_at === "string" ? memory.updated_at : memory.created_at;
+  const timestamp = typeof raw === "string" ? Date.parse(raw) : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+/** Ranking local, determinístico e sem embeddings/provider. Não aplica top-N. */
+export function rankMemoriesForContext(memories: MemoryRow[], message: string) {
+  const queryTerms = significantTerms(message);
+  const newestTimestamp = Math.max(0, ...memories.map(timestampOf));
+  const unique = memories.filter((memory, index, all) =>
+    all.findIndex((item) => normalizeMemoryContent(item.content) === normalizeMemoryContent(memory.content)) === index,
+  );
+  return unique
+    .map((memory, originalIndex) => {
+      const memoryTerms = significantTerms(memory.content);
+      const lexicalMatches = [...queryTerms].filter((term) => memoryTerms.has(term)).length;
+      const ageDays = newestTimestamp && timestampOf(memory)
+        ? Math.max(0, (newestTimestamp - timestampOf(memory)) / 86_400_000)
+        : Number.POSITIVE_INFINITY;
+      const recency = Number.isFinite(ageDays) ? 1 / (1 + ageDays / 30) : 0;
+      const projectRelevance = memory.scope === "project" && lexicalMatches > 0 ? 1 : 0;
+      return {
+        content: memory.content,
+        score: lexicalMatches * 4 + Number(memory.importance || 0) + projectRelevance + recency,
+        timestamp: timestampOf(memory),
+        originalIndex,
+      };
+    })
+    .sort((a, b) => b.score - a.score || b.timestamp - a.timestamp || a.originalIndex - b.originalIndex)
     .map((memory) => memory.content);
 }
 
@@ -200,7 +220,7 @@ export async function getRelevantMemories(options: {
   ]);
   const merged = [...(project as unknown as MemoryRow[]), ...(global as unknown as MemoryRow[])];
   const unique = merged.filter((memory, index, all) => all.findIndex((item) => normalizeMemoryContent(item.content) === normalizeMemoryContent(memory.content)) === index);
-  return rankMemories(unique, options.message);
+  return rankMemoriesForContext(unique, options.message);
 }
 
 export async function deleteProjectMemory(options: {

@@ -27,6 +27,7 @@ export interface SystemDiagnostics {
   transcription: DiagnosticCapability;
   speech: DiagnosticCapability;
   attachments: DiagnosticCapability;
+  productCapabilities: readonly import("@/types/capabilities").NiraProductCapability[];
   tables: Record<string, boolean>;
   // Pacote 16.5: observabilidade basica de capacidade (Nira Capacity Engine).
   // Opcional e presente apenas no modo producao; contem apenas dados

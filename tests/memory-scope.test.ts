@@ -3,6 +3,7 @@ vi.mock("server-only", () => ({}));
 import {
   deleteProjectMemory,
   getRelevantMemories,
+  rankMemoriesForContext,
   saveExplicitMemory,
 } from "../services/memory";
 
@@ -133,6 +134,20 @@ function createSupabaseStub(options: {
 }
 
 describe("memory scope", () => {
+  it("ranqueia por relevância lexical, escopo, importância e recência de forma determinística", () => {
+    const memories = [
+      { content: "prefere chá", importance: 5, scope: "global", created_at: "2025-01-01T00:00:00Z" },
+      { content: "projeto usa café especial", importance: 2, scope: "project", created_at: "2026-01-01T00:00:00Z" },
+      { content: "projeto usa café especial.", importance: 5, scope: "global", created_at: "2026-02-01T00:00:00Z" },
+      { content: "café", importance: 1, scope: "global", created_at: "2026-03-01T00:00:00Z" },
+    ];
+    const first = rankMemoriesForContext(memories, "Qual café este projeto usa?");
+    expect(first).toEqual(rankMemoriesForContext(memories, "Qual café este projeto usa?"));
+    expect(first[0]).toBe("projeto usa café especial");
+    expect(first.filter((item) => item.startsWith("projeto usa café especial"))).toHaveLength(1);
+    expect(first.indexOf("prefere chá")).toBeGreaterThan(first.indexOf("café"));
+  });
+
   it("conversa A nao le memoria da conversa B", async () => {
     const supabase = createSupabaseStub({
       conversations: [

@@ -5,18 +5,15 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BrainCircuit,
-  Check,
   LogOut,
   Moon,
   Save,
   Activity,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
-import { HANIRA_CAPABILITIES } from "@/lib/capabilities";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import type { ResponseStyle, UserSettings } from "@/types/settings";
 
@@ -370,29 +367,6 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="mt-12">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="size-4 text-violet-300" />
-            Próximas capacidades
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {HANIRA_CAPABILITIES.map(({ id, name, description, icon: Icon }) => (
-              <article
-                key={id}
-                className="flex items-center gap-3 rounded-xl border border-white/[0.065] bg-white/[0.025] p-3.5"
-              >
-                <Icon className="size-4 text-violet-300" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-zinc-300">{name}</p>
-                  <p className="truncate text-[10px] text-zinc-700">
-                    {description}
-                  </p>
-                </div>
-                <Check className="size-3 text-violet-500" />
-              </article>
-            ))}
-          </div>
-        </section>
       </div>
     </main>
   );
