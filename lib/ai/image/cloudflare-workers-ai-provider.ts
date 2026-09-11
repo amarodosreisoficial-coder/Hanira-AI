@@ -45,6 +45,26 @@ function validDimension(value: number | undefined, min: number, max: number): bo
   return value === undefined || (Number.isInteger(value) && value >= min && value <= max);
 }
 
+function decodeJsonImage(body: unknown): { readonly imageData: ArrayBuffer; readonly mimeType: string } | undefined {
+  const image = body && typeof body === "object"
+    ? (body as { result?: { image?: unknown }; image?: unknown }).result?.image ?? (body as { image?: unknown }).image
+    : undefined;
+  if (typeof image !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) return undefined;
+  try {
+    const bytes = Buffer.from(image, "base64");
+    if (bytes.byteLength === 0) return undefined;
+    const mimeType = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+      ? "image/png"
+      : bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+        ? "image/jpeg"
+        : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+          ? "image/webp"
+          : undefined;
+    if (!mimeType) return undefined;
+    return { imageData: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), mimeType };
+  } catch { return undefined; }
+}
+
 /** Server-only adapter. It never accepts/fetches remote reference URLs. */
 export class CloudflareWorkersAIImageProvider extends BaseImageProvider {
   readonly providerId = CLOUDFLARE_WORKERS_AI_PROVIDER_ID;
@@ -115,11 +135,12 @@ export class CloudflareWorkersAIImageProvider extends BaseImageProvider {
       );
       if (!response.ok) return safeError(errorForStatus(response.status), operation, Date.now() - startMs);
       const contentType = response.headers.get("content-type")?.split(";")[0]?.toLowerCase();
-      if (!contentType?.startsWith("image/")) return safeError("provider_error", operation, Date.now() - startMs);
-      const imageData = await response.arrayBuffer();
-      if (imageData.byteLength === 0) return safeError("provider_error", operation, Date.now() - startMs);
+      const directImage = contentType?.startsWith("image/") ? { imageData: await response.arrayBuffer(), mimeType: contentType } : undefined;
+      const jsonImage = contentType === "application/json" ? decodeJsonImage(await response.json().catch(() => undefined)) : undefined;
+      const output = directImage ?? jsonImage;
+      if (!output || output.imageData.byteLength === 0) return safeError("provider_error", operation, Date.now() - startMs, "malformed_response");
       return Object.freeze({
-        success: true, mock: false, mimeType: contentType, imageData,
+        success: true, mock: false, mimeType: output.mimeType, imageData: output.imageData,
         width: request.width, height: request.height, providerId: this.providerId,
         modelId: CLOUDFLARE_FLUX_KLEIN_MODEL_ID, operation, costClass: "free",
         estimatedCost: 0, actualCost: 0, currency: "BRL", durationMs: Date.now() - startMs,

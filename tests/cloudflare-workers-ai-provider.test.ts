@@ -38,6 +38,15 @@ describe("Cloudflare Workers AI image provider", () => {
     expect(result.imageData?.byteLength).toBe(4);
   });
 
+  it("normalizes Flux JSON base64 output without exposing it", async () => {
+    const image = Buffer.from([137, 80, 78, 71]).toString("base64");
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ result: { image } }), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    const result = await configured(fetchFn).generate(request);
+    expect(result).toMatchObject({ success: true, mimeType: "image/png", mock: false });
+    expect(result.imageData?.byteLength).toBe(4);
+    expect(JSON.stringify(result)).not.toContain(image);
+  });
+
   it("maps edit references, including up to four local blobs", async () => {
     const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
       const form = init?.body as FormData;
