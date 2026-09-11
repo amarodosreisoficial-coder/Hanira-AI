@@ -324,7 +324,10 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
   for re-auditada; não há fallback pago/promocional, DB, storage ou UI.
   O smoke real é opt-in (`HANIRA_LIVE_IMAGE_SMOKE=1`) e nunca roda na suíte
   normal.
-- **Package 16.9 — Image Free-First Capacity Router**: roteamento de imagem
+- **Package 16.9 — Image Free-First Capacity Router**: **implementado** — roteamento
+  deterministico free-first, filtro de capacidade/custo/configuracao antes de rede,
+  cooldown por candidato e observabilidade segura. A verificacao de producao do
+  Cloudflare continua **PENDENTE** ate um smoke real bem-sucedido.
   free-first reutilizando o estado de capacidade/cooldown;
 - **Package 17.0 — Hanira Image UX**: interface de produto para geração/
   edição de imagem;

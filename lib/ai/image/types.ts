@@ -160,6 +160,8 @@ export interface ImageResult {
   readonly imageData?: ArrayBuffer;
   readonly errorCode?: ImageErrorCode;
   readonly errorMessage?: string;
+  // Closed, sanitized transport diagnostic; never a raw provider response/error.
+  readonly diagnosticCode?: "dns_error" | "connection_error" | "tls_error" | "timeout" | "authentication" | "rate_limit" | "provider_5xx" | "malformed_response" | "capacity_unavailable";
 }
 
 // Ciclo de vida de modelo de imagem (espelho do texto, para consistencia).

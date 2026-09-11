@@ -24,11 +24,11 @@ function nonEmpty(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function safeError(code: ImageErrorCode, operation: "generate" | "edit", durationMs: number): ImageResult {
+function safeError(code: ImageErrorCode, operation: "generate" | "edit", durationMs: number, diagnosticCode?: ImageResult["diagnosticCode"]): ImageResult {
   return Object.freeze({
     success: false, mock: false, providerId: CLOUDFLARE_WORKERS_AI_PROVIDER_ID,
     modelId: CLOUDFLARE_FLUX_KLEIN_MODEL_ID, operation, errorCode: code,
-    errorMessage: "A geracao de imagem esta indisponivel no momento.", durationMs,
+    errorMessage: "A geracao de imagem esta indisponivel no momento.", durationMs, diagnosticCode,
   });
 }
 
@@ -124,9 +124,11 @@ export class CloudflareWorkersAIImageProvider extends BaseImageProvider {
         modelId: CLOUDFLARE_FLUX_KLEIN_MODEL_ID, operation, costClass: "free",
         estimatedCost: 0, actualCost: 0, currency: "BRL", durationMs: Date.now() - startMs,
       });
-    } catch {
-      const code: ImageErrorCode = controller.signal.aborted ? "timeout" : "provider_unavailable";
-      return safeError(code, operation, Date.now() - startMs);
+    } catch (error) {
+      if (controller.signal.aborted) return safeError("timeout", operation, Date.now() - startMs, "timeout");
+      const causeCode = typeof error === "object" && error !== null && "cause" in error && typeof (error as { cause?: unknown }).cause === "object" ? (error as { cause?: { code?: unknown } }).cause?.code : undefined;
+      const diagnosticCode = causeCode === "ENOTFOUND" ? "dns_error" : causeCode === "ECONNREFUSED" || causeCode === "ECONNRESET" ? "connection_error" : causeCode === "CERT_HAS_EXPIRED" || causeCode === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ? "tls_error" : undefined;
+      return safeError("provider_unavailable", operation, Date.now() - startMs, diagnosticCode);
     } finally {
       clearTimeout(timer);
     }

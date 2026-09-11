@@ -43,6 +43,7 @@ run("verify:capacity", ["run", "verify:capacity"]);
 // Pacote 16.7: invariantes da fundacao de imagem (sem rede, sem segredos).
 run("verify:image-foundation", ["run", "verify:image-foundation"]);
 run("verify:cloudflare-image", ["run", "verify:cloudflare-image"]);
+run("verify:image-free-router", ["run", "verify:image-free-router"]);
 if (!skipBuild) run("build", ["run", "build"]);
 runGitDiffCheck();
 

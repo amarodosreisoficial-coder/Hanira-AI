@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ImageCapabilityRouter } from "@/lib/ai/image/capability-router";
+import { FreeFirstImageRouter } from "@/lib/ai/image/free-first-router";
 import {
   CloudflareWorkersAIImageProvider,
   type CloudflareWorkersAIImageProviderOptions,
@@ -12,6 +12,7 @@ import {
  */
 export function createProductionImageRouter(
   options: CloudflareWorkersAIImageProviderOptions = {},
-): ImageCapabilityRouter {
-  return new ImageCapabilityRouter([new CloudflareWorkersAIImageProvider(options)]);
+): FreeFirstImageRouter {
+  const provider = new CloudflareWorkersAIImageProvider(options);
+  return new FreeFirstImageRouter([{ candidateId: "cloudflare-workers-ai:nira-image-flux-klein", provider, model: provider.models[0], priority: 1, production: true }]);
 }
