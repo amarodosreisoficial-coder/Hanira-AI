@@ -333,6 +333,10 @@ Princípios herdados da camada de texto (obrigatórios para imagem):
   composer, referências efêmeras, presets de proporção, API autenticada e card
   de resultado sem storage. Cloudflare Workers AI permanece com verificação
   de produção **PENDENTE** até um smoke real bem-sucedido.
+- **Package 17.1 — Image Production Activation + Beta Hardening**: beta
+  hardening implementado (trava por usuário e bloqueio de clique duplo). O
+  smoke controlado de Cloudflare retornou `provider_unavailable`; portanto a
+  ativação/validação de produção permanece **PENDENTE**, sem fallback pago.
   edição de imagem;
 - **Package 17.1 — Runware**: pesquisa/integração como candidato;
 - **Package 17.2 — Qwen Image / Image Edit**: pesquisa/integração como

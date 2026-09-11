@@ -13,6 +13,7 @@ it.skipIf(!enabled || !credentialsPresent)("generates one controlled real Cloudf
   const safeDiagnostic = JSON.stringify({
     success: result.success,
     errorCode: result.errorCode,
+    diagnosticCode: result.diagnosticCode,
     providerId: result.providerId,
     modelId: result.modelId,
     mock: result.mock,
