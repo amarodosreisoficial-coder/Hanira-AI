@@ -5,7 +5,7 @@ Sincronização inicial do Package 17.2 em 2026-09-11: o Package 17.1 foi mergea
 
 ## Package 17.2 local completion (2026-09-11)
 
-- Branch: `pacote-17-2-identity-brand-pwa-social`; base `100379f`.
+- Branch: `pacote-17-2-identity-brand-pwa-social`; base `100379f`; implementation commit `fa49b7c` publicado no remote oficial.
 - Identidade: system prompt canônico define Nira como inteligência da Hanira AI, credita Ronne Maicon Amaro dos Reis e separa identidade de provider/modelo com transparência técnica.
 - Marca: fonte canônica `public/hanira-symbol.png`; logo canônico `public/hanira-logo-primary.png`. Favicon, 192, 512, maskable 512, Apple 180 e social 1200×630 são derivados da marca existente.
 - PWA: manifest nativo Next.js, `display: standalone`, install prompt somente após ação do usuário, orientação iOS realista, detecção de standalone e dismiss por sessão.
@@ -13,6 +13,7 @@ Sincronização inicial do Package 17.2 em 2026-09-11: o Package 17.1 foi mergea
 - Social: Open Graph, Twitter/X large card e WhatsApp metadata usam um asset público genérico; canonical usa `NEXT_PUBLIC_APP_URL` quando público e `VERCEL_PROJECT_PRODUCTION_URL` como fallback de produção. Preview URL não é canonical permanente.
 - Validação final em Next.js 16.3.3: 665 testes passed / 7 skipped; 70 arquivos passed / 1 skipped. Typecheck PASS. Lint PASS com 6 warnings preexistentes e 0 errors. Build PASS. Todos os verificadores offline e `git diff --check` PASS.
 - Browser/E2E: 2/2 PASS para desktop/mobile, metadata, manifest/assets, prompt nativo simulado, orientação iOS e standalone. Nenhum prompt de IA/provider foi enviado.
+- Vercel Preview: AUTO CREATED e status SUCCESS para `fa49b7c`; URL de ambiente `https://hanira-6q54gm2mt-amarodosreisoficial-9764s-projects.vercel.app`. Nenhum deploy de produção foi executado.
 - Dependências, providers, modelos, banco, migrations, storage, billing e recursos pagos: NONE.
 - Validação manual restante: instalação em dispositivos Android/iOS reais e cache do WhatsApp após publicação em Preview.
 
@@ -71,7 +72,7 @@ Hanira AI é o produto/plataforma. Nira é a inteligência da Hanira; provider e
 | 16.9 Free-First Image Router | `pacote-16-9-image-free-first-router` / `c875998` | Implementado e pushed; seleção free-first, custo/capacidade antes da rede, failover somente free. |
 | 17.0 Image UX | `pacote-17-0-image-ux` / `92457c3` | Implementado e pushed; `/api/image`, composer explícito, referências, ratios, card/download/regenerate. |
 | 17.1 Production Beta Hardening | `pacote-17-1-image-production-beta` / `94d0e18`; merge `100379f` | Concluído e mergeado via PR #17. Hardening de concorrência/duplicate-click, correção multipart/JSON Base64 e verificação de produção Flux PASS. |
-| 17.2 Identity + Brand + PWA + Social | `pacote-17-2-identity-brand-pwa-social` | Implementado e validado localmente; aguardando commit/push e Preview para revisão humana. |
+| 17.2 Identity + Brand + PWA + Social | `pacote-17-2-identity-brand-pwa-social` / `fa49b7c` | Implementado, validado e publicado; Vercel Preview automático PASS. Aguardando revisão humana. |
 
 Package 17.2 é o pacote atual.
 
@@ -185,8 +186,7 @@ Nenhum defeito ativo de Cloudflare permaneceu após o 17.1C. A verificação de 
 
 ## 24. OPEN WORK
 
-- Commitar e publicar somente a branch do Package 17.2.
-- Validar instalação Android/iOS e previews sociais em URL publicada, sem deploy de produção neste pacote.
+- Validar instalação Android/iOS e previews sociais no Preview publicado, sem deploy de produção neste pacote.
 
 ## 25. ROADMAP — DONE / IN PROGRESS / NEXT / LATER
 
@@ -196,11 +196,11 @@ Nenhum defeito ativo de Cloudflare permaneceu após o 17.1C. A verificação de 
 
 ### IN PROGRESS
 
-17.2 implementado e validado localmente; aguardando commit/push da branch.
+17.2 implementado, validado e publicado; Vercel Preview automático PASS.
 
 ### NEXT
 
-Publicar a branch do 17.2 e revisar o Preview; merge continua sendo decisão humana.
+Revisar o Preview do 17.2; merge continua sendo decisão humana.
 
 ### LATER
 
@@ -208,7 +208,7 @@ Image persistence/gallery, provider audits Runware/Qwen, richer PWA/social metad
 
 ## 26. EXACT NEXT RECOMMENDED ACTION
 
-Publicar somente a branch do Package 17.2 e validar Preview antes de qualquer decisão humana de merge.
+Validar manualmente o Preview do Package 17.2 antes de qualquer decisão humana de merge.
 
 ## 27. IMPORTANT DO-NOT-DO RULES
 
@@ -228,7 +228,7 @@ Hanira está em uma arquitetura free-first com chat Groq/Ollama, memória/contex
 - MAIN HEAD: `100379f`
 - LAST COMPLETED PACKAGE: 17.1 merged via PR #17; Flux production verification PASS
 - CURRENT PACKAGE: 17.2 Identity + Brand + PWA + Social Install Experience
-- CURRENT STATUS: implementação e gates locais PASS; aguardando commit/push da branch
+- CURRENT STATUS: implementação, gates locais, push e Vercel Preview automático PASS
 - ACTIVE PROVIDER: Cloudflare Workers AI for image; Groq for cloud text; Ollama optional local
 - ACTIVE MODEL: image logical `nira-image-flux-klein` → `@cf/black-forest-labs/flux-2-klein-4b`
 - ZERO-COST STATUS: paid/promotional/unknown blocked; free-only routing
@@ -237,6 +237,6 @@ Hanira está em uma arquitetura free-first com chat Groq/Ollama, memória/contex
 - IDENTITY STATUS: Hanira=product, Nira=intelligence; developer Ronne Maicon Amaro dos Reis definido no prompt canônico e coberto por testes
 - LAST MAJOR FEATURES: free-first image router, authenticated image API, image composer/result card, beta concurrency guard, Flux JSON response decoding
 - OPEN ISSUES: no active Cloudflare transport issue; production verification is point-in-time and should be monitored
-- NEXT ACTION: concluir 17.2, push da branch e revisão humana do Preview/PR
+- NEXT ACTION: revisão humana do Preview e abertura de PR quando decidido
 - DO NOT TOUCH: main, other projects, DB/Supabase/Vercel, credentials, paid providers or storage
 - DO NOT MIX PROJECTS: ARIKEM Studio, EntreUS, Amaro dos Reis Parfum or any other repository
