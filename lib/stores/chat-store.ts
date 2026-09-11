@@ -42,6 +42,10 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
   updateMessage: (id: string, content: string, pending?: boolean) => void;
+  updateImageGeneration: (
+    id: string,
+    imageGeneration: ChatMessage["imageGeneration"],
+  ) => void;
   markMessageFailed: (id: string, errorCode?: ChatErrorCode) => void;
   removeMessage: (id: string) => void;
   removeAttachment: (messageId: string, attachmentId: string) => void;
@@ -226,6 +230,21 @@ export const useChatStore = create<ChatState>()(
             ),
           })),
         })),
+      updateImageGeneration: (id, imageGeneration) =>
+        set((state) => ({
+          conversations: state.conversations.map((conversation) => ({
+            ...conversation,
+            messages: conversation.messages.map((message) =>
+              message.id === id
+                ? {
+                    ...message,
+                    pending: imageGeneration?.status === "generating",
+                    imageGeneration,
+                  }
+                : message,
+            ),
+          })),
+        })),
       markMessageFailed: (id, errorCode = "unknown") =>
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
@@ -279,7 +298,15 @@ export const useChatStore = create<ChatState>()(
     {
       name: "hanira-chat",
       partialize: (state) => ({
-        conversations: state.mode === "demo" ? state.conversations : [],
+        conversations:
+          state.mode === "demo"
+            ? state.conversations.map((conversation) => ({
+                ...conversation,
+                messages: conversation.messages.map(
+                  ({ imageGeneration: _ephemeralImage, ...message }) => message,
+                ),
+              }))
+            : [],
         activeId: state.mode === "demo" ? state.activeId : null,
         sidebarCollapsed: state.sidebarCollapsed,
       }),

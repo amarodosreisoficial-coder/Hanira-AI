@@ -18,13 +18,13 @@ import {
   LoaderCircle,
   Mic,
   Paperclip,
+  Sparkles,
   Square,
   TriangleAlert,
   X,
 } from "lucide-react";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
-import { NiraImageComposer } from "@/components/chat/nira-image-composer";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
   CHAT_MESSAGE_LENGTH_ERROR,
@@ -35,6 +35,7 @@ import {
   willExceedChatMessageLimit,
 } from "@/lib/chat/message-limits";
 import {
+  ACCEPTED_IMAGE_MIME_TYPES,
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_DOCUMENTS_PER_MESSAGE,
   MAX_IMAGES_PER_MESSAGE,
@@ -49,6 +50,11 @@ import {
 } from "@/lib/validation/media";
 import { streamChatMessage } from "@/services/chat-service";
 import { uploadMediaFiles } from "@/services/media-service";
+import { generateImage, imageGenerationErrorMessage, type ImageReferenceDraft } from "@/services/image-service";
+import { ImageComposerOptions } from "@/components/chat/image-composer-options";
+import { resolveComposerIntent, type ComposerMode } from "@/lib/chat/composer-intent";
+import { IMAGE_ASPECT_RATIO_PRESETS, type ImageAspectRatioPreset } from "@/lib/ai/image/aspect-ratios";
+import { IMAGE_REFERENCE_MAX_COUNT } from "@/lib/validation/image-request";
 import type { ChatMessage } from "@/types/chat";
 import type { Attachment, AttachmentType } from "@/types/media";
 import type { UserSettings } from "@/types/settings";
@@ -74,10 +80,16 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [privacyKind, setPrivacyKind] = useState<"camera" | "microphone" | null>(
     null,
   );
+  const [composerMode, setComposerMode] = useState<ComposerMode>("text");
+  const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatioPreset>("1:1");
+  const [imageReferences, setImageReferences] = useState<ImageReferenceDraft[]>([]);
+  const [imageReferenceInputKey, setImageReferenceInputKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const imageGenerationAbortRef = useRef<AbortController | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const { ref, resize } = useAutoResize();
   const store = useChatStore();
   const messageLength = getChatMessageLength(store.draft);
@@ -85,6 +97,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const showOperationalIssue = Boolean(
     issue && !store.activeConversation()?.messages.some((message) => message.failed),
   );
+
+  const effectiveIntent = resolveComposerIntent({ mode: composerMode, draft: store.draft });
+  const isImageMode = composerMode === "image";
+  const isGeneratingImage = effectiveIntent === "image" && store.isThinking;
 
   function showMessageLengthError() {
     setError(CHAT_MESSAGE_LENGTH_ERROR);
@@ -97,6 +113,149 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   async function ensureConversation() {
     if (!store.activeConversation()) await store.newConversation();
     return useChatStore.getState().activeConversation();
+  }
+
+  useEffect(() => {
+    const handleRegenerate = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        assistantId: string;
+        prompt: string;
+        aspectRatio: ImageAspectRatioPreset;
+        references: ImageReferenceDraft[];
+      }>).detail;
+      setComposerMode("image");
+      setImageAspectRatio(detail.aspectRatio);
+      void handleImageGeneration({
+        prompt: detail.prompt,
+        aspectRatio: detail.aspectRatio,
+        references: detail.references,
+        assistantId: detail.assistantId,
+      });
+    };
+    window.addEventListener("hanira:regenerate-image", handleRegenerate);
+    return () => window.removeEventListener("hanira:regenerate-image", handleRegenerate);
+  }, []);
+
+  async function handleImageGeneration(options: {
+    prompt: string;
+    aspectRatio: ImageAspectRatioPreset;
+    references: ImageReferenceDraft[];
+    assistantId?: string;
+  }) {
+    const { prompt, aspectRatio, references, assistantId } = options;
+    setError("");
+    setIssue(null);
+    const conversation = await ensureConversation();
+    if (!conversation) {
+      setError("Não foi possível iniciar uma conversa.");
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: prompt,
+      createdAt: new Date().toISOString(),
+    };
+    store.addMessage(userMessage);
+
+    const assistantIdToUse =
+      assistantId ??
+      crypto.randomUUID();
+    const assistantMessage: ChatMessage = {
+      id: assistantIdToUse,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      pending: true,
+      imageGeneration: {
+        status: "generating",
+        prompt,
+        aspectRatio,
+        references,
+      },
+    };
+    store.addMessage(assistantMessage);
+    store.setThinking(true);
+
+    const abortController = new AbortController();
+    imageGenerationAbortRef.current = abortController;
+
+    try {
+      const result = await generateImage(
+        { prompt, aspectRatio, references },
+        abortController.signal,
+      );
+      store.updateImageGeneration(assistantIdToUse, {
+        status: "ready",
+        prompt,
+        aspectRatio,
+        references,
+        result,
+      });
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+      const errorCode =
+        error instanceof Error && error.message === "capacity_unavailable"
+          ? "capacity_unavailable"
+          : "generation_unavailable";
+      store.updateImageGeneration(assistantIdToUse, {
+        status: "error",
+        prompt,
+        aspectRatio,
+        references,
+        errorMessage: imageGenerationErrorMessage(errorCode),
+      });
+    } finally {
+      store.setThinking(false);
+      imageGenerationAbortRef.current = null;
+    }
+  }
+
+  function exitImageMode() {
+    setComposerMode("text");
+    setImageReferences([]);
+    setImageReferenceInputKey((value) => value + 1);
+  }
+
+  function handlePickImageReferences() {
+    imageReferenceInputRef.current?.click();
+  }
+
+  function handleImageReferenceFiles(files: File[]) {
+    const accepted: ImageReferenceDraft[] = [];
+    for (const file of files) {
+      if (
+        !ACCEPTED_IMAGE_MIME_TYPES.includes(
+          file.type as (typeof ACCEPTED_IMAGE_MIME_TYPES)[number],
+        ) ||
+        !file.size ||
+        file.size > mediaConfig.maxImageSizeBytes
+      ) {
+        setMessage("Use PNG, JPEG ou WebP dentro do limite permitido.");
+        continue;
+      }
+      accepted.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+      });
+    }
+    if (imageReferences.length + accepted.length > IMAGE_REFERENCE_MAX_COUNT) {
+      accepted.forEach((ref) => URL.revokeObjectURL(ref.previewUrl));
+      setMessage("Você pode usar até 4 imagens de referência.");
+      return;
+    }
+    setImageReferences((current) => [...current, ...accepted]);
+  }
+
+  function handleRemoveImageReference(reference: ImageReferenceDraft) {
+    URL.revokeObjectURL(reference.previewUrl);
+    setImageReferences((current) => current.filter((ref) => ref.id !== reference.id));
+  }
+
+  function setMessage(message: string) {
+    setError(message);
   }
 
   async function addFiles(files: File[]) {
@@ -171,6 +330,24 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     const content = rawContent.trim();
     const hasMedia = pendingMedia.length > 0 || Boolean(attachmentOverride?.length);
     if ((!content && !hasMedia) || store.isThinking || uploading) return;
+
+    // Pacote 17.4: roteamento determinístico de intent de imagem.
+    // Se o modo imagem estiver ativo ou o texto for um pedido claro de imagem,
+    // roteamos para o gerador de imagens em vez do chat de texto.
+    const intent = resolveComposerIntent({ mode: composerMode, draft: content });
+    if (intent === "image" && !retry) {
+      void handleImageGeneration({
+        prompt: content,
+        aspectRatio: imageAspectRatio,
+        references: imageReferences,
+      });
+      setPendingMedia([]);
+      store.setDraft("");
+      if (ref.current) ref.current.style.height = "0px";
+      exitImageMode();
+      return;
+    }
+
     const conversation = await ensureConversation();
     if (!conversation) return;
 
@@ -464,6 +641,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     !uploading &&
     !store.isThinking;
 
+  const canSendImage = isImageMode && Boolean(store.draft.trim()) && !store.isThinking;
+
   return (
     <>
       <div
@@ -471,7 +650,6 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         onDrop={handleDrop}
         className="chat-composer-shell relative z-20 mx-auto w-full max-w-[50rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-7 sm:pb-5"
       >
-        <NiraImageComposer />
         {showOperationalIssue && issue && (
           <div
             id="chat-operational-error"
@@ -624,52 +802,97 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               event.target.value = "";
             }}
           />
+          <input
+            key={imageReferenceInputKey}
+            ref={imageReferenceInputRef}
+            type="file"
+            hidden
+            multiple
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => {
+              void handleImageReferenceFiles(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
+          />
+          {isImageMode && (
+            <ImageComposerOptions
+              aspectRatio={imageAspectRatio}
+              references={imageReferences}
+              busy={store.isThinking}
+              onExit={exitImageMode}
+              onRatioChange={setImageAspectRatio}
+              onPickReferences={handlePickImageReferences}
+              onRemoveReference={handleRemoveImageReference}
+            />
+          )}
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="flex items-center">
-              <button
-                type="button"
-                disabled={!mediaConfig.attachmentsEnabled}
-                onClick={() => documentInputRef.current?.click()}
-                aria-label="Adicionar documento"
-                title="Adicionar documento"
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-              >
-                <Paperclip className="size-[18px]" />
-              </button>
-              <button
-                type="button"
-                disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                onClick={() => imageInputRef.current?.click()}
-                aria-label="Adicionar imagem"
-                title="Adicionar imagem"
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-              >
-                <ImagePlus className="size-[18px]" />
-              </button>
-              <button
-                type="button"
-                disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                onClick={() => void requestMediaAccess("camera")}
-                aria-label="Tirar foto"
-                title="Tirar foto"
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-              >
-                <Camera className="size-[18px]" />
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !mediaConfig.voiceEnabled ||
-                  !settings.voiceEnabled ||
-                  !settings.transcriptionEnabled
-                }
-                onClick={() => void requestMediaAccess("microphone")}
-                aria-label="Gravar voz"
-                title={settings.voiceEnabled ? "Gravar voz" : "Ative a voz nas configuracoes"}
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-              >
-                <Mic className="size-[18px]" />
-              </button>
+              {!isImageMode && (
+                <button
+                  type="button"
+                  onClick={() => setComposerMode("image")}
+                  aria-label="Criar imagem"
+                  title="Criar imagem"
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground"
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-medium">
+                    <ImagePlus className="size-[18px]" />
+                    Criar imagem
+                  </span>
+                </button>
+              )}
+              {!isImageMode && (
+                <button
+                  type="button"
+                  disabled={!mediaConfig.attachmentsEnabled}
+                  onClick={() => documentInputRef.current?.click()}
+                  aria-label="Adicionar documento"
+                  title="Adicionar documento"
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+                >
+                  <Paperclip className="size-[18px]" />
+                </button>
+              )}
+              {!isImageMode && (
+                <button
+                  type="button"
+                  disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label="Adicionar imagem"
+                  title="Adicionar imagem"
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+                >
+                  <ImagePlus className="size-[18px]" />
+                </button>
+              )}
+              {!isImageMode && (
+                <button
+                  type="button"
+                  disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                  onClick={() => void requestMediaAccess("camera")}
+                  aria-label="Tirar foto"
+                  title="Tirar foto"
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+                >
+                  <Camera className="size-[18px]" />
+                </button>
+              )}
+              {!isImageMode && (
+                <button
+                  type="button"
+                  disabled={
+                    !mediaConfig.voiceEnabled ||
+                    !settings.voiceEnabled ||
+                    !settings.transcriptionEnabled
+                  }
+                  onClick={() => void requestMediaAccess("microphone")}
+                  aria-label="Gravar voz"
+                  title={settings.voiceEnabled ? "Gravar voz" : "Ative a voz nas configuracoes"}
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+                >
+                  <Mic className="size-[18px]" />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <span
@@ -681,7 +904,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               {store.isThinking ? (
                 <button
                   type="button"
-                  onClick={() => abortRef.current?.abort()}
+                  onClick={() => {
+                    abortRef.current?.abort();
+                    imageGenerationAbortRef.current?.abort();
+                  }}
                   aria-label="Interromper resposta"
                   className="grid size-9 place-items-center rounded-xl bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -691,12 +917,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 <button
                   type="button"
                   onClick={() => void submit()}
-                  disabled={!canSend}
-                  aria-label="Enviar mensagem"
+                  disabled={isImageMode ? !canSendImage : !canSend}
+                  aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
                   className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {uploading ? (
                     <LoaderCircle className="size-4 animate-spin" />
+                  ) : isImageMode ? (
+                    <Sparkles className="size-4" />
                   ) : (
                     <ArrowUp className="size-4" />
                   )}

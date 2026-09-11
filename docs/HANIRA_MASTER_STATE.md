@@ -1,5 +1,5 @@
 # HANIRA AI — MASTER STATE REPORT
-## Recovery Snapshot — Package 17.3
+## Recovery Snapshot — Package 17.4
 
 Atualizado em 2026-09-11. Este documento descreve o estado corrente; resultados antigos permanecem identificados como snapshots históricos no ledger.
 
@@ -13,8 +13,9 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
 - Base atual sincronizada: `main` / `88d8a36be3db3f572eedd3b5df4dbaea74102de8`
-- Branch atual: `pacote-17-3-runtime-economy-capability-awareness`
-- Commit do Package 17.3: `feat: add Nira capability awareness and context economy`; o hash autoritativo é o HEAD publicado da branch.
+- Branch atual: `pacote-17-4-unified-composer-image-ux`
+- Commit do Package 17.3: merge `45c47051956380599ebc6f880ce361af06894bee` via PR #19.
+- Package 17.4: Unified Chat Composer + Image Intent Routing + Premium Conversational UX.
 
 ## 3. CURRENT GIT STATE
 
@@ -28,7 +29,8 @@ O Package 17.2 foi mergeado pelo PR #18 no commit `88d8a36be3db3f572eedd3b5df4db
 | 17.0 | histórico anterior ao 17.1 | Concluído; UX/API de imagem free-first. |
 | 17.1 | `94d0e18`; merge `100379f` via PR #17 | Concluído e mergeado; hardening e smoke controlado do Flux passaram naquele snapshot. |
 | 17.2 | `fa49b7c`, `af09919`; merge `88d8a36` via PR #18 | Concluído e mergeado; identidade, marca, PWA, instalação e metadata social. |
-| 17.3 | branch `pacote-17-3-runtime-economy-capability-awareness` | Implementado e validado localmente; push/Preview registrados no relatório final externo ao commit. |
+| 17.3 | `45c4705`; merge via PR #19 | MERGED. |
+| 17.4 | branch `pacote-17-4-unified-composer-image-ux` | Implementado e validado localmente. Single composer, image intent determinístico, UX premium. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -50,6 +52,19 @@ O Package 17.2 foi mergeado pelo PR #18 no commit `88d8a36be3db3f572eedd3b5df4db
 - Memory Relevance V2: overlap lexical normalizado, importância, bônus de escopo de projeto quando relevante, recência disponível, deduplicação e ordenação determinística; sem embeddings, vector DB ou IA externa.
 - Observabilidade allow-listed: `context_budget_applied` e `self_knowledge_resolved`; somente IDs, intent, contagens, caracteres, duração e flags.
 - UI de sistema mostra “Recursos da Nira” sem provider/modelo; a lista estática divergente de “próximas capacidades” foi removida.
+
+## 6A. PACKAGE 17.4 — IMPLEMENTED STATE
+
+- **Single Composer**: apenas um textarea principal visível; experiência de duas barras removida; `NiraImageComposer` não é mais um formulário separado.
+- **Text Mode**: texto normal continua usando `/api/chat`.
+- **Image Mode**: botão discreto "Criar imagem"; mesmo textarea; proporção e referência em controles compactos (`ImageComposerOptions`).
+- **Auto Image Intent**: reconhecimento local e determinístico de pedidos claros ("gere uma imagem de...", "crie uma imagem de...", "desenhe uma arte de...", "generate an image of..."). Perguntas como "você gera imagens?" continuam em `/api/chat`. Nenhum provider é chamado para detectar intent.
+- **Image Result**: imagem mostrada dentro da conversa como resposta da Nira; estado "Gerando imagem..."; download; regenerate; lightbox.
+- **Storage Safety**: imagens geradas permanecem efêmeras; nunca persistir `data:image/...;base64,...` em localStorage, conversations, Supabase, messages, memory ou logs.
+- **UI Polish**: removido "quadrado dentro de quadrado"; textarea sem outline retangular interno dominante; foco no container arredondado; visual mais natural; menos bordas/blocos.
+- **PWA Install**: card grande fixo removido; substituído por pequeno ícone/botão discreto com tooltip "Instalar Hanira"; click abre native install prompt; iOS abre popover curto; standalone = oculto.
+- **Model/Provider**: não mostra modelId, providerId, Flux ou Cloudflare na UI da imagem.
+- **Testes**: 62 novos testes adicionados (759 total). Cobre positive/negative intents, explicit image mode, normal text, image routing, single textarea, no second textarea, image result, download, regenerate, references, no base64 persistence, no model/provider UI, compact install, standalone hidden, iOS popover.
 
 ## 7. CURRENT PRODUCT CAPABILITIES
 
@@ -129,14 +144,17 @@ Nenhum desses eventos inclui prompt, resposta, memória, attachment, Authorizati
 
 ## 17. TEST / BUILD STATUS
 
-Snapshot local do Package 17.3 antes do commit:
+Snapshot local do Package 17.4 antes do commit:
 
-- `npm test`: PASS — 697 passed / 7 skipped / 74 files.
+- `npm test`: PASS — 759 passed / 7 skipped / 81 files (62 novos testes).
 - `npm run typecheck`: PASS.
-- `npm run lint`: PASS — 0 errors / 6 warnings preexistentes.
+- `npm run lint`: PASS — 0 errors / 11 warnings preexistentes.
 - `npm run build`: PASS — Next.js 16.3.3.
 - `npm run verify:release`: PASS, incluindo todos os verificadores offline, build e `git diff --check`.
 - Testes e verificadores não fizeram chamadas reais de Groq, Cloudflare, OpenAI, Ollama remoto ou weather.
+
+Snapshot do Package 17.3 (mergeado):
+- `npm test`: PASS — 697 passed / 7 skipped / 74 files.
 
 ## 18. SECURITY STATUS
 
@@ -161,11 +179,11 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ### DONE
 
-Packages 16.4–17.2 concluídos; 17.1 mergeado via PR #17 e 17.2 mergeado via PR #18 em `88d8a36`.
+Packages 16.4–17.3 concluídos; 17.1 mergeado via PR #17, 17.2 mergeado via PR #18 em `88d8a36`, 17.3 mergeado via PR #19 em `45c4705`.
 
 ### CURRENT
 
-Package 17.3 implementado e validado na branch dedicada. Push e Preview são conferidos no relatório final.
+Package 17.4 implementado e validado na branch dedicada `pacote-17-4-unified-composer-image-ux`. Push e Preview são conferidos no relatório final.
 
 ### NEXT
 
@@ -173,7 +191,7 @@ Revisão humana da branch e do Vercel Preview; abertura de PR somente após nova
 
 ### LATER
 
-Gemini, OpenRouter, RAG, embeddings, vector DB, ledger de créditos, quota distribuída, gallery, Nira API, Academic Copilot e Course Builder não foram iniciados.
+Package 17.5 candidate: Distributed Usage Guard + Free Capacity Protection + Usage Dashboard. Gemini, OpenRouter, RAG, embeddings, vector DB, ledger de créditos, quota distribuída, gallery, Nira API, Academic Copilot e Course Builder não foram iniciados.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
@@ -181,7 +199,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Após o push e o Preview automático, realizar revisão humana do Package 17.3. Não abrir PR automaticamente.
+Após o push e o Preview automático, realizar revisão humana do Package 17.4. Não abrir PR automaticamente.
 
 ## CHATGPT RECOVERY BLOCK
 

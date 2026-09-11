@@ -39,6 +39,8 @@ export function InstallExperience() {
   const [standalone, setStandalone] = useState(true);
   const [ios, setIos] = useState(false);
   const [dismissed, setDismissed] = useState(true);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [iosPopoverOpen, setIosPopoverOpen] = useState(false);
 
   useEffect(() => {
     const displayMode = window.matchMedia("(display-mode: standalone)");
@@ -83,15 +85,6 @@ export function InstallExperience() {
     ios,
   });
 
-  const dismiss = () => {
-    try {
-      sessionStorage.setItem(DISMISSED_KEY, "1");
-    } catch {
-      // A dica continua dispensável mesmo quando o storage está indisponível.
-    }
-    setDismissed(true);
-  };
-
   const install = async () => {
     if (!installPrompt) return;
     try {
@@ -99,52 +92,76 @@ export function InstallExperience() {
       await installPrompt.userChoice;
     } finally {
       setInstallPrompt(null);
+      setTooltipOpen(false);
+    }
+  };
+
+  const handleInstallClick = () => {
+    if (experience === "native-prompt") {
+      void install();
+    } else if (experience === "ios-guidance") {
+      setIosPopoverOpen(true);
     }
   };
 
   if (experience === "none") return null;
 
   return (
-    <aside
-      aria-label="Instalar Hanira"
-      aria-live="polite"
-      className="fixed right-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-violet-300/15 bg-[#100d15]/95 p-3 text-zinc-100 shadow-2xl shadow-black/50 backdrop-blur-xl sm:right-4"
+    <div
+      className="fixed bottom-3 right-3 z-50 sm:bottom-4 sm:right-4"
       style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
-      <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-violet-200">
-          {experience === "native-prompt" ? (
-            <Download className="size-5" aria-hidden="true" />
-          ) : (
-            <Share className="size-5" aria-hidden="true" />
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Instalar Hanira</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-400">
-            {experience === "native-prompt"
-              ? "Use a Hanira como aplicativo, com acesso direto pela sua tela inicial."
-              : "No iPhone ou iPad, toque em Compartilhar e depois em Adicionar à Tela de Início."}
-          </p>
-          {experience === "native-prompt" ? (
+      {iosPopoverOpen && (
+        <div
+          role="dialog"
+          aria-label="Instalar Hanira no iOS"
+          className="mb-2 w-72 rounded-2xl border border-border/60 bg-card/95 p-4 text-foreground shadow-xl shadow-black/30 backdrop-blur-xl"
+        >
+          <div className="flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Share className="size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Adicionar à Tela de Início</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                No Safari, toque em <strong>Compartilhar</strong> e depois em{" "}
+                <strong>Adicionar à Tela de Início</strong>.
+              </p>
+            </div>
             <button
               type="button"
-              onClick={install}
-              className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-white px-4 text-xs font-semibold text-black transition hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              onClick={() => setIosPopoverOpen(false)}
+              aria-label="Fechar"
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
-              Adicionar Hanira
+              <X className="size-3.5" aria-hidden="true" />
             </button>
-          ) : null}
+          </div>
         </div>
+      )}
+      <div className="relative">
         <button
           type="button"
-          onClick={dismiss}
-          aria-label="Dispensar instalação"
-          className="grid size-11 shrink-0 place-items-center rounded-xl text-zinc-500 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+          onClick={handleInstallClick}
+          onMouseEnter={() => setTooltipOpen(true)}
+          onMouseLeave={() => setTooltipOpen(false)}
+          onFocus={() => setTooltipOpen(true)}
+          onBlur={() => setTooltipOpen(false)}
+          aria-label="Instalar Hanira"
+          title="Instalar Hanira"
+          className="grid size-11 place-items-center rounded-full border border-border/60 bg-card/90 text-muted-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition hover:border-primary/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <X className="size-4" aria-hidden="true" />
+          <Download className="size-[18px]" aria-hidden="true" />
         </button>
+        {tooltipOpen && !iosPopoverOpen && (
+          <div
+            role="tooltip"
+            className="absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-lg border border-border/60 bg-card/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-lg shadow-black/20 backdrop-blur-xl"
+          >
+            Instalar Hanira
+          </div>
+        )}
       </div>
-    </aside>
+    </div>
   );
 }
