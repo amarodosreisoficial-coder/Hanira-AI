@@ -22,6 +22,14 @@ import {
   logAIProviderErrorThrown,
 } from "@/lib/ai/ai-provider-error-logging";
 import { buildSystemPrompt } from "@/lib/ai/runtime/system-prompt";
+import {
+  buildCapabilitySummary,
+  getPublicAICapabilities,
+} from "@/lib/ai/public-capabilities";
+import {
+  createSelfKnowledgeTextResponse,
+  resolveSelfKnowledge,
+} from "@/lib/ai/runtime/self-knowledge";
 import { AIProviderError } from "@/lib/ai/types";
 import {
   createRequestId,
@@ -482,6 +490,28 @@ async function createChatStream(
     ...(chatContext.legacyScopeUsed ? { legacyScopeUsed: true } : {}),
   });
 
+  logServerEvent({
+    level: "info",
+    requestId,
+    projectId: chatContext.projectId,
+    conversationId,
+    route: "/api/chat",
+    event: "context_budget_applied",
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    stage: "context_budget",
+    details: {
+      historyCount: chatContext.contextBudget.messagesConsidered,
+      selectedHistoryCount: chatContext.contextBudget.messagesIncluded,
+      historyCharacters: chatContext.contextBudget.charactersIncluded,
+      historyTruncated: chatContext.contextBudget.truncated,
+      memoryCount: chatContext.contextBudget.memoryCount,
+      selectedMemoryCount: chatContext.contextBudget.selectedMemoryCount,
+      memoryCharacters: chatContext.contextBudget.memoryCharacters,
+      memoryTruncated: chatContext.contextBudget.memoryTruncated,
+    },
+  });
+
   if (chatContext.legacyScopeUsed) {
     logLegacyConversationScopeUsed({
       requestId,
@@ -589,12 +619,52 @@ async function createChatStream(
     .eq("user_id", userId)
     .eq("title", "Uma nova conversa");
 
+  const productCapabilities = getPublicAICapabilities();
   const systemPrompt = buildSystemPrompt({
     baseInstructions: SYSTEM_PROMPT,
     personalityInstructions: chatContext.personalityInstructions,
     projectLabel: chatContext.projectName,
     relevantMemories: chatContext.relevantMemories,
+    capabilitySummary: buildCapabilitySummary(productCapabilities),
   });
+  const selfKnowledge = resolveSelfKnowledge({
+    message: payload.message,
+    capabilities: productCapabilities,
+  });
+  if (selfKnowledge) {
+    logServerEvent({
+      level: "info",
+      requestId,
+      projectId: chatContext.projectId,
+      conversationId,
+      route: "/api/chat",
+      event: "self_knowledge_resolved",
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      stage: "deterministic_self_knowledge",
+      details: { intent: selfKnowledge.intent },
+    });
+    return createSelfKnowledgeTextResponse({
+      request,
+      conversationId,
+      requestId,
+      resolution: selfKnowledge,
+      onCancelled: releaseLock,
+      onComplete: async (assistantContent) => {
+        releaseLock();
+        await persistAssistantResponse({
+          supabase,
+          conversationId,
+          userId,
+          requestId,
+          projectId: chatContext.projectId,
+          assistantContent,
+          userMessage: payload.message,
+          startedAt,
+        });
+      },
+    });
+  }
   const routedTool = await routeTool({
     message: payload.message,
     requestId,

@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOpenAIClient } from "@/services/openai";
 import { getCapacityMetricsSnapshot } from "@/lib/observability/capacity-metrics";
 import type { SystemDiagnostics } from "@/types/diagnostics";
+import { getPublicAICapabilities } from "@/lib/ai/public-capabilities";
 
 const REQUIRED_TABLES = [
   "profiles",
@@ -55,6 +56,7 @@ export async function GET(request: Request) {
       transcription: capabilities.transcription,
       speech: capabilities.speech,
       attachments: capabilities.attachments,
+      productCapabilities: getPublicAICapabilities(),
       tables: Object.fromEntries(
         REQUIRED_TABLES.map((table) => [table, false]),
       ),
@@ -156,6 +158,7 @@ export async function GET(request: Request) {
     transcription: capabilities.transcription,
     speech: capabilities.speech,
     attachments: capabilities.attachments,
+    productCapabilities: getPublicAICapabilities(),
     tables,
     // Pacote 16.5: observabilidade basica da capacidade Nira (contadores e
     // estados em memoria; sem segredos, sem baseUrl, sem conteudo de usuario).

@@ -21,6 +21,7 @@ export function buildSystemPrompt(options: {
   personalityInstructions?: string;
   projectLabel: string;
   relevantMemories?: string[];
+  capabilitySummary?: string;
 }) {
   const sections = [
     {
@@ -36,6 +37,10 @@ export function buildSystemPrompt(options: {
       body: cleanLine(
         "Responda no mesmo idioma usado pelo usuario e, quando ele escrever em portugues, use portugues brasileiro. So mude de idioma se o usuario pedir explicitamente. Diferencie conhecimento geral de informacoes atuais: nesta instancia voce nao tem acesso direto a internet nem a ferramentas de clima, noticias, precos ou outras fontes em tempo real. Nunca diga que consultou, pesquisou ou verificou dados atuais sem uma ferramenta ter sido executada; explique a limitacao com clareza. Nao invente fatos atuais, nao prometa consultas externas e nao exiba placeholders, campos entre colchetes ou templates incompletos como resposta final. Use somente as capacidades e os dados presentes no contexto recebido.",
       ),
+    },
+    {
+      title: "Capacidades atuais",
+      body: cleanLine(options.capabilitySummary),
     },
     {
       title: "Contexto do projeto",

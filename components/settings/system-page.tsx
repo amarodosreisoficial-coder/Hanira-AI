@@ -13,6 +13,7 @@ import {
 import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
 import type { SystemDiagnostics } from "@/types/diagnostics";
+import type { NiraProductCapabilityStatus } from "@/types/capabilities";
 
 function statusLabel(status: SystemDiagnostics["text"]["status"]) {
   switch (status) {
@@ -24,6 +25,19 @@ function statusLabel(status: SystemDiagnostics["text"]["status"]) {
       return "Configuracao incompleta";
     case "unavailable":
       return "Indisponivel";
+  }
+}
+
+function productStatusLabel(status: NiraProductCapabilityStatus) {
+  switch (status) {
+    case "available":
+      return "Disponível";
+    case "limited":
+      return "Limitado";
+    case "disabled":
+      return "Desativado";
+    case "unavailable":
+      return "Indisponível";
   }
 }
 
@@ -62,22 +76,22 @@ export function SystemPage() {
         ["Banco acessivel", undefined, diagnostics.databaseAccessible],
         [
           "Texto",
-          `${statusLabel(diagnostics.text.status)}${diagnostics.text.model ? ` (${diagnostics.text.model})` : ""}`,
+          statusLabel(diagnostics.text.status),
           diagnostics.text.status === "available",
         ],
         [
           "Visao",
-          `${statusLabel(diagnostics.vision.status)}${diagnostics.vision.model ? ` (${diagnostics.vision.model})` : ""}`,
+          statusLabel(diagnostics.vision.status),
           diagnostics.vision.status === "available",
         ],
         [
           "Transcricao",
-          `${statusLabel(diagnostics.transcription.status)}${diagnostics.transcription.model ? ` (${diagnostics.transcription.model})` : ""}`,
+          statusLabel(diagnostics.transcription.status),
           diagnostics.transcription.status === "available",
         ],
         [
           "Voz",
-          `${statusLabel(diagnostics.speech.status)}${diagnostics.speech.voice ? ` (${diagnostics.speech.voice})` : ""}`,
+          statusLabel(diagnostics.speech.status),
           diagnostics.speech.status === "available",
         ],
         [
@@ -128,6 +142,37 @@ export function SystemPage() {
           </Button>
           {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
         </div>
+
+        {diagnostics && (
+          <section className="mt-8">
+            <h2 className="text-sm font-medium">Recursos da Nira</h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-600">
+              Disponibilidade do produto, sem detalhes internos de provider ou modelo.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {diagnostics.productCapabilities.map((capability) => {
+                const usable = capability.status === "available" || capability.status === "limited";
+                return (
+                  <article
+                    key={capability.id}
+                    className="rounded-xl border border-white/[0.065] bg-white/[0.025] p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-zinc-300">{capability.label}</p>
+                      <span className={`flex items-center gap-1.5 text-[10px] ${usable ? "text-emerald-300" : "text-amber-300"}`}>
+                        {usable ? <CheckCircle2 className="size-3" /> : <CircleAlert className="size-3" />}
+                        {productStatusLabel(capability.status)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                      {capability.description}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {diagnostics && (
           <section className="mt-8 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
