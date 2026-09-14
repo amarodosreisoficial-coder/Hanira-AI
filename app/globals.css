@@ -378,14 +378,25 @@ select:focus-visible {
 /* Nira composer — one unified surface, no double frame */
 .nira-composer {
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32);
+  transition: box-shadow 0.2s ease;
 }
 
 .nira-composer textarea {
   line-height: 1.6;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.nira-composer textarea:focus {
+  outline: none;
+  box-shadow: none;
+  border: none;
 }
 
 .compose-surface:focus-within {
-  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(167, 139, 250, 0.18);
 }
 
 .chat-code > span {

@@ -42,6 +42,10 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
   updateMessage: (id: string, content: string, pending?: boolean) => void;
+  updateImageGeneration: (
+    id: string,
+    imageGeneration: ChatMessage["imageGeneration"],
+  ) => void;
   markMessageFailed: (id: string, errorCode?: ChatErrorCode) => void;
   removeMessage: (id: string) => void;
   removeAttachment: (messageId: string, attachmentId: string) => void;
@@ -219,9 +223,26 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === id
                 ? { ...message, content, pending, failed: false }
+                : message,
+            ),
+          })),
+        })),
+      updateImageGeneration: (id, imageGeneration) =>
+        set((state) => ({
+          conversations: state.conversations.map((conversation) => ({
+            ...conversation,
+            messages: conversation.messages
+                  .map((message) =>
+              message.id === id
+                ? {
+                    ...message,
+                    pending: imageGeneration?.status === "generating",
+                    imageGeneration,
+                  }
                 : message,
             ),
           })),
@@ -230,7 +251,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === id
                 ? { ...message, pending: false, failed: true, errorCode }
                 : message,
@@ -250,7 +272,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === messageId
                 ? {
                     ...message,
@@ -279,7 +302,22 @@ export const useChatStore = create<ChatState>()(
     {
       name: "hanira-chat",
       partialize: (state) => ({
-        conversations: state.mode === "demo" ? state.conversations : [],
+        conversations:
+          state.mode === "demo"
+            ? state.conversations.map((conversation) => ({
+                ...conversation,
+                messages: conversation.messages
+                  .map((message) => {
+                    const { imageGeneration: _ignored, ...rest } = message;
+                    void _ignored;
+                    return rest;
+                  })
+                  .filter(
+                    (message) =>
+                      !(message.role === "assistant" && message.content.trim() === ""),
+                  ),
+              }))
+            : [],
         activeId: state.mode === "demo" ? state.activeId : null,
         sidebarCollapsed: state.sidebarCollapsed,
       }),

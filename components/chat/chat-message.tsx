@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, Copy, RotateCcw, TriangleAlert } from "lucide-react";
 import { MessageContent } from "@/components/chat/message-content";
+import { GeneratedImageResponse } from "@/components/chat/generated-image-response";
 import { NiraPresence } from "@/components/chat/nira-presence";
 import { MessageAttachments } from "@/components/media/message-attachments";
 import { IconButton } from "@/components/ui/icon-button";
@@ -71,7 +72,14 @@ export function ChatMessage({
           messageId={message.id}
         />
 
-        {message.content && <MessageContent content={message.content} />}
+        {message.imageGeneration ? (
+          <GeneratedImageResponse
+            messageId={message.id}
+            generation={message.imageGeneration}
+          />
+        ) : (
+          message.content && <MessageContent content={message.content} />
+        )}
 
         {message.pending && message.content && (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" role="status">
