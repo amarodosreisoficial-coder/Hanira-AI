@@ -223,7 +223,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === id
                 ? { ...message, content, pending, failed: false }
                 : message,
@@ -234,7 +235,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === id
                 ? {
                     ...message,
@@ -249,7 +251,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === id
                 ? { ...message, pending: false, failed: true, errorCode }
                 : message,
@@ -269,7 +272,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
-            messages: conversation.messages.map((message) =>
+            messages: conversation.messages
+                  .map((message) =>
               message.id === messageId
                 ? {
                     ...message,
@@ -302,13 +306,16 @@ export const useChatStore = create<ChatState>()(
           state.mode === "demo"
             ? state.conversations.map((conversation) => ({
                 ...conversation,
-                messages: conversation.messages.map(
-                  (message) => {
+                messages: conversation.messages
+                  .map((message) => {
                     const { imageGeneration: _ignored, ...rest } = message;
                     void _ignored;
                     return rest;
-                  },
-                ),
+                  })
+                  .filter(
+                    (message) =>
+                      !(message.role === "assistant" && message.content.trim() === ""),
+                  ),
               }))
             : [],
         activeId: state.mode === "demo" ? state.activeId : null,

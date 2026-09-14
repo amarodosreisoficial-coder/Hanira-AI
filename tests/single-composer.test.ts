@@ -34,4 +34,15 @@ describe("single composer textarea", () => {
   it("alterna com setComposerMode", () => {
     expect(composer).toContain("setComposerMode");
   });
+  it("possui placeholder dinâmico para modo imagem", () => {
+    expect(composer).toContain("Descreva a imagem que você quer criar...");
+  });
+
+  it("mantém placeholder padrão para modo texto", () => {
+    expect(composer).toContain("Converse com a Nira...");
+  });
+
+  it("usa isImageMode para alternar placeholder", () => {
+    expect(composer).toContain("isImageMode");
+  });
 });

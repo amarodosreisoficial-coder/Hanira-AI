@@ -13,6 +13,10 @@ const generatedImageResponse = readFileSync(
   new URL("../components/chat/generated-image-response.tsx", import.meta.url),
   "utf8",
 );
+const composer = readFileSync(
+  new URL("../components/chat/chat-composer.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("storage safety: no base64 persistence", () => {
   it("store remove imageGeneration antes de persistir no modo demo", () => {
@@ -42,5 +46,13 @@ describe("storage safety: no base64 persistence", () => {
       /partialize[\s\S]*?imageGeneration[\s\S]*?\}/,
     );
     expect(partializeMatch).not.toBeNull();
+  });
+  it("store remove assistant vazio ao persistir (modo demo)", () => {
+    // A partialize deve filtrar mensagens assistant com conteúdo vazio
+    expect(chatStore).toContain("message.content.trim() === \"\"");
+  });
+
+  it("abort define mensagem amigável 'Geração interrompida'", () => {
+    expect(composer).toContain("Geração interrompida.");
   });
 });

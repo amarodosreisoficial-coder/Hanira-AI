@@ -47,4 +47,9 @@ describe("image result in conversation", () => {
   it("store possui updateImageGeneration", () => {
     expect(chatStore).toContain("updateImageGeneration");
   });
+
+  it("store remove assistant vazio ao persistir (modo demo)", () => {
+    // A partialize deve filtrar mensagens assistant com conteúdo vazio
+    expect(chatStore).toContain("message.content.trim() === \"\"");
+  });
 });

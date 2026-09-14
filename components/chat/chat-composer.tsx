@@ -158,31 +158,47 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       return;
     }
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: prompt,
-      createdAt: new Date().toISOString(),
-    };
-    store.addMessage(userMessage);
+    const isRegeneration = Boolean(assistantId);
 
-    const assistantIdToUse =
-      assistantId ??
-      crypto.randomUUID();
-    const assistantMessage: ChatMessage = {
-      id: assistantIdToUse,
-      role: "assistant",
-      content: "",
-      createdAt: new Date().toISOString(),
-      pending: true,
-      imageGeneration: {
+    // First generation: add user + assistant messages.
+    // Regeneration: reuse existing assistant message, do NOT duplicate.
+    if (!isRegeneration) {
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: prompt,
+        createdAt: new Date().toISOString(),
+      };
+      store.addMessage(userMessage);
+    }
+
+    const assistantIdToUse = assistantId ?? crypto.randomUUID();
+
+    if (!isRegeneration) {
+      const assistantMessage: ChatMessage = {
+        id: assistantIdToUse,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        pending: true,
+        imageGeneration: {
+          status: "generating",
+          prompt,
+          aspectRatio,
+          references,
+        },
+      };
+      store.addMessage(assistantMessage);
+    } else {
+      // Regenerate: reset existing assistant message to generating state.
+      store.updateImageGeneration(assistantIdToUse, {
         status: "generating",
         prompt,
         aspectRatio,
         references,
-      },
-    };
-    store.addMessage(assistantMessage);
+      });
+    }
+
     store.setThinking(true);
 
     const abortController = new AbortController();
@@ -201,7 +217,17 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         result,
       });
     } catch (error) {
-      if (abortController.signal.aborted) return;
+      if (abortController.signal.aborted) {
+        // Abort: mark message as not pending, set error state.
+        store.updateImageGeneration(assistantIdToUse, {
+          status: "error",
+          prompt,
+          aspectRatio,
+          references,
+          errorMessage: "Geração interrompida.",
+        });
+        return;
+      }
       const errorCode =
         error instanceof Error && error.message === "capacity_unavailable"
           ? "capacity_unavailable"
@@ -767,7 +793,11 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 : "chat-message-length"
             }
             placeholder={
-              pendingMedia.length ? "Pergunte sobre o arquivo..." : "Converse com a Nira..."
+              pendingMedia.length
+                ? "Pergunte sobre o arquivo..."
+                : isImageMode
+                  ? "Descreva a imagem que você quer criar..."
+                  : "Converse com a Nira..."
             }
             onChange={(event) => {
               const nextValue = event.target.value;
