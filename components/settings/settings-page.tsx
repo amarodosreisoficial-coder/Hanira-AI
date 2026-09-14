@@ -14,6 +14,7 @@ import {
 import { logoutAction } from "@/app/actions/auth";
 import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
+import { UsageDashboard } from "@/components/usage/usage-dashboard";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import type { ResponseStyle, UserSettings } from "@/types/settings";
 
@@ -326,6 +327,8 @@ export function SettingsPage() {
             />
           </SettingRow>
         </section>
+
+        <UsageDashboard />
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button onClick={() => void save()} disabled={status === "saving"}>

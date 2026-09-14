@@ -37,7 +37,8 @@ import {
 } from "@/lib/logging/server";
 import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { checkUserMessageQuota } from "@/lib/security/user-quota";
+import { consumeDailyUsage } from "@/lib/security/usage-guard";
+import { getUsageSupabaseClient } from "@/services/usage-service";
 import {
   createConcurrencyLockReleaser,
   tryAcquireConcurrencyLock,
@@ -172,11 +173,18 @@ export async function POST(request: Request) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
 
-    // Pacote 16.5 (Fase 1 - quotas internas simples por usuario): limite
-    // diario em memoria, verificado ANTES de qualquer execucao de IA. O erro
-    // publico segue o vocabulario de capacidade do produto (invariante 5 do
-    // roadmap: sem capacidade disponivel -> resposta segura de alta demanda).
-    const quota = checkUserMessageQuota(user.id);
+    // Pacote 17.5 (Distributed Usage Guard): quota diaria distribuida de texto,
+    // verificada ANTES de qualquer execucao de IA. Tenta o contador atomico
+    // no Postgres (migration 009 LOCAL ONLY) com fallback seguro em memoria;
+    // erro inesperado e fail-closed. O erro publico segue o vocabulario de
+    // capacidade do produto (sem capacidade -> resposta segura de alta demanda).
+    let quota;
+    try {
+      quota = await consumeDailyUsage({ userId: user.id, kind: "text", supabase: getUsageSupabaseClient() });
+    } catch {
+      logServerEvent({ level: "error", requestId, route: "/api/chat", event: "quota_config_invalid", status: 500, durationMs: Date.now() - startedAt });
+      return Response.json({ error: "Configuracao de limite invalida. Tente novamente mais tarde.", code: "capacity_unavailable", requestId }, { status: 500, headers: { "X-Request-ID": requestId } });
+    }
     if (!quota.allowed) {
       logServerEvent({
         level: "warn",

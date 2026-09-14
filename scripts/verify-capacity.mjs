@@ -19,7 +19,8 @@ import { pathToFileURL } from "node:url";
 import { parseEnvFile } from "./doctor.mjs";
 
 const NUMERIC_LIMITS = [
-  { key: "HANIRA_USER_DAILY_MESSAGE_LIMIT", min: 0, max: 100_000, fallback: 200, source: "lib/security/user-quota.ts" },
+  { key: "HANIRA_USER_DAILY_MESSAGE_LIMIT", min: 0, max: 100_000, fallback: 200, source: "lib/security/usage-limits.ts" },
+  { key: "HANIRA_IMAGE_DAILY_LIMIT", min: 0, max: 1_000, fallback: 10, source: "lib/security/usage-limits.ts" },
   { key: "HANIRA_CONCURRENCY_MAX_PER_USER", min: 0, max: 10, fallback: 1, source: "lib/security/concurrency-guard.ts" },
   { key: "HANIRA_CAPACITY_RATE_LIMIT_COOLDOWN_MS", min: 1_000, max: 600_000, fallback: 60_000, source: "lib/ai/capacity/capacity-state.ts" },
   { key: "HANIRA_CAPACITY_UNHEALTHY_COOLDOWN_MS", min: 1_000, max: 600_000, fallback: 30_000, source: "lib/ai/capacity/capacity-state.ts" },
