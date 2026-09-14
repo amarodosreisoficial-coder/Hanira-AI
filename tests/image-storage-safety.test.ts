@@ -17,7 +17,7 @@ const generatedImageResponse = readFileSync(
 describe("storage safety: no base64 persistence", () => {
   it("store remove imageGeneration antes de persistir no modo demo", () => {
     // A função partialize deve remover imageGeneration das mensagens
-    expect(chatStore).toContain("imageGeneration: _ephemeralImage");
+    expect(chatStore).toContain("imageGeneration: _ignored");
   });
 
   it("store persiste conversations apenas no modo demo", () => {

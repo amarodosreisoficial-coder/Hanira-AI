@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ClipboardEvent,
@@ -53,11 +54,18 @@ import { uploadMediaFiles } from "@/services/media-service";
 import { generateImage, imageGenerationErrorMessage, type ImageReferenceDraft } from "@/services/image-service";
 import { ImageComposerOptions } from "@/components/chat/image-composer-options";
 import { resolveComposerIntent, type ComposerMode } from "@/lib/chat/composer-intent";
-import { IMAGE_ASPECT_RATIO_PRESETS, type ImageAspectRatioPreset } from "@/lib/ai/image/aspect-ratios";
+import { type ImageAspectRatioPreset } from "@/lib/ai/image/aspect-ratios";
 import { IMAGE_REFERENCE_MAX_COUNT } from "@/lib/validation/image-request";
 import type { ChatMessage } from "@/types/chat";
 import type { Attachment, AttachmentType } from "@/types/media";
 import type { UserSettings } from "@/types/settings";
+
+type ImageGenerationHandler = (options: {
+  prompt: string;
+  aspectRatio: ImageAspectRatioPreset;
+  references: ImageReferenceDraft[];
+  assistantId?: string;
+}) => Promise<void>;
 
 interface PendingMedia {
   id: string;
@@ -86,6 +94,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [imageReferenceInputKey, setImageReferenceInputKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const imageGenerationAbortRef = useRef<AbortController | null>(null);
+  const handleImageGenerationRef = useRef<ImageGenerationHandler>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -98,9 +107,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     issue && !store.activeConversation()?.messages.some((message) => message.failed),
   );
 
-  const effectiveIntent = resolveComposerIntent({ mode: composerMode, draft: store.draft });
   const isImageMode = composerMode === "image";
-  const isGeneratingImage = effectiveIntent === "image" && store.isThinking;
 
   function showMessageLengthError() {
     setError(CHAT_MESSAGE_LENGTH_ERROR);
@@ -125,7 +132,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       }>).detail;
       setComposerMode("image");
       setImageAspectRatio(detail.aspectRatio);
-      void handleImageGeneration({
+      void handleImageGenerationRef.current?.({
         prompt: detail.prompt,
         aspectRatio: detail.aspectRatio,
         references: detail.references,
@@ -211,6 +218,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       imageGenerationAbortRef.current = null;
     }
   }
+
+  useLayoutEffect(() => {
+    handleImageGenerationRef.current = handleImageGeneration;
+  });
 
   function exitImageMode() {
     setComposerMode("text");

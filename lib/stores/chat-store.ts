@@ -303,7 +303,11 @@ export const useChatStore = create<ChatState>()(
             ? state.conversations.map((conversation) => ({
                 ...conversation,
                 messages: conversation.messages.map(
-                  ({ imageGeneration: _ephemeralImage, ...message }) => message,
+                  (message) => {
+                    const { imageGeneration: _ignored, ...rest } = message;
+                    void _ignored;
+                    return rest;
+                  },
                 ),
               }))
             : [],
