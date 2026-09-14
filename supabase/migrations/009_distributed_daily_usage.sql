@@ -80,7 +80,7 @@ declare
   v_text_count integer := 0;
   v_image_count integer := 0;
   v_used integer := 0;
-  v_next_day_start timestamptz := (v_day + 1)::timestamptz;
+  v_next_day_start timestamptz := ((v_day + 1)::timestamp at time zone 'UTC');
   v_retry integer := greatest(1, ceil(extract(epoch from (v_next_day_start - now()))::numeric)::integer);
 begin
   if p_user_id is null then
@@ -95,6 +95,9 @@ begin
     raise exception 'consume_daily_usage: p_limit deve ser inteiro >= 0.';
   end if;
 
+  -- 17.5.2: proxima meia-noite UTC explicita, sem depender de TimeZone da
+  -- sessao/banco. ((v_day + 1)::timestamp AT TIME ZONE 'UTC') e o timestamptz
+  -- da proxima meia-noite UTC; retry_after_seconds tem minimo de 1s.
   -- Limite 0 = quota desativada (comportamento pre-17.5): nunca consome.
   if p_limit = 0 then
     allowed := true;

@@ -60,7 +60,7 @@ export async function getDailyUsageSnapshot(userId: string): Promise<UsageSnapsh
     resetAt: nextUtcResetIso(),
     text: { used: peek.textUsed, limit: textLimit, remaining: textRemaining },
     image: { used: peek.imageUsed, limit: imageLimit, remaining: imageRemaining },
-    degraded: peek.degraded || supabase === null,
-    source: supabase === null ? "memory" : "distributed",
+    degraded: peek.degraded,
+    source: peek.source,
   };
 }

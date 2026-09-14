@@ -62,7 +62,10 @@ function checkMemoryQuota(userId: string, kind: UsageKind, limit: number, nowMs:
 }
 
 function deniedFailClosed(kind: UsageKind, limit: number, nowMs: number): UsageGuardDecision {
-  return { allowed: false, kind, limit, remaining: 0, retryAfterSeconds: secondsUntilNextUtcDay(nowMs), source: "memory", degraded: true, usageDay: utcDayKey(nowMs) };
+  void kind;
+  void limit;
+  void nowMs;
+  throw new UsageGuardUnavailableError();
 }
 
 function isMissingRelationError(error: unknown): boolean {
@@ -99,13 +102,15 @@ export async function consumeDailyUsage(input: { readonly userId: string; readon
     if (isMissingRelationError(error)) return checkMemoryQuota(userId, kind, limit, nowMs, true);
     return deniedFailClosed(kind, limit, nowMs);
   }
-  const row = (Array.isArray(data) ? data[0] : data) as { allowed?: unknown; remaining?: unknown; retry_after_seconds?: unknown; usage_day?: unknown } | null;
-  if (!row || typeof row.allowed !== "boolean" || typeof row.usage_day !== "string") return deniedFailClosed(kind, limit, nowMs);
+  const row = (Array.isArray(data) ? data[0] : data) as { allowed?: unknown; used?: unknown; remaining?: unknown; retry_after_seconds?: unknown; usage_day?: unknown } | null;
+  if (!row || typeof row.allowed !== "boolean" || typeof row.usage_day !== "string") throw new UsageGuardUnavailableError();
   if (!row.allowed) {
+    // Quota real esgotada: unico caminho legitimo de allowed=false.
     const retry = typeof row.retry_after_seconds === "number" && Number.isSafeInteger(row.retry_after_seconds) ? row.retry_after_seconds : secondsUntilNextUtcDay(nowMs);
     return { allowed: false, kind, limit, remaining: 0, retryAfterSeconds: Math.max(1, retry), source: "distributed", degraded: false, usageDay: row.usage_day };
   }
-  const remaining = typeof row.remaining === "number" && Number.isSafeInteger(row.remaining) ? row.remaining : 0;
+  const remaining = typeof row.remaining === "number" && Number.isSafeInteger(row.remaining) && row.remaining >= 0 ? row.remaining : null;
+  if (remaining === null) throw new UsageGuardUnavailableError();
   return { allowed: true, kind, limit, remaining: Math.max(0, remaining), retryAfterSeconds: 0, source: "distributed", degraded: false, usageDay: row.usage_day };
 }
 
@@ -123,13 +128,17 @@ export function nextUtcResetIso(nowMs: number = Date.now()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
 }
 
-export async function peekDailyUsage(input: { readonly userId: string; readonly supabase?: SupabaseClient | null }): Promise<{ readonly usageDay: string; readonly textUsed: number; readonly imageUsed: number; readonly degraded: boolean }> {
+function validCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+export async function peekDailyUsage(input: { readonly userId: string; readonly supabase?: SupabaseClient | null }): Promise<{ readonly usageDay: string; readonly textUsed: number; readonly imageUsed: number; readonly degraded: boolean; readonly source: "distributed" | "memory" }> {
   const usageDay = utcDayKey(Date.now());
   type PeekClient = { from: (t: string) => { select: (c: string) => { eq: (col: string, v: unknown) => { eq: (col: string, v: unknown) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> } } } } };
   const client = (input.supabase ?? null) as PeekClient | null;
   if (!client) {
     const memory = peekMemoryUsage(input.userId);
-    return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true };
+    return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true, source: "memory" };
   }
   let res: { data: unknown; error: unknown };
   try {
@@ -140,14 +149,15 @@ export async function peekDailyUsage(input: { readonly userId: string; readonly 
   if (res.error) {
     if (isMissingRelationError(res.error)) {
       const memory = peekMemoryUsage(input.userId);
-      return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true };
+      return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true, source: "memory" };
     }
     throw new UsageGuardUnavailableError();
   }
   const row = res.data as { text_count?: unknown; image_count?: unknown } | null;
-  const textUsed = typeof row?.text_count === "number" && row.text_count >= 0 ? Math.floor(row.text_count) : 0;
-  const imageUsed = typeof row?.image_count === "number" && row.image_count >= 0 ? Math.floor(row.image_count) : 0;
-  return { usageDay, textUsed, imageUsed, degraded: false };
+  // Sem linha: usuario ainda sem uso hoje — zero legitimo distribuido.
+  if (row === null) return { usageDay, textUsed: 0, imageUsed: 0, degraded: false, source: "distributed" };
+  if (!validCount(row.text_count) || !validCount(row.image_count)) throw new UsageGuardUnavailableError();
+  return { usageDay, textUsed: row.text_count, imageUsed: row.image_count, degraded: false, source: "distributed" };
 }
 
 export function resetUsageGuardForTests(): void {

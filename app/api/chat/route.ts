@@ -37,7 +37,7 @@ import {
 } from "@/lib/logging/server";
 import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { consumeDailyUsage } from "@/lib/security/usage-guard";
+import { consumeDailyUsage, UsageGuardUnavailableError } from "@/lib/security/usage-guard";
 import { getUsageSupabaseClient } from "@/services/usage-service";
 import {
   createConcurrencyLockReleaser,
@@ -432,14 +432,20 @@ async function createChatStream(
 
   const releaseLock = createConcurrencyLockReleaser(userId, requestId);
 
-  // Quota diaria distribuida de texto (17.5.1): apos o lock, antes de
-  // qualquer execucao de IA. Erro publico no vocabulario de capacidade.
+  // Quota diaria distribuida de texto (17.5.2): apos o lock, antes de
+  // qualquer execucao de IA. Falha inesperada do guard (rede/permissao/
+  // resposta malformada) NAO e "limite diario atingido": retorna 503
+  // temporario sem chamar o provider. So allowed=false real vira 429.
   let quota;
   try {
     quota = await consumeDailyUsage({ userId, kind: "text", supabase: getUsageSupabaseClient(), nowMs: Date.now() });
-  } catch {
+  } catch (error) {
     releaseLock();
-    logServerEvent({ level: "error", requestId, route: "/api/chat", event: "quota_config_invalid", status: 500, durationMs: Date.now() - startedAt });
+    const unavailable = error instanceof UsageGuardUnavailableError;
+    logServerEvent({ level: "error", requestId, route: "/api/chat", event: unavailable ? "usage_guard_unavailable" : "quota_config_invalid", status: unavailable ? 503 : 500, durationMs: Date.now() - startedAt });
+    if (unavailable) {
+      return Response.json({ error: "A capacidade da Hanira está temporariamente indisponível. Tente novamente em instantes.", code: "capacity_unavailable", requestId }, { status: 503, headers: { "X-Request-ID": requestId, "Retry-After": "30" } });
+    }
     return Response.json({ error: "Configuracao de limite invalida. Tente novamente mais tarde.", code: "capacity_unavailable", requestId }, { status: 500, headers: { "X-Request-ID": requestId } });
   }
   if (!quota.allowed) {

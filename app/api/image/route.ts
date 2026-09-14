@@ -5,7 +5,7 @@ import { IMAGE_ASPECT_RATIO_DIMENSIONS } from "@/lib/ai/image/aspect-ratios";
 import { createProductionImageRouter } from "@/lib/ai/image/runtime";
 import { validateImageRequest } from "@/lib/validation/image-request";
 import { createConcurrencyLockReleaser, tryAcquireConcurrencyLock } from "@/lib/security/concurrency-guard";
-import { consumeDailyUsage } from "@/lib/security/usage-guard";
+import { consumeDailyUsage, UsageGuardUnavailableError } from "@/lib/security/usage-guard";
 import { recordCapacityEvent } from "@/lib/observability/capacity-metrics";
 import { createRequestId, logServerEvent } from "@/lib/logging/server";
 import { getUsageSupabaseClient } from "@/services/usage-service";
@@ -32,7 +32,13 @@ export async function POST(request: Request) {
     let quota;
     try {
       quota = await consumeDailyUsage({ userId: user.id, kind: "image", supabase: getUsageSupabaseClient(), nowMs: Date.now() });
-    } catch {
+    } catch (guardError) {
+      // 17.5.2: indisponibilidade do guard NAO e "limite diario atingido".
+      // Retorna 503 temporario sem chamar o provider, com Retry-After curto.
+      if (guardError instanceof UsageGuardUnavailableError) {
+        logServerEvent({ level: "error", requestId, route: "/api/image", event: "usage_guard_unavailable", status: 503, durationMs: Date.now() - startedAt });
+        return error("capacity_unavailable", 503, requestId, "30");
+      }
       // Config invalida (env) ou admin-client quebrado em producao:
       // fail-closed sem chamar o provider.
       logServerEvent({ level: "error", requestId, route: "/api/image", event: "quota_config_invalid", status: 500, durationMs: Date.now() - startedAt });

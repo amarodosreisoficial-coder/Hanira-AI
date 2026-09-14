@@ -12,7 +12,7 @@ const guard = readFileSync(new URL("../lib/security/usage-guard.ts", import.meta
 const usageService = readFileSync(new URL("../services/usage-service.ts", import.meta.url), "utf8");
 const envExample = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 
-describe("package 17.5.1 invariants", () => {
+describe("package 17.5.2 invariants", () => {
   it("migration 009: SELECT-only, sem mutacao direta, service_role-only", () => {
     expect(migration).toContain("LOCAL ONLY / NOT APPLIED REMOTELY");
     expect(migration).toContain("create table if not exists public.daily_usage");
@@ -77,6 +77,35 @@ describe("package 17.5.1 invariants", () => {
     expect(guard).toContain("peekMemoryUsage");
     expect(guard).toContain("UsageGuardUnavailableError");
     expect(guard).toContain("isMissingRelationError");
+  });
+
+  it("chat indisponivel do guard vira 503 sem chamar provider", () => {
+    expect(chatRoute).toContain("UsageGuardUnavailableError");
+    expect(chatRoute).toContain("usage_guard_unavailable");
+    expect(chatRoute).toContain("A capacidade da Hanira está temporariamente indisponível. Tente novamente em instantes.");
+    expect(chatRoute).toContain("status: 503");
+    expect(chatRoute).toContain('"Retry-After": "30"');
+  });
+
+  it("imagem indisponivel do guard vira 503 sem chamar provider", () => {
+    expect(imageRoute).toContain("UsageGuardUnavailableError");
+    expect(imageRoute).toContain("usage_guard_unavailable");
+    expect(imageRoute).toContain('capacity_unavailable", 503');
+    expect(imageRoute).toContain('"30"');
+    const guardAt = imageRoute.indexOf("usage_guard_unavailable");
+    const providerAt = imageRoute.indexOf("createProductionImageRouter().execute");
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(providerAt);
+  });
+
+  it("SQL usa meia-noite UTC explicita", () => {
+    expect(migration).toContain("at time zone 'UTC'");
+    expect(migration).toContain("((v_day + 1)::timestamp at time zone 'UTC')");
+  });
+
+  it("peek expoe source real distribuido/memoria", () => {
+    expect(guard).toContain('source: "distributed" | "memory"');
+    expect(usageService).toContain("source: peek.source");
   });
 
   it("dashboard usa copy de produto com reset e sem termos tecnicos", () => {
