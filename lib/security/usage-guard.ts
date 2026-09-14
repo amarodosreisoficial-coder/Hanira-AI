@@ -2,9 +2,24 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveDailyLimitForKind, type UsageKind } from "@/lib/security/usage-limits";
 
-// Package 17.5 — Distributed Usage Guard.
+// Package 17.5.1 — Distributed Usage Guard.
 // Tenta Postgres atomico (migration 009); fallback memoria quando a
 // migration ainda nao foi aplicada; fail-closed em erro inesperado.
+// Erros de config/admin em producao NAO ativam fallback silencioso.
+
+export class UsageGuardConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageGuardConfigError";
+  }
+}
+
+export class UsageGuardUnavailableError extends Error {
+  constructor(message = "Uso diario temporariamente indisponivel.") {
+    super(message);
+    this.name = "UsageGuardUnavailableError";
+  }
+}
 
 export interface UsageGuardDecision {
   readonly allowed: boolean;
@@ -94,21 +109,45 @@ export async function consumeDailyUsage(input: { readonly userId: string; readon
   return { allowed: true, kind, limit, remaining: Math.max(0, remaining), retryAfterSeconds: 0, source: "distributed", degraded: false, usageDay: row.usage_day };
 }
 
+export function peekMemoryUsage(userId: string, nowMs: number = Date.now()): { readonly usageDay: string; readonly textUsed: number; readonly imageUsed: number } {
+  const usageDay = utcDayKey(nowMs);
+  return {
+    usageDay,
+    textUsed: fallbackUsage.get(`text:${userId}:${usageDay}`) ?? 0,
+    imageUsed: fallbackUsage.get(`image:${userId}:${usageDay}`) ?? 0,
+  };
+}
+
+export function nextUtcResetIso(nowMs: number = Date.now()): string {
+  const now = new Date(nowMs);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+}
+
 export async function peekDailyUsage(input: { readonly userId: string; readonly supabase?: SupabaseClient | null }): Promise<{ readonly usageDay: string; readonly textUsed: number; readonly imageUsed: number; readonly degraded: boolean }> {
   const usageDay = utcDayKey(Date.now());
   type PeekClient = { from: (t: string) => { select: (c: string) => { eq: (col: string, v: unknown) => { eq: (col: string, v: unknown) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> } } } } };
   const client = (input.supabase ?? null) as PeekClient | null;
-  if (!client) return { usageDay, textUsed: 0, imageUsed: 0, degraded: true };
-  try {
-    const res = await client.from("daily_usage").select("text_count,image_count").eq("user_id", input.userId).eq("usage_date", usageDay).maybeSingle();
-    if (res.error) return { usageDay, textUsed: 0, imageUsed: 0, degraded: true };
-    const row = res.data as { text_count?: unknown; image_count?: unknown } | null;
-    const textUsed = typeof row?.text_count === "number" && row.text_count >= 0 ? Math.floor(row.text_count) : 0;
-    const imageUsed = typeof row?.image_count === "number" && row.image_count >= 0 ? Math.floor(row.image_count) : 0;
-    return { usageDay, textUsed, imageUsed, degraded: false };
-  } catch {
-    return { usageDay, textUsed: 0, imageUsed: 0, degraded: true };
+  if (!client) {
+    const memory = peekMemoryUsage(input.userId);
+    return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true };
   }
+  let res: { data: unknown; error: unknown };
+  try {
+    res = await client.from("daily_usage").select("text_count,image_count").eq("user_id", input.userId).eq("usage_date", usageDay).maybeSingle();
+  } catch {
+    throw new UsageGuardUnavailableError();
+  }
+  if (res.error) {
+    if (isMissingRelationError(res.error)) {
+      const memory = peekMemoryUsage(input.userId);
+      return { usageDay: memory.usageDay, textUsed: memory.textUsed, imageUsed: memory.imageUsed, degraded: true };
+    }
+    throw new UsageGuardUnavailableError();
+  }
+  const row = res.data as { text_count?: unknown; image_count?: unknown } | null;
+  const textUsed = typeof row?.text_count === "number" && row.text_count >= 0 ? Math.floor(row.text_count) : 0;
+  const imageUsed = typeof row?.image_count === "number" && row.image_count >= 0 ? Math.floor(row.image_count) : 0;
+  return { usageDay, textUsed, imageUsed, degraded: false };
 }
 
 export function resetUsageGuardForTests(): void {

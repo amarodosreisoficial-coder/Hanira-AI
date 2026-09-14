@@ -6,7 +6,7 @@
 // - zero billing, zero paid provider, zero hardcode de plano.
 
 export const USER_DAILY_MESSAGE_LIMIT_ENV = "HANIRA_USER_DAILY_MESSAGE_LIMIT";
-export const IMAGE_DAILY_LIMIT_ENV = "HANIRA_IMAGE_DAILY_LIMIT";
+export const USER_DAILY_IMAGE_LIMIT_ENV = "HANIRA_USER_DAILY_IMAGE_LIMIT";
 
 export const DEFAULT_TEXT_DAILY_LIMIT = 200;
 export const DEFAULT_IMAGE_DAILY_LIMIT = 10;
@@ -48,7 +48,7 @@ export function resolveTextDailyLimit(): number {
 
 export function resolveImageDailyLimit(): number {
   return resolveBoundedLimit(
-    IMAGE_DAILY_LIMIT_ENV,
+    USER_DAILY_IMAGE_LIMIT_ENV,
     DEFAULT_IMAGE_DAILY_LIMIT,
     IMAGE_QUOTA_LIMIT_BOUNDS,
   );

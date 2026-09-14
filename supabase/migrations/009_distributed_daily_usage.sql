@@ -31,9 +31,19 @@ create table if not exists public.daily_usage (
 
 alter table public.daily_usage enable row level security;
 
+-- 17.5.1: contadores de quota sao sensiveis. NENHUM client direto pode
+-- INSERT/UPDATE/DELETE. Mutacao ocorre SOMENTE via RPC privilegiada
+-- (service_role, server-only). Leitura direta e limitada a SELECT da
+-- propria linha do usuario autenticado.
 drop policy if exists "daily_usage_own_data" on public.daily_usage;
-create policy "daily_usage_own_data" on public.daily_usage
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "daily_usage_own_select" on public.daily_usage;
+
+create policy "daily_usage_own_select" on public.daily_usage
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+revoke all on table public.daily_usage from anon, authenticated;
+grant select on table public.daily_usage to authenticated;
 
 drop trigger if exists daily_usage_set_updated_at on public.daily_usage;
 create trigger daily_usage_set_updated_at
@@ -41,7 +51,11 @@ create trigger daily_usage_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- Contador atomico diario por usuario/kind.
--- Chamado via service_role (bypassa RLS); valida tudo de forma defensiva.
+-- Chamado SOMENTE via service_role, server-side (nunca no browser).
+-- EXECUTE e concedido apenas a service_role: anon/authenticated/public NAO
+-- podem executar (REVOKE ALL FROM PUBLIC abaixo e grant minimo). A service
+-- role nunca chega ao bundle do cliente: os clients de browser usam anon key
+-- e RLS; o service role existe apenas em lib/supabase/admin.ts (server-only).
 -- Uma chamada = no maximo +1 no kind solicitado, e somente quando abaixo do
 -- limite. Concorrencia entre instancias e serializada pelo lock de linha
 -- (SELECT ... FOR UPDATE) dentro da mesma transacao.
@@ -143,7 +157,7 @@ begin
 end;
 $$;
 
-revoke all on function public.consume_daily_usage(uuid, text, integer) from public;
+revoke all on function public.consume_daily_usage(uuid, text, integer) from public, anon, authenticated;
 grant execute on function public.consume_daily_usage(uuid, text, integer) to service_role;
 
 insert into public.system_metadata (key, value, updated_at)

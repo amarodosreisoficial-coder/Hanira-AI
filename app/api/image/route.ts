@@ -21,10 +21,20 @@ export async function POST(request: Request) {
   if (!tryAcquireConcurrencyLock(user.id, `image:${requestId}`)) return error("generation_unavailable", 409, requestId, "1");
   const release = createConcurrencyLockReleaser(user.id, `image:${requestId}`);
   try {
+    // 17.5.1: validar ANTES de consumir quota. Request invalido nao consome
+    // quota e nao chama o provider; rejeicao de concorrencia nao consome.
+    let input;
+    try {
+      input = validateImageRequest(await request.json());
+    } catch {
+      return error("invalid_request", 400, requestId);
+    }
     let quota;
     try {
-      quota = await consumeDailyUsage({ userId: user.id, kind: "image", supabase: getUsageSupabaseClient() });
+      quota = await consumeDailyUsage({ userId: user.id, kind: "image", supabase: getUsageSupabaseClient(), nowMs: Date.now() });
     } catch {
+      // Config invalida (env) ou admin-client quebrado em producao:
+      // fail-closed sem chamar o provider.
       logServerEvent({ level: "error", requestId, route: "/api/image", event: "quota_config_invalid", status: 500, durationMs: Date.now() - startedAt });
       return error("generation_unavailable", 500, requestId);
     }
@@ -33,7 +43,6 @@ export async function POST(request: Request) {
       recordCapacityEvent({ outcome: "quota_limited_response" });
       return error("capacity_unavailable", 429, requestId, String(quota.retryAfterSeconds));
     }
-    const input = validateImageRequest(await request.json());
     const dimensions = IMAGE_ASPECT_RATIO_DIMENSIONS[input.aspectRatio];
     const references = input.references.map((reference, index) => ({ id: `reference-${index}`, mimeType: reference.mimeType, sizeBytes: reference.sizeBytes, data: new Blob([Buffer.from(reference.dataUrl.split(",", 2)[1], "base64")], { type: reference.mimeType }) }));
     const result = await createProductionImageRouter().execute({ prompt: input.prompt, operation: references.length ? "edit" : "generate", aspectRatio: input.aspectRatio, width: dimensions.width, height: dimensions.height, references });
