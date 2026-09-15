@@ -37,7 +37,8 @@ import {
 } from "@/lib/logging/server";
 import { logLegacyConversationScopeUsed } from "@/lib/logging/project-events";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { checkUserMessageQuota } from "@/lib/security/user-quota";
+import { consumeDailyUsage, UsageGuardUnavailableError } from "@/lib/security/usage-guard";
+import { getUsageSupabaseClient } from "@/services/usage-service";
 import {
   createConcurrencyLockReleaser,
   tryAcquireConcurrencyLock,
@@ -172,38 +173,11 @@ export async function POST(request: Request) {
       return createDemoStream(request, payload, requestId, startedAt);
     }
 
-    // Pacote 16.5 (Fase 1 - quotas internas simples por usuario): limite
-    // diario em memoria, verificado ANTES de qualquer execucao de IA. O erro
-    // publico segue o vocabulario de capacidade do produto (invariante 5 do
-    // roadmap: sem capacidade disponivel -> resposta segura de alta demanda).
-    const quota = checkUserMessageQuota(user.id);
-    if (!quota.allowed) {
-      logServerEvent({
-        level: "warn",
-        requestId,
-        route: "/api/chat",
-        event: "quota_limited",
-        status: 429,
-        durationMs: Date.now() - startedAt,
-      });
-      recordCapacityEvent({ outcome: "quota_limited_response" });
-      return Response.json(
-        {
-          error:
-            "Voce atingiu o limite diario de mensagens da Hanira. Tente novamente amanha.",
-          code: "capacity_unavailable",
-          requestId,
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(quota.retryAfterSeconds),
-            "X-Request-ID": requestId,
-          },
-        },
-      );
-    }
-
+    // Pacote 17.5.1 (Distributed Usage Guard): quota diaria distribuida de
+    // texto, consumida SOMENTE apos o concurrency guard (rejeicao de
+    // concorrencia NAO consome quota). Ordem: rate limit -> demo bypass ->
+    // concurrency -> quota -> execucao. Erro inesperado e fail-closed.
+    // O lock pertence a createChatStream (dono unico, liberacao exata 1x).
     return await createChatStream(
       request,
       user.id,
@@ -423,9 +397,11 @@ async function createChatStream(
   if (!supabase) throw new Error("UNAUTHENTICATED");
 
   // Pacote 16.5: Concurrency Guard - previne multiple requests simultaneas
-  // do mesmo usuario (double-submit acidental). Lock liberado em todos os
-  // caminhos terminais (early returns, callbacks onComplete/onFailed/
-  // onCancelled e catch). Estado em memoria, nao autoritativo.
+  // do mesmo usuario (double-submit acidental). Em 17.5.1 o lock e adquirido
+  // ANTES da quota de texto (rejeicao de concorrencia NAO consome quota).
+  // Lock liberado exatamente 1x em todos os caminhos terminais (early
+  // returns, quota negada, callbacks onComplete/onFailed/onCancelled e
+  // catch). Estado em memoria, nao autoritativo.
   const lockAcquired = tryAcquireConcurrencyLock(userId, requestId);
   if (!lockAcquired) {
     logServerEvent({
@@ -455,6 +431,50 @@ async function createChatStream(
   }
 
   const releaseLock = createConcurrencyLockReleaser(userId, requestId);
+
+  // Quota diaria distribuida de texto (17.5.2): apos o lock, antes de
+  // qualquer execucao de IA. Falha inesperada do guard (rede/permissao/
+  // resposta malformada) NAO e "limite diario atingido": retorna 503
+  // temporario sem chamar o provider. So allowed=false real vira 429.
+  let quota;
+  try {
+    quota = await consumeDailyUsage({ userId, kind: "text", supabase: getUsageSupabaseClient(), nowMs: Date.now() });
+  } catch (error) {
+    releaseLock();
+    const unavailable = error instanceof UsageGuardUnavailableError;
+    logServerEvent({ level: "error", requestId, route: "/api/chat", event: unavailable ? "usage_guard_unavailable" : "quota_config_invalid", status: unavailable ? 503 : 500, durationMs: Date.now() - startedAt });
+    if (unavailable) {
+      return Response.json({ error: "A capacidade da Hanira está temporariamente indisponível. Tente novamente em instantes.", code: "capacity_unavailable", requestId }, { status: 503, headers: { "X-Request-ID": requestId, "Retry-After": "30" } });
+    }
+    return Response.json({ error: "Configuracao de limite invalida. Tente novamente mais tarde.", code: "capacity_unavailable", requestId }, { status: 500, headers: { "X-Request-ID": requestId } });
+  }
+  if (!quota.allowed) {
+    releaseLock();
+    logServerEvent({
+      level: "warn",
+      requestId,
+      route: "/api/chat",
+      event: "quota_limited",
+      status: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    recordCapacityEvent({ outcome: "quota_limited_response" });
+    return Response.json(
+      {
+        error:
+          "Voce atingiu o limite diario de mensagens da Hanira. Tente novamente amanha.",
+        code: "capacity_unavailable",
+        requestId,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(quota.retryAfterSeconds),
+          "X-Request-ID": requestId,
+        },
+      },
+    );
+  }
 
   try {
     logServerEvent({

@@ -12,14 +12,14 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `88d8a36be3db3f572eedd3b5df4dbaea74102de8`
-- Branch atual: `pacote-17-4-unified-composer-image-ux`
-- Commit do Package 17.3: merge `45c47051956380599ebc6f880ce361af06894bee` via PR #19.
-- Package 17.4: Unified Chat Composer + Image Intent Routing + Premium Conversational UX.
+- Base atual sincronizada: `main` / `90a9d67152c752c087118ddf73981c8218613808` (merge do Package 17.4 via PR #20)
+- Branch atual: `pacote-17-5-distributed-usage-guard`
+- Commit do Package 17.4: merge `90a9d67152c752c087118ddf73981c8218613808` via PR #20.
+- Package 17.5: Distributed Usage Guard + Free Capacity Protection + Usage Dashboard.
 
 ## 3. CURRENT GIT STATE
 
-O Package 17.2 foi mergeado pelo PR #18 no commit `88d8a36be3db3f572eedd3b5df4dbaea74102de8`. A branch 17.3 nasceu diretamente desse commit. `main` não foi modificada pelo Package 17.3; PR, merge e deploy de produção permanecem decisões humanas posteriores.
+O Package 17.4 foi mergeado pelo PR #20 no commit `90a9d67152c752c087118ddf73981c8218613808`. A branch 17.5 (`pacote-17-5-distributed-usage-guard`) nasceu diretamente desse commit. `main` não foi modificada pelo Package 17.5; PR, merge, migration remota e deploy de produção permanecem decisões humanas posteriores.
 
 ## 4. PACKAGE TIMELINE
 
@@ -66,7 +66,24 @@ O Package 17.2 foi mergeado pelo PR #18 no commit `88d8a36be3db3f572eedd3b5df4db
 - **Model/Provider**: não mostra modelId, providerId, Flux ou Cloudflare na UI da imagem.
 - **Testes**: 62 novos testes adicionados (759 total). Cobre positive/negative intents, explicit image mode, normal text, image routing, single textarea, no second textarea, image result, download, regenerate, references, no base64 persistence, no model/provider UI, compact install, standalone hidden, iOS popover.
 
+| 17.4 | `9a3a327`…; merge `90a9d67` via PR #20 | MERGED. |
+| 17.5 | branch `pacote-17-5-distributed-usage-guard`; commits `c366d51`, `e098773`, `147695c` | Implementado e validado localmente. Quota distribuída Postgres, fail-closed, usage API e dashboard; migration 009 apenas local. |
+
+## 6B. PACKAGE 17.5 — IMPLEMENTED STATE
+
+- **Quota distribuída**: contador diário atômico por usuário/dia UTC/kind (`text`/`image`) no Postgres via RPC `consume_daily_usage` (migration `009_distributed_daily_usage.sql`, LOCAL ONLY — não aplicada remotamente).
+- **Limites**: texto default 200/dia (`HANIRA_USER_DAILY_MESSAGE_LIMIT`), imagem default 10/dia (`HANIRA_USER_DAILY_IMAGE_LIMIT`); limite 0 = "Limite diário desativado"; env inválida falha em código (fail-closed).
+- **Rollout seguro**: fallback in-memory quando migration/RPC claramente ausente (códigos 42P01/42883/PGRST202); erro genérico de banco, timeout, permission denied ou resposta inesperada = fail-closed (`UsageGuardUnavailableError`).
+- **Chat** (`/api/chat`): demo e rate-limit não consomem quota; concurrency rejection não consome; quota consumida antes do provider; streaming/memória/self-knowledge/free-only router intactos.
+- **Imagem** (`/api/image`): fluxo auth → concurrency → parse/validation → usage guard → provider; request inválido e concurrency rejection não consomem quota; quota bloqueada impede provider.
+- **Contrato público de imagem**: response de sucesso sem providerId/modelId/mock/durationMs; apenas success/mimeType/width/height/dataUrl.
+- **Usage API**: `GET /api/usage` autenticado, retorna date/resetAt/text/image (used, limit, remaining, disabled) + tracking; sem provider/model/tokens/billing; remaining nunca negativo.
+- **Usage Dashboard**: "Uso da Hanira" nas settings (`components/usage/usage-dashboard.tsx`), mensagens/imagens hoje, restantes, renovação, sem polling contínuo.
+- **Migration 009**: tabela `daily_usage` com RLS (select próprio), mutação somente via RPC `security definer` executável apenas por `service_role`; cliente não altera uso diretamente; sem billing nem dados sensíveis.
+- **Testes**: +37 novos (812 total): usage-distributed, usage-guard, usage-ordering, contract público, dashboard.
+
 ## 7. CURRENT PRODUCT CAPABILITIES
+
 
 O estado é derivado localmente, sem chamadas de rede:
 
@@ -144,14 +161,16 @@ Nenhum desses eventos inclui prompt, resposta, memória, attachment, Authorizati
 
 ## 17. TEST / BUILD STATUS
 
-Snapshot local do Package 17.4 antes do commit:
-
-- `npm test`: PASS — 759 passed / 7 skipped / 81 files (62 novos testes).
+Snapshot local do Package 17.5 antes do commit final:
+- `npm test`: PASS — 812 passed / 7 skipped / 88 files (37 novos testes).
 - `npm run typecheck`: PASS.
-- `npm run lint`: PASS — 0 errors / 11 warnings preexistentes.
+- `npm run lint`: PASS — 0 errors / 6 warnings preexistentes.
 - `npm run build`: PASS — Next.js 16.3.3.
 - `npm run verify:release`: PASS, incluindo todos os verificadores offline, build e `git diff --check`.
-- Testes e verificadores não fizeram chamadas reais de Groq, Cloudflare, OpenAI, Ollama remoto ou weather.
+- Testes e verificadores não fizeram chamadas reais de Groq, Cloudflare, OpenAI, Ollama remoto, weather nem mutações no Supabase remoto.
+
+Snapshot do Package 17.4 (mergeado):
+- `npm test`: PASS — 759 passed / 7 skipped / 81 files.
 
 Snapshot do Package 17.3 (mergeado):
 - `npm test`: PASS — 697 passed / 7 skipped / 74 files.
@@ -162,7 +181,7 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ## 19. KNOWN LIMITATIONS
 
-- Quota e concurrency continuam best-effort por instância, não distribuídas.
+- Quota distribuída depende da aplicação da migration 009 no remoto (decisão humana); sem ela, ativo fallback in-memory (por instância) e o snapshot marca `degraded`.
 - Vision/transcription/speech legados não são capacidades públicas disponíveis sob a política R$0 atual.
 - Extração de PDF é textual e limitada; não é OCR completo.
 - Imagens geradas continuam efêmeras, sem gallery/storage persistente.
@@ -179,45 +198,45 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ### DONE
 
-Packages 16.4–17.3 concluídos; 17.1 mergeado via PR #17, 17.2 mergeado via PR #18 em `88d8a36`, 17.3 mergeado via PR #19 em `45c4705`.
+Packages 16.4–17.4 concluídos; 17.4 mergeado via PR #20 em `90a9d67`.
 
 ### CURRENT
 
-Package 17.4 implementado e validado na branch dedicada `pacote-17-4-unified-composer-image-ux`. Push e Preview são conferidos no relatório final.
+Package 17.5 implementado e validado na branch `pacote-17-5-distributed-usage-guard` (commits `c366d51`, `e098773`, `147695c`). Migration 009 existe apenas localmente.
 
 ### NEXT
 
-Revisão humana da branch e do Vercel Preview; abertura de PR somente após nova autorização.
+Revisão humana da branch, da migration 009 e autorização explícita para PR / aplicação remota da migration.
 
 ### LATER
 
-Package 17.5 candidate: Distributed Usage Guard + Free Capacity Protection + Usage Dashboard. Gemini, OpenRouter, RAG, embeddings, vector DB, ledger de créditos, quota distribuída, gallery, Nira API, Academic Copilot e Course Builder não foram iniciados.
+Package 17.6 candidate e demais itens do LATER não foram iniciados.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
-Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, memórias ou binary; não chamar provider pelo cliente; não criar storage/DB/billing; não executar live smoke sem autorização; não misturar projetos; não fazer merge, push em main, produção ou próximo pacote sem autorização.
+Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, memórias ou binary; não chamar provider pelo cliente; não criar storage/DB/billing; não executar live smoke sem autorização; não aplicar migration 009 remotamente sem autorização explícita; não misturar projetos; não fazer merge, push em main, produção ou próximo pacote sem autorização.
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Após o push e o Preview automático, realizar revisão humana do Package 17.4. Não abrir PR automaticamente.
+Revisão humana do Package 17.5 (branch + migration 009). Não abrir PR nem aplicar migration remota automaticamente.
 
 ## CHATGPT RECOVERY BLOCK
 
 - PROJECT: Hanira AI / Nira
 - PATH: `C:\Projetos\hanira-app`
 - REMOTE: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- MAIN HEAD / BASE: `88d8a36be3db3f572eedd3b5df4dbaea74102de8`
-- CURRENT BRANCH: `pacote-17-3-runtime-economy-capability-awareness`
-- LAST MERGED PACKAGE: 17.2 via PR #18 / `88d8a36`
-- CURRENT PACKAGE: 17.3 Runtime Intelligence + Context Economy + Capability & Usage Awareness
-- IDENTITY: Hanira=produto/plataforma; Nira=inteligência; Ronne Maicon Amaro dos Reis=criador/desenvolvedor
-- CAPABILITIES: catálogo canônico público com status dinâmico e geração de imagem integrada
-- SELF-KNOWLEDGE: determinístico para intents de alta confiança, persistido sem provider
-- USAGE: não ilimitado; sem carteira de créditos, cobrança ou fallback pago
-- CONTEXT: 20 mensagens/24.000 caracteres; 8 memórias/4.000 caracteres; prioridade recente e metadata segura
-- MEMORY: ranking local lexical/importância/escopo/recência/dedup; sem embeddings/RAG
+- MAIN HEAD / BASE: `90a9d67152c752c087118ddf73981c8218613808` (PR #20)
+- CURRENT BRANCH: `pacote-17-5-distributed-usage-guard`
+- LAST MERGED PACKAGE: 17.4 via PR #20 / `90a9d67`
+- CURRENT PACKAGE: 17.5 Distributed Usage Guard + Free Capacity Protection + Usage Dashboard
+- COMMITS: `c366d51` (guard + dashboard), `e098773` (quota ordering + migration security), `147695c` (failure semantics)
+- MIGRATION 009: existe apenas local (`supabase/migrations/009_distributed_daily_usage.sql`); REMOTE: NOT APPLIED
+- LIMITS: texto 200/dia default, imagem 10/dia default; 0 = desativado; fail-closed
+- USAGE API: `GET /api/usage`; DASHBOARD: "Uso da Hanira" nas settings
+- IMAGE PUBLIC RESPONSE: sem providerId/modelId/mock/durationMs
 - PROVIDERS/MODELS: sem mudanças; zero-cost/free-only preservado
-- DB/MIGRATIONS/STORAGE/BILLING/DEPENDENCIES: NONE
-- PRODUCTION CALLS: NONE
-- PR/MERGE/PRODUCTION DEPLOY: NO
-- NEXT ACTION: revisão humana do branch/Preview e autorização separada para PR
+- DB REMOTE/BILLING/DEPENDENCIES: NONE / NONE / NONE
+- REAL PROVIDER CALLS: 0; REAL SUPABASE TEST MUTATIONS: 0
+- VALIDATION: test 812 passed / 7 skipped; typecheck/lint/build/verify:release PASS
+- PR/MERGE/MIGRATION REMOTA/PRODUCTION DEPLOY: NO
+- NEXT ACTION: revisão humana do branch e da migration 009
