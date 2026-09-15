@@ -102,6 +102,18 @@ export function SystemPage() {
         ["Versao do schema", diagnostics.schemaVersion ?? "Nao verificada", true],
         ["URL da aplicacao", diagnostics.appUrl, true],
         ["Versao da aplicacao", diagnostics.appVersion, true],
+        [
+          "Ambiente",
+          diagnostics.release?.environment ?? "Nao informado",
+          true,
+        ],
+        [
+          "Commit do build",
+          diagnostics.release?.commitSha
+            ? diagnostics.release.commitSha.slice(0, 7)
+            : "Nao informado pelo deploy",
+          true,
+        ],
       ]
     : [];
 

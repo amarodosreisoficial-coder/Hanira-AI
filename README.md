@@ -57,7 +57,8 @@ Execute no SQL Editor do Supabase, em ordem:
 5. `supabase/migrations/005_projects_and_personalities.sql`;
 6. `supabase/migrations/006_document_attachments.sql`;
 7. `supabase/migrations/007_global_memory_scope.sql`;
-8. `supabase/migrations/008_profile_preferences_memory_origin.sql`.
+8. `supabase/migrations/008_profile_preferences_memory_origin.sql`;
+9. `supabase/migrations/009_distributed_daily_usage.sql` (ativa em produção).
 
 Depois execute `supabase/VERIFY.sql` para conferir tabelas, buckets privados,
 RLS, policies, triggers e a versão do schema. As políticas isolam banco e
@@ -73,10 +74,41 @@ Configure o provedor Email, a Site URL e a Redirect URL
 modelo, transmite a resposta por streaming e persiste mensagens com request
 IDs idempotentes. Chaves e conteúdo das conversas não entram nos logs.
 
-- `GET /api/health`: health check público e mínimo;
+- `GET /api/health`: health check público e mínimo (versão e ambiente);
+- `GET /api/readiness`: prontidão segura (banco, texto, imagem, guard de uso) sem segredos;
 - `/settings/system`: painel protegido de diagnóstico;
 - `GET /api/system/diagnostics`: verificação server-side protegida do banco,
   schema e disponibilidade do modelo.
+
+## Uso diário e limites
+
+O uso da Nira não é ilimitado. Existe quota diária distribuída (tabela
+`daily_usage`, migration 009): 200 mensagens/dia e 10 imagens/dia por padrão
+(configuráveis por `HANIRA_USER_DAILY_MESSAGE_LIMIT` e
+`HANIRA_USER_DAILY_IMAGE_LIMIT`; `0` desativa o limite). O dashboard
+"Uso da Hanira" nas configurações mostra o consumo do dia e o horário de
+renovação UTC. Não há créditos, carteira, cobrança ou upgrade pago — o
+projeto opera com arquitetura de custo zero.
+
+Limites operacionais honestos:
+
+- rate limit e concurrency guard são in-memory por instância (best-effort,
+  não distribuídos — sem Redis/Upstash);
+- sem migração 009 aplicada, o guard degrada para memória local e o
+  dashboard sinaliza estado limitado; falhas do guard são fail-closed.
+
+## Status das capacidades
+
+- **AVAILABLE**: chat textual, geração/edição de imagem (Cloudflare free),
+  memória, contexto de projeto, anexos de documento, hora/clima,
+  uso diário distribuído;
+- **LIMITED**: extração de PDF (somente texto, sem OCR completo); imagens
+  geradas são efêmeras (sem galeria persistente);
+- **PLANNED**: visão, transcrição e voz como capacidades públicas R$0 —
+  os caminhos legados existem em código mas NÃO são promovidos como
+  disponíveis; navegação geral na internet não existe.
+
+## Voz e visão (LEGADO — não promovido)
 
 ## Voz e visão
 

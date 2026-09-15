@@ -12,6 +12,7 @@ import { getOpenAIClient } from "@/services/openai";
 import { getCapacityMetricsSnapshot } from "@/lib/observability/capacity-metrics";
 import type { SystemDiagnostics } from "@/types/diagnostics";
 import { getPublicAICapabilities } from "@/lib/ai/public-capabilities";
+import { getReleaseInfo } from "@/lib/version";
 
 const REQUIRED_TABLES = [
   "profiles",
@@ -63,6 +64,7 @@ export async function GET(request: Request) {
       schemaVersion: null,
       appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "nao configurada",
       appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "unknown",
+      release: getReleaseInfo(),
       checkedAt: new Date().toISOString(),
       requestId,
     };
@@ -166,6 +168,7 @@ export async function GET(request: Request) {
     schemaVersion,
     appUrl: env.NEXT_PUBLIC_APP_URL,
     appVersion: env.NEXT_PUBLIC_APP_VERSION,
+    release: getReleaseInfo(),
     checkedAt: new Date().toISOString(),
     requestId,
   };
