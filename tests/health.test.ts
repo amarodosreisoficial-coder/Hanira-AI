@@ -20,6 +20,7 @@ describe("health check público", () => {
       status: "ok",
       app: "Hanira AI",
       version: "0.4.0",
+      environment: "self-hosted",
       mode: "demo",
     });
     expect(JSON.stringify(body)).not.toContain("sk-secret");

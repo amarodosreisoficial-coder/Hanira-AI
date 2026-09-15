@@ -22,6 +22,9 @@ export interface SystemDiagnostics {
   appVersion: string;
   checkedAt: string;
   requestId: string;
+  // Package 17.6: identificacao de release segura (commit do build e
+  // ambiente logico). Exposta apenas neste diagnostico autenticado.
+  release?: import("@/lib/version").ReleaseInfo;
   text: DiagnosticCapability;
   vision: DiagnosticCapability;
   transcription: DiagnosticCapability;

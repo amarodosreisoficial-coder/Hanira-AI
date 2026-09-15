@@ -12,14 +12,14 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `90a9d67152c752c087118ddf73981c8218613808` (merge do Package 17.4 via PR #20)
-- Branch atual: `pacote-17-5-distributed-usage-guard`
-- Commit do Package 17.4: merge `90a9d67152c752c087118ddf73981c8218613808` via PR #20.
-- Package 17.5: Distributed Usage Guard + Free Capacity Protection + Usage Dashboard.
+- Base atual sincronizada: `main` / `90fd5051534675bcb72a20df7ee60887cc335fc1` (merge do Package 17.5 via PR #21)
+- Branch atual: `pacote-17-6-production-hardening`
+- Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
+- Package 17.6: Production Hardening + Operational Readiness + Multi-User Safety.
 
 ## 3. CURRENT GIT STATE
 
-O Package 17.4 foi mergeado pelo PR #20 no commit `90a9d67152c752c087118ddf73981c8218613808`. A branch 17.5 (`pacote-17-5-distributed-usage-guard`) nasceu diretamente desse commit. `main` não foi modificada pelo Package 17.5; PR, merge, migration remota e deploy de produção permanecem decisões humanas posteriores.
+O Package 17.5 foi mergeado pelo PR #21 no commit `90fd5051534675bcb72a20df7ee60887cc335fc1`. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009; RLS habilitado; `consume_daily_usage` executável somente por service_role). Smoke test de produção passou: `text_count = 1`, `image_count = 1` — o guard distribuído está operacional. A branch 17.6 (`pacote-17-6-production-hardening`) nasceu desse commit. `main` não foi modificada pelo Package 17.6; PR, merge e deploy permanecem decisões humanas posteriores.
 
 ## 4. PACKAGE TIMELINE
 
@@ -30,7 +30,9 @@ O Package 17.4 foi mergeado pelo PR #20 no commit `90a9d67152c752c087118ddf73981
 | 17.1 | `94d0e18`; merge `100379f` via PR #17 | Concluído e mergeado; hardening e smoke controlado do Flux passaram naquele snapshot. |
 | 17.2 | `fa49b7c`, `af09919`; merge `88d8a36` via PR #18 | Concluído e mergeado; identidade, marca, PWA, instalação e metadata social. |
 | 17.3 | `45c4705`; merge via PR #19 | MERGED. |
-| 17.4 | branch `pacote-17-4-unified-composer-image-ux` | Implementado e validado localmente. Single composer, image intent determinístico, UX premium. |
+| 17.4 | branch `pacote-17-4-unified-composer-image-ux` | MERGED via PR #20 (`90a9d67`). Single composer, image intent determinístico, UX premium. |
+| 17.5 | branch `pacote-17-5-distributed-usage-guard`; merge `90fd505` via PR #21 | MERGED. Guard distribuído + usage dashboard. Migration 009 REMOTA: ACTIVE / VERIFIED. Smoke: text_count=1, image_count=1. |
+| 17.6 | branch `pacote-17-6-production-hardening` | Implementado e validado localmente. Hardening de produção, readiness, release identity e multi-user safety. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -161,7 +163,15 @@ Nenhum desses eventos inclui prompt, resposta, memória, attachment, Authorizati
 
 ## 17. TEST / BUILD STATUS
 
-Snapshot local do Package 17.5 antes do commit final:
+Snapshot local do Package 17.6 antes do commit final:
+- `npm test`: PASS — 859 passed / 7 skipped / 94 files (47 novos testes).
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS.
+- `npm run build`: PASS — Next.js 16.3.3.
+- `npm run verify:release`: PASS.
+- Testes e verificadores não fizeram chamadas reais de Groq, Cloudflare, OpenAI, Ollama remoto, weather nem mutações no Supabase remoto.
+
+Snapshot do Package 17.5 (mergeado):
 - `npm test`: PASS — 812 passed / 7 skipped / 88 files (37 novos testes).
 - `npm run typecheck`: PASS.
 - `npm run lint`: PASS — 0 errors / 6 warnings preexistentes.
@@ -198,19 +208,19 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ### DONE
 
-Packages 16.4–17.4 concluídos; 17.4 mergeado via PR #20 em `90a9d67`.
+Packages 16.4–17.5 concluídos; 17.5 mergeado via PR #21 em `90fd505`; migration 009 ativa e verificada no remoto; smoke de produção do guard distribuído passou.
 
 ### CURRENT
 
-Package 17.5 implementado e validado na branch `pacote-17-5-distributed-usage-guard` (commits `c366d51`, `e098773`, `147695c`). Migration 009 existe apenas localmente.
+Package 17.6 implementado e validado na branch `pacote-17-6-production-hardening`: release identity, readiness com sinal do guard distribuído, dashboard de uso com estados de limite, testes de ownership/concurrency/quota ordering/failure modes e documentação corrigida.
 
 ### NEXT
 
-Revisão humana da branch, da migration 009 e autorização explícita para PR / aplicação remota da migration.
+Revisão humana da branch 17.6 e autorização explícita para PR / merge.
 
 ### LATER
 
-Package 17.6 candidate e demais itens do LATER não foram iniciados.
+Package 17.7 e demais itens do LATER não foram iniciados.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
@@ -225,18 +235,19 @@ Revisão humana do Package 17.5 (branch + migration 009). Não abrir PR nem apli
 - PROJECT: Hanira AI / Nira
 - PATH: `C:\Projetos\hanira-app`
 - REMOTE: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- MAIN HEAD / BASE: `90a9d67152c752c087118ddf73981c8218613808` (PR #20)
-- CURRENT BRANCH: `pacote-17-5-distributed-usage-guard`
-- LAST MERGED PACKAGE: 17.4 via PR #20 / `90a9d67`
-- CURRENT PACKAGE: 17.5 Distributed Usage Guard + Free Capacity Protection + Usage Dashboard
-- COMMITS: `c366d51` (guard + dashboard), `e098773` (quota ordering + migration security), `147695c` (failure semantics)
-- MIGRATION 009: existe apenas local (`supabase/migrations/009_distributed_daily_usage.sql`); REMOTE: NOT APPLIED
+- MAIN HEAD / BASE: `90fd5051534675bcb72a20df7ee60887cc335fc1` (PR #21)
+- CURRENT BRANCH: `pacote-17-6-production-hardening`
+- LAST MERGED PACKAGE: 17.5 via PR #21 / `90fd505`
+- MIGRATION 009: REMOTE ACTIVE / VERIFIED (schema_version = 009; smoke text_count=1, image_count=1)
+- CURRENT PACKAGE: 17.6 Production Hardening + Operational Readiness + Multi-User Safety
+- 17.6 SCOPE: release identity (`lib/version.ts`; commit SHA via VERCEL_GIT_COMMIT_SHA/HANIRA_GIT_COMMIT_SHA), health com environment, readiness com usageGuard/usageTracking/image, diagnostics com release, dashboard com limite atingido/perto do limite/retry, testes de ownership/concurrency/quota/failures (47 novos)
 - LIMITS: texto 200/dia default, imagem 10/dia default; 0 = desativado; fail-closed
-- USAGE API: `GET /api/usage`; DASHBOARD: "Uso da Hanira" nas settings
-- IMAGE PUBLIC RESPONSE: sem providerId/modelId/mock/durationMs
+- USAGE API: `GET /api/usage`; DASHBOARD: "Uso da Hanira" nas settings; READINESS: `GET /api/readiness`
+- RATE LIMIT: in-memory, per-instance, best-effort (20 req/min por chave); distribuído NÃO
+- CONCURRENCY: in-memory per-user (default 1); escopado por usuário; não serializa usuários diferentes
 - PROVIDERS/MODELS: sem mudanças; zero-cost/free-only preservado
-- DB REMOTE/BILLING/DEPENDENCIES: NONE / NONE / NONE
+- DB REMOTE MUTATIONS: 0; BILLING/DEPENDENCIES: NONE / NONE
 - REAL PROVIDER CALLS: 0; REAL SUPABASE TEST MUTATIONS: 0
-- VALIDATION: test 812 passed / 7 skipped; typecheck/lint/build/verify:release PASS
-- PR/MERGE/MIGRATION REMOTA/PRODUCTION DEPLOY: NO
-- NEXT ACTION: revisão humana do branch e da migration 009
+- VALIDATION: test 859 passed / 7 skipped; typecheck/lint/build/verify:release PASS
+- PR/MERGE/PUSH MAIN/PRODUÇÃO: NO (branch 17.6 pronta para revisão humana)
+- NEXT ACTION: revisão humana do Package 17.6 e PR
