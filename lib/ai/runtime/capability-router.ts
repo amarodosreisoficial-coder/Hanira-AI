@@ -14,6 +14,14 @@ import {
   buildDocumentContextBlock,
   extractDocumentFromAttachment,
 } from "@/services/document-extraction";
+import {
+  buildDocumentContextBudget,
+  type DocumentBudgetSource,
+} from "@/lib/ai/runtime/document-context-budget";
+import {
+  DOCUMENT_POLICY_INSTRUCTIONS,
+  DOCUMENT_OMITTED_MARKER,
+} from "@/lib/ai/runtime/document-policy";
 import { getOpenAIClient } from "@/services/openai";
 import type { AttachmentDescriptor } from "@/types/media";
 
@@ -194,18 +202,62 @@ export async function routeChatCapability(options: {
       extracted: await extractDocumentFromAttachment(attachment),
     })),
   );
-  const documentContext = buildDocumentContextBlock(extractedDocuments);
+
+  // Aplica orcamento deterministico de contexto de documentos
+  const sources: DocumentBudgetSource[] = extractedDocuments.map(
+    ({ attachment, extracted }) => ({
+      sourceLabel: attachment.originalName,
+      text: extracted.text,
+    }),
+  );
+  const budget = buildDocumentContextBudget(sources);
+
+  // Constrói documentos com texto orçamentado para o contexto do provider
+  const documentsForContext = budget.sources.map((source, index) => {
+    const original = extractedDocuments[index];
+    if (source.omitted) {
+      return {
+        attachment: original.attachment,
+        extracted: {
+          ...original.extracted,
+          text: DOCUMENT_OMITTED_MARKER,
+          characterCount: 0,
+          truncated: true,
+          warnings: [
+            ...original.extracted.warnings,
+            `Este documento excedeu o limite de contexto e foi omitido.`,
+          ],
+        },
+      };
+    }
+    return {
+      attachment: original.attachment,
+      extracted: {
+        ...original.extracted,
+        text: source.text,
+        characterCount: source.charactersIncluded,
+        truncated: source.truncated || original.extracted.truncated,
+      },
+    };
+  });
+
+  const documentContext = buildDocumentContextBlock(documentsForContext);
   const userText = buildDocumentAwareUserText({
     userMessage: options.userMessage,
     documentContext,
     hasDocuments: documentAttachments.length > 0,
   });
 
+  // Monta system prompt com instrucoes de politica de documentos quando ha documentos
+  const systemPromptWithDocumentPolicy = documentAttachments.length > 0
+    ? `${options.systemPrompt}\n\n${DOCUMENT_POLICY_INSTRUCTIONS}`
+    : options.systemPrompt;
+
   return {
     capability: "text",
     provider: runtime.provider,
     providerRequest: buildTextChatProviderRequest({
-      systemPrompt: options.systemPrompt,
+      systemPrompt: systemPromptWithDocumentPolicy,
       context: [...options.context, { role: "user", content: userText }],
       model: runtime.model,
     }),
