@@ -1,6 +1,8 @@
 import "server-only";
 import { inflateSync } from "node:zlib";
-import { MAX_DOCUMENT_CONTEXT_CHARACTERS } from "@/lib/media/config";
+import {
+  MAX_DOCUMENT_CONTEXT_CHARACTERS,
+} from "@/lib/media/config";
 import {
   sanitizeExtractedDocumentText,
   truncateDocumentText,
@@ -9,12 +11,21 @@ import {
 import { downloadAttachmentBytes } from "@/services/attachments";
 import type { AttachmentDescriptor } from "@/types/media";
 
+export type DocumentExtractionStatus =
+  | "extracted"
+  | "truncated"
+  | "no_text"
+  | "unsupported_type"
+  | "unreadable"
+  | "budget_exceeded";
+
 export interface ExtractedDocument {
   text: string;
   characterCount: number;
   truncated: boolean;
   pageCount?: number;
   warnings: string[];
+  status: DocumentExtractionStatus;
 }
 
 function decodePdfLiteralString(input: string) {
@@ -114,10 +125,17 @@ function finalizeExtractedDocument(
   text: string,
   warnings: string[],
   pageCount?: number,
+  status: DocumentExtractionStatus = "extracted",
 ): ExtractedDocument {
   const sanitized = sanitizeExtractedDocumentText(text);
   if (!sanitized) {
-    throw new Error("O documento nao possui texto extraivel.");
+    return {
+      text: "",
+      characterCount: 0,
+      truncated: false,
+      warnings: [],
+      status: "no_text",
+    };
   }
 
   const { text: truncatedText, truncated } = truncateDocumentText(sanitized);
@@ -133,6 +151,7 @@ function finalizeExtractedDocument(
             `Apenas os primeiros ${MAX_DOCUMENT_CONTEXT_CHARACTERS} caracteres foram usados.`,
           ]
         : warnings,
+    status: truncated ? "truncated" : status,
   };
 }
 
@@ -140,12 +159,20 @@ export async function extractDocumentFromFile(file: File): Promise<ExtractedDocu
   const { bytes, mimeType } = await validateMediaFile(file, "document");
   if (mimeType === "text/plain" || mimeType === "text/markdown") {
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-    return finalizeExtractedDocument(text, []);
+    const result = finalizeExtractedDocument(text, []);
+    if (result.status === "no_text") {
+      throw new Error("Nao encontrei texto extraivel neste arquivo.");
+    }
+    return result;
   }
 
   if (mimeType === "application/pdf") {
     const result = extractPdfStreamTexts(bytes);
-    return finalizeExtractedDocument(result.text, result.warnings, result.pageCount);
+    const finalized = finalizeExtractedDocument(result.text, result.warnings, result.pageCount);
+    if (finalized.status === "no_text") {
+      throw new Error("Nao encontrei texto extraivel neste arquivo.");
+    }
+    return finalized;
   }
 
   throw new Error("Tipo de documento nao suportado.");
@@ -188,4 +215,65 @@ export function buildDocumentContextBlock(
         .join("\n"),
     )
     .join("\n\n");
+}
+
+export interface AttachmentPreview {
+  id: string;
+  originalName: string;
+  status: DocumentExtractionStatus;
+  characterCount: number;
+  truncated: boolean;
+  pageCount: number | undefined;
+  warnings: string[];
+}
+
+export async function extractAttachmentPreview(
+  attachment: AttachmentDescriptor,
+): Promise<AttachmentPreview> {
+  try {
+    const extracted = await extractDocumentFromAttachment(attachment);
+    return {
+      id: attachment.id,
+      originalName: attachment.originalName,
+      status: extracted.status,
+      characterCount: extracted.characterCount,
+      truncated: extracted.truncated,
+      pageCount: extracted.pageCount,
+      warnings: extracted.warnings,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Não foi possível ler o documento.";
+    if (message.includes("suportado")) {
+      return {
+        id: attachment.id,
+        originalName: attachment.originalName,
+        status: "unsupported_type",
+        characterCount: 0,
+        truncated: false,
+        pageCount: undefined,
+        warnings: [message],
+      };
+    }
+    if (message.includes("texto extraivel")) {
+      return {
+        id: attachment.id,
+        originalName: attachment.originalName,
+        status: "no_text",
+        characterCount: 0,
+        truncated: false,
+        pageCount: undefined,
+        warnings: [message],
+      };
+    }
+    return {
+      id: attachment.id,
+      originalName: attachment.originalName,
+      status: "unreadable",
+      characterCount: 0,
+      truncated: false,
+      pageCount: undefined,
+      warnings: [message],
+    };
+  }
 }

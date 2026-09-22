@@ -739,6 +739,35 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           </div>
         )}
         <div className="compose-surface nira-composer rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none">
+          <textarea
+            ref={ref}
+            value={store.draft}
+            rows={1}
+            maxLength={CHAT_MESSAGE_MAX_LENGTH}
+            aria-label="Mensagem para a Nira"
+            aria-describedby={
+              showOperationalIssue
+                ? "chat-message-length chat-operational-error"
+                : "chat-message-length"
+            }
+            placeholder={
+              pendingMedia.length
+                ? "Pergunte sobre o arquivo..."
+                : isImageMode
+                  ? "Descreva a imagem que você quer criar..."
+                  : "Converse com a Nira..."
+            }
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              store.setDraft(nextValue);
+              if (isChatMessageTooLong(nextValue)) showMessageLengthError();
+              else clearMessageLengthError();
+              resize();
+            }}
+            onPaste={handlePaste}
+            onKeyDown={handleKeyDown}
+                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+          />
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
               {pendingMedia.map((item) => (
@@ -781,35 +810,6 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               ))}
             </div>
           )}
-          <textarea
-            ref={ref}
-            value={store.draft}
-            rows={1}
-            maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            aria-label="Mensagem para a Nira"
-            aria-describedby={
-              showOperationalIssue
-                ? "chat-message-length chat-operational-error"
-                : "chat-message-length"
-            }
-            placeholder={
-              pendingMedia.length
-                ? "Pergunte sobre o arquivo..."
-                : isImageMode
-                  ? "Descreva a imagem que você quer criar..."
-                  : "Converse com a Nira..."
-            }
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              store.setDraft(nextValue);
-              if (isChatMessageTooLong(nextValue)) showMessageLengthError();
-              else clearMessageLengthError();
-              resize();
-            }}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
-          />
           <input
             ref={imageInputRef}
             type="file"

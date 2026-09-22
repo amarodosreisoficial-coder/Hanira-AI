@@ -27,6 +27,38 @@ export function ImageComposerOptions({
 }) {
   return (
     <div className="px-1 pb-1 pt-0.5" data-composer-mode="image">
+      {/* Pacote 17.7 (hotfix de layout): as referências ficam ACIMA dos
+          controles, para que a ordem visual seja textarea -> miniaturas ->
+          controles -> rodapé. pendingMedia nunca entra aqui: este bloco
+          renderiza apenas imageReferences (rascunhos de geração de imagem). */}
+      {references.length > 0 && (
+        <div className="mb-2 flex gap-2 overflow-x-auto pt-1" aria-label="Imagens de referência">
+          {references.map((reference, index) => (
+            <div
+              key={reference.id}
+              className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-border/70 bg-black/20"
+            >
+              <Image
+                src={reference.previewUrl}
+                alt={`Referência ${index + 1}: ${reference.file.name}`}
+                fill
+                unoptimized
+                className="object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => onRemoveReference(reference)}
+                disabled={busy}
+                aria-label={`Remover referência ${index + 1}`}
+                className="absolute right-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-black/75 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 pl-3 pr-1.5 text-xs font-medium text-primary">
           <Sparkles className="size-3.5" aria-hidden="true" />
@@ -71,34 +103,6 @@ export function ImageComposerOptions({
           Referências{references.length ? ` (${references.length})` : ""}
         </button>
       </div>
-
-      {references.length > 0 && (
-        <div className="mt-2 flex gap-2 overflow-x-auto" aria-label="Imagens de referência">
-          {references.map((reference, index) => (
-            <div
-              key={reference.id}
-              className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-border/70 bg-black/20"
-            >
-              <Image
-                src={reference.previewUrl}
-                alt={`Referência ${index + 1}: ${reference.file.name}`}
-                fill
-                unoptimized
-                className="object-cover"
-              />
-              <button
-                type="button"
-                onClick={() => onRemoveReference(reference)}
-                disabled={busy}
-                aria-label={`Remover referência ${index + 1}`}
-                className="absolute right-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-black/75 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
-              >
-                <X className="size-3" aria-hidden="true" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

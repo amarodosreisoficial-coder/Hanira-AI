@@ -69,6 +69,17 @@ describe("extracao textual de documentos", () => {
     );
   });
 
+  it("falha de forma graciosa em PDF malformado, sem inventar texto", async () => {
+    const malformed = new File(
+      ["%PDF-1.4\nconteudo corrompido sem streams validos\n%%EOF"],
+      "corrompido.pdf",
+      { type: "application/pdf" },
+    );
+    await expect(extractDocumentFromFile(malformed)).rejects.toThrow(
+      "texto extraivel",
+    );
+  });
+
   it("marca truncamento e delimita contexto nao confiavel", async () => {
     const extracted = await extractDocumentFromFile(createTextFile("a".repeat(12_500)));
     expect(extracted.truncated).toBe(true);

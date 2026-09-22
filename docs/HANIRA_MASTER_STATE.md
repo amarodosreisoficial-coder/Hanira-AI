@@ -1,7 +1,7 @@
 # HANIRA AI — MASTER STATE REPORT
-## Recovery Snapshot — Package 17.4
+## Recovery Snapshot — Package 17.7 (Document Intelligence V1)
 
-Atualizado em 2026-09-11. Este documento descreve o estado corrente; resultados antigos permanecem identificados como snapshots históricos no ledger.
+Atualizado em 2026-09-21. Este documento descreve o estado corrente; resultados antigos permanecem identificados como snapshots históricos no ledger.
 
 ## 1. PROJECT IDENTITY
 
@@ -12,14 +12,15 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `90fd5051534675bcb72a20df7ee60887cc335fc1` (merge do Package 17.5 via PR #21)
-- Branch atual: `pacote-17-6-production-hardening`
+- Base atual sincronizada: `main` / `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` (merge do Package 17.6 via PR #22)
+- Branch atual: `pacote-17-7-document-intelligence`
 - Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
-- Package 17.6: Production Hardening + Operational Readiness + Multi-User Safety.
+- Commit do Package 17.6: merge `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` via PR #22; 17.6 em produção operacional.
+- Package 17.7: Document Intelligence V1 + Attachment-Aware Chat + Source-Grounded UX + Image Composer Layout Hotfix.
 
 ## 3. CURRENT GIT STATE
 
-O Package 17.5 foi mergeado pelo PR #21 no commit `90fd5051534675bcb72a20df7ee60887cc335fc1`. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009; RLS habilitado; `consume_daily_usage` executável somente por service_role). Smoke test de produção passou: `text_count = 1`, `image_count = 1` — o guard distribuído está operacional. A branch 17.6 (`pacote-17-6-production-hardening`) nasceu desse commit. `main` não foi modificada pelo Package 17.6; PR, merge e deploy permanecem decisões humanas posteriores.
+O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.6 (`pacote-17-6-production-hardening`) foi mergeada e não está mais ativa. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar. A branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carrega o Document Intelligence V1: `main` NÃO foi modificada pelo 17.7; PR, merge e deploy permanecem decisões humanas posteriores. No fechamento do pacote, o estado validado era: testes 880 passed / 7 skipped (0 failed), typecheck, lint, build e verify:release PASS.
 
 ## 4. PACKAGE TIMELINE
 
@@ -31,8 +32,9 @@ O Package 17.5 foi mergeado pelo PR #21 no commit `90fd5051534675bcb72a20df7ee60
 | 17.2 | `fa49b7c`, `af09919`; merge `88d8a36` via PR #18 | Concluído e mergeado; identidade, marca, PWA, instalação e metadata social. |
 | 17.3 | `45c4705`; merge via PR #19 | MERGED. |
 | 17.4 | branch `pacote-17-4-unified-composer-image-ux` | MERGED via PR #20 (`90a9d67`). Single composer, image intent determinístico, UX premium. |
-| 17.5 | branch `pacote-17-5-distributed-usage-guard`; merge `90fd505` via PR #21 | MERGED. Guard distribuído + usage dashboard. Migration 009 REMOTA: ACTIVE / VERIFIED. Smoke: text_count=1, image_count=1. |
-| 17.6 | branch `pacote-17-6-production-hardening` | Implementado e validado localmente. Hardening de produção, readiness, release identity e multi-user safety. |
+| 17.5 | branch `pacote-17-5-distributed-usage-guard`; merge `90fd505` via PR #21 | MERGED. Guard distribuído + usage dashboard. Migration 009 remota: ACTIVE / VERIFIED. Smoke: text_count=1, image_count=1. |
+| 17.6 | branch `pacote-17-6-production-hardening`; merge `3c51be7` via PR #22 | MERGED e em produção operacional: hardening, readiness, release identity, multi-user safety. |
+| 17.7 | branch `pacote-17-7-document-intelligence` | Implementado e validado na branch. Document Intelligence V1 (TXT/Markdown/PDF-texto), anexos com ownership, orçamento de contexto determinístico, defesa de prompt injection e hotfix de layout do composer de imagem. NÃO MERGED no momento da escrita. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -69,11 +71,10 @@ O Package 17.5 foi mergeado pelo PR #21 no commit `90fd5051534675bcb72a20df7ee60
 - **Testes**: 62 novos testes adicionados (759 total). Cobre positive/negative intents, explicit image mode, normal text, image routing, single textarea, no second textarea, image result, download, regenerate, references, no base64 persistence, no model/provider UI, compact install, standalone hidden, iOS popover.
 
 | 17.4 | `9a3a327`…; merge `90a9d67` via PR #20 | MERGED. |
-| 17.5 | branch `pacote-17-5-distributed-usage-guard`; commits `c366d51`, `e098773`, `147695c` | Implementado e validado localmente. Quota distribuída Postgres, fail-closed, usage API e dashboard; migration 009 apenas local. |
 
 ## 6B. PACKAGE 17.5 — IMPLEMENTED STATE
 
-- **Quota distribuída**: contador diário atômico por usuário/dia UTC/kind (`text`/`image`) no Postgres via RPC `consume_daily_usage` (migration `009_distributed_daily_usage.sql`, LOCAL ONLY — não aplicada remotamente).
+- **Quota distribuída**: contador diário atômico por usuário/dia UTC/kind (`text`/`image`) no Postgres via RPC `consume_daily_usage` (migration `009_distributed_daily_usage.sql`, ATIVA no Supabase remoto — não reaplicar).
 - **Limites**: texto default 200/dia (`HANIRA_USER_DAILY_MESSAGE_LIMIT`), imagem default 10/dia (`HANIRA_USER_DAILY_IMAGE_LIMIT`); limite 0 = "Limite diário desativado"; env inválida falha em código (fail-closed).
 - **Rollout seguro**: fallback in-memory quando migration/RPC claramente ausente (códigos 42P01/42883/PGRST202); erro genérico de banco, timeout, permission denied ou resposta inesperada = fail-closed (`UsageGuardUnavailableError`).
 - **Chat** (`/api/chat`): demo e rate-limit não consomem quota; concurrency rejection não consome; quota consumida antes do provider; streaming/memória/self-knowledge/free-only router intactos.
@@ -83,6 +84,21 @@ O Package 17.5 foi mergeado pelo PR #21 no commit `90fd5051534675bcb72a20df7ee60
 - **Usage Dashboard**: "Uso da Hanira" nas settings (`components/usage/usage-dashboard.tsx`), mensagens/imagens hoje, restantes, renovação, sem polling contínuo.
 - **Migration 009**: tabela `daily_usage` com RLS (select próprio), mutação somente via RPC `security definer` executável apenas por `service_role`; cliente não altera uso diretamente; sem billing nem dados sensíveis.
 - **Testes**: +37 novos (812 total): usage-distributed, usage-guard, usage-ordering, contract público, dashboard.
+
+## 6C. PACKAGE 17.7 — IMPLEMENTED STATE (NOT MERGED)
+
+- **Escopo**: Document Intelligence V1 + Attachment-Aware Chat + Source-Grounded UX + Image Composer Layout Hotfix.
+- **Formatos**: TXT (`text/plain`), Markdown (`text/markdown`) e PDF **com texto extraível** ("PDFs compatíveis com extração de texto" — extração leve via FlateDecode e operadores de texto; sem OCR, sem DOCX, sem RAG/embeddings/vector DB).
+- **Honestidade de PDF**: PDF digitalizado/imagem-only retorna `no_text` com aviso explícito; nunca se finge leitura, nunca se inventam números de página ou citações não extraídas.
+- **Orçamento determinístico** (`lib/ai/runtime/document-context-budget.ts`): máximo 2 documentos/mensagem, 12.000 caracteres por documento, 20.000 caracteres totais por requisição; truncamento e omissão explícitos; orçamentos de histórico, memória e contexto de projeto permanecem separados.
+- **Grounding por fonte**: rótulo sanitizado (`sanitizeDocumentSourceLabel`) — nunca expõe bucket, storage path ou IDs internos; apenas nome de arquivo.
+- **Prompt injection**: documentos são DADOS, nunca instruções. Defesa primária é a hierarquia arquitetural (política `DOCUMENT_POLICY_INSTRUCTIONS` no system prompt + cabeçalho inline no contexto); heurística regex (`containsInstructionLikeContent`) é apenas observabilidade booleana, não mecanismo de segurança primário.
+- **Ownership**: `requireSessionUser()` → `user.id` da sessão → `getOwnedAttachments({ userId, conversationId, ids })` (filtra `user_id` + `conversation_id` no banco) → só então download/extração. O cliente nunca fornece `storageBucket`/`storagePath`, apenas IDs; `downloadAttachmentBytes` não valida ownership por si — o boundary é o ownership check anterior a ele.
+- **Privacidade**: nenhum log de texto de documento, bytes de PDF, Base64, Authorization, caminhos de storage ou segredos no fluxo de documentos; apenas IDs/contagens/status/duração.
+- **Persistência**: extração é processamento de requisição; nenhum novo armazenamento de texto, nenhuma migration, nenhuma alteração de schema.
+- **Image composer hotfix**: em modo imagem a ordem visual/DOM é textarea → miniaturas de `imageReferences` → controles (Criar imagem / Proporção / Referências) → rodapé. `pendingMedia` (anexos normais) não é confundido com `imageReferences`.
+- **Validação**: vitest 96 arquivos (95 passed / 1 skipped) — 880 passed / 7 skipped (0 failed; novos: 8 de budget + 12 de prompt-injection + suites de extração/roteamento pré-existentes); typecheck, lint, build e verify:release PASS.
+- **Estado**: implementado/validado na branch `pacote-17-7-document-intelligence`; NÃO MERGED no momento da escrita.
 
 ## 7. CURRENT PRODUCT CAPABILITIES
 
@@ -212,15 +228,22 @@ Packages 16.4–17.5 concluídos; 17.5 mergeado via PR #21 em `90fd505`; migrati
 
 ### CURRENT
 
-Package 17.6 implementado e validado na branch `pacote-17-6-production-hardening`: release identity, readiness com sinal do guard distribuído, dashboard de uso com estados de limite, testes de ownership/concurrency/quota ordering/failure modes e documentação corrigida.
+Package 17.7 implementado e validado na branch `pacote-17-7-document-intelligence`: Document Intelligence V1, attachment-aware chat, source-grounded UX e image composer layout hotfix. Not merged.
 
 ### NEXT
 
-Revisão humana da branch 17.6 e autorização explícita para PR / merge.
+Revisão humana da branch 17.7 e autorização explícita para PR / merge.
 
 ### LATER
 
-Package 17.7 e demais itens do LATER não foram iniciados.
+### Vídeo (research note)
+
+- `video_generation`: STATUS `RESEARCHED_NOT_IMPLEMENTED`.
+- Motivo: nenhuma API de produção sustentável a custo zero confirmada. Cloudflare Workers AI não oferece vídeo nativo gratuito; soluções third-party via Cloudflare violam a política de custo.
+- Candidatos futuros: vídeo nativo no Cloudflare Workers AI (se introduzido); Wan open-weight self-hosted; família LTX sujeita a revisão de licença/hardware.
+- Sem router, sem endpoints, sem UI, sem colunas de quota, sem capability code enquanto não houver caminho R$0 confirmado.
+
+Package 17.8 e demais itens do LATER não foram iniciados.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
@@ -228,26 +251,23 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 17.5 (branch + migration 009). Não abrir PR nem aplicar migration remota automaticamente.
+Revisão humana do Package 17.7 (PR #23, branch `pacote-17-7-document-intelligence`) e autorização explícita de merge. Não fazer merge nem aplicar qualquer migration remota automaticamente.
 
 ## CHATGPT RECOVERY BLOCK
 
 - PROJECT: Hanira AI / Nira
 - PATH: `C:\Projetos\hanira-app`
 - REMOTE: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- MAIN HEAD / BASE: `90fd5051534675bcb72a20df7ee60887cc335fc1` (PR #21)
-- CURRENT BRANCH: `pacote-17-6-production-hardening`
-- LAST MERGED PACKAGE: 17.5 via PR #21 / `90fd505`
-- MIGRATION 009: REMOTE ACTIVE / VERIFIED (schema_version = 009; smoke text_count=1, image_count=1)
-- CURRENT PACKAGE: 17.6 Production Hardening + Operational Readiness + Multi-User Safety
-- 17.6 SCOPE: release identity (`lib/version.ts`; commit SHA via VERCEL_GIT_COMMIT_SHA/HANIRA_GIT_COMMIT_SHA), health com environment, readiness com usageGuard/usageTracking/image, diagnostics com release, dashboard com limite atingido/perto do limite/retry, testes de ownership/concurrency/quota/failures (47 novos)
-- LIMITS: texto 200/dia default, imagem 10/dia default; 0 = desativado; fail-closed
-- USAGE API: `GET /api/usage`; DASHBOARD: "Uso da Hanira" nas settings; READINESS: `GET /api/readiness`
-- RATE LIMIT: in-memory, per-instance, best-effort (20 req/min por chave); distribuído NÃO
-- CONCURRENCY: in-memory per-user (default 1); escopado por usuário; não serializa usuários diferentes
+- MAIN HEAD / BASE: `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` (PR #22 — Package 17.6)
+- CURRENT BRANCH: `pacote-17-7-document-intelligence`
+- LAST MERGED PACKAGE: 17.6 via PR #22 / `3c51be7` (produção operacional)
+- MIGRATION 009: REMOTE ACTIVE / VERIFIED (schema_version = 009) — NÃO reaplicar
+- CURRENT PACKAGE: 17.7 Document Intelligence V1 + Attachment-Aware Chat + Source-Grounded UX + Image Composer Layout Hotfix
+- 17.7 SCOPE: extração de TXT/Markdown/PDF-texto (`services/document-extraction.ts`), orçamento determinístico (2 docs / 12k por doc / 20k total), política anti-injection no system prompt, ownership via `getOwnedAttachments`, hotfix de ordem visual do composer (`imageReferences` entre textarea e controles)
+- LIMITS: inalterados (texto 200/dia, imagem 10/dia; 0 = desativado; fail-closed)
 - PROVIDERS/MODELS: sem mudanças; zero-cost/free-only preservado
-- DB REMOTE MUTATIONS: 0; BILLING/DEPENDENCIES: NONE / NONE
-- REAL PROVIDER CALLS: 0; REAL SUPABASE TEST MUTATIONS: 0
-- VALIDATION: test 859 passed / 7 skipped; typecheck/lint/build/verify:release PASS
-- PR/MERGE/PUSH MAIN/PRODUÇÃO: NO (branch 17.6 pronta para revisão humana)
-- NEXT ACTION: revisão humana do Package 17.6 e PR
+- DB REMOTE MUTATIONS: 0; MIGRATIONS: NONE; BILLING/DEPENDENCIES: NONE / NONE
+- REAL PROVIDER CALLS: 0
+- VALIDATION: test 880 passed / 7 skipped (0 failed); typecheck/lint/build/verify:release PASS
+- PR/MERGE/PUSH MAIN/PRODUÇÃO: NO (branch 17.7 pronta para revisão humana)
+- NEXT ACTION: revisão humana do Package 17.7 e PR

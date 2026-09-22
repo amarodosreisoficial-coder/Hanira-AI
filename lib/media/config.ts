@@ -3,6 +3,11 @@ export const MAX_ATTACHMENTS_PER_MESSAGE = 4;
 export const MAX_DOCUMENTS_PER_MESSAGE = 2;
 export const MAX_RECORDING_SECONDS = 180;
 export const MAX_DOCUMENT_CONTEXT_CHARACTERS = 12_000;
+// Pacote 17.7: orcamento total deterministico de documentos por requisicao.
+// Dois documentos de 12k caracteres caberiam no limite por arquivo, mas o
+// contexto do provider precisa de um teto previsivel para nao apagar
+// historico, memoria e contexto de projeto.
+export const MAX_DOCUMENT_CONTEXT_TOTAL_CHARACTERS = 20_000;
 
 function publicNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value);
