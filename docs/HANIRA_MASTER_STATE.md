@@ -20,7 +20,7 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 
 ## 3. CURRENT GIT STATE
 
-O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.6 (`pacote-17-6-production-hardening`) foi mergeada e não está mais ativa. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar. A branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carrega o Document Intelligence V1: `main` NÃO foi modificada pelo 17.7; PR, merge e deploy permanecem decisões humanas posteriores. No fechamento do pacote, o estado validado era: testes 879 passed / 7 skipped, typecheck, lint, build e verify:release PASS.
+O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.6 (`pacote-17-6-production-hardening`) foi mergeada e não está mais ativa. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar. A branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carrega o Document Intelligence V1: `main` NÃO foi modificada pelo 17.7; PR, merge e deploy permanecem decisões humanas posteriores. No fechamento do pacote, o estado validado era: testes 880 passed / 7 skipped (0 failed), typecheck, lint, build e verify:release PASS.
 
 ## 4. PACKAGE TIMELINE
 
@@ -97,7 +97,7 @@ O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b8
 - **Privacidade**: nenhum log de texto de documento, bytes de PDF, Base64, Authorization, caminhos de storage ou segredos no fluxo de documentos; apenas IDs/contagens/status/duração.
 - **Persistência**: extração é processamento de requisição; nenhum novo armazenamento de texto, nenhuma migration, nenhuma alteração de schema.
 - **Image composer hotfix**: em modo imagem a ordem visual/DOM é textarea → miniaturas de `imageReferences` → controles (Criar imagem / Proporção / Referências) → rodapé. `pendingMedia` (anexos normais) não é confundido com `imageReferences`.
-- **Validação**: vitest 879 passed / 7 skipped (novos: 8 de budget + 12 de prompt-injection + suites de extração/roteamento pré-existentes); typecheck, lint, build e verify:release PASS.
+- **Validação**: vitest 96 arquivos (95 passed / 1 skipped) — 880 passed / 7 skipped (0 failed; novos: 8 de budget + 12 de prompt-injection + suites de extração/roteamento pré-existentes); typecheck, lint, build e verify:release PASS.
 - **Estado**: implementado/validado na branch `pacote-17-7-document-intelligence`; NÃO MERGED no momento da escrita.
 
 ## 7. CURRENT PRODUCT CAPABILITIES
@@ -251,7 +251,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 17.5 (branch + migration 009). Não abrir PR nem aplicar migration remota automaticamente.
+Revisão humana do Package 17.7 (PR #23, branch `pacote-17-7-document-intelligence`) e autorização explícita de merge. Não fazer merge nem aplicar qualquer migration remota automaticamente.
 
 ## CHATGPT RECOVERY BLOCK
 
@@ -268,6 +268,6 @@ Revisão humana do Package 17.5 (branch + migration 009). Não abrir PR nem apli
 - PROVIDERS/MODELS: sem mudanças; zero-cost/free-only preservado
 - DB REMOTE MUTATIONS: 0; MIGRATIONS: NONE; BILLING/DEPENDENCIES: NONE / NONE
 - REAL PROVIDER CALLS: 0
-- VALIDATION: test 879 passed / 7 skipped; typecheck/lint/build/verify:release PASS
+- VALIDATION: test 880 passed / 7 skipped (0 failed); typecheck/lint/build/verify:release PASS
 - PR/MERGE/PUSH MAIN/PRODUÇÃO: NO (branch 17.7 pronta para revisão humana)
 - NEXT ACTION: revisão humana do Package 17.7 e PR
