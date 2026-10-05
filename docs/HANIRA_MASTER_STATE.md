@@ -253,6 +253,16 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 Revisão humana do Package 17.7 (PR #23, branch `pacote-17-7-document-intelligence`) e autorização explícita de merge. Não fazer merge nem aplicar qualquer migration remota automaticamente.
 
+## PACKAGE 17.8 - CURRENT RECOVERY ADDENDUM
+
+- Updated: 2026-10-05.
+- Package 17.7: **MERGED** via PR #23, merge `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7`.
+- Package 17.8: **FEASIBILITY COMPLETED** on `pacote-17-8-vision-ocr-feasibility`; documentation/research only.
+- Vision: **NOT IMPLEMENTED**. OCR: **NOT IMPLEMENTED**. Scanned PDF OCR: **NOT IMPLEMENTED**.
+- Package 17.9: **PLANNED ONLY**; no implementation begins in this package.
+- Migration 009: REMOTE ACTIVE / VERIFIED and unchanged.
+- Source code: unchanged by Package 17.8. Provider activation, billing, paid resource, live Vision/OCR call, DB mutation, and migration: none.
+
 ## CHATGPT RECOVERY BLOCK
 
 - PROJECT: Hanira AI / Nira
