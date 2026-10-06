@@ -12,9 +12,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   voiceEnabled: false,
   autoSpeak: false,
   audioAutoplay: false,
-  ttsVoice: "alloy",
+  ttsVoice: "browser:auto",
   speechRate: 1,
-  transcriptionEnabled: true,
+  transcriptionEnabled: false,
   voiceConversationEnabled: false,
   privacyNoticeDismissed: false,
 };

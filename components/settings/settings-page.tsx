@@ -16,6 +16,7 @@ import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
 import { UsageDashboard } from "@/components/usage/usage-dashboard";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { BROWSER_TTS_AUTO_PREFERENCE, getBrowserTtsHost, isBrowserTtsPreference, listPtBrBrowserVoices } from "@/lib/voice/browser-tts";
 import type { ResponseStyle, UserSettings } from "@/types/settings";
 
 const styles: ResponseStyle[] = [
@@ -33,6 +34,16 @@ export function SettingsPage() {
     "loading",
   );
   const [message, setMessage] = useState("");
+  const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    const host = getBrowserTtsHost();
+    if (!host?.speechSynthesis) return;
+    const refreshVoices = () => setBrowserVoices(listPtBrBrowserVoices(host.speechSynthesis!.getVoices()));
+    refreshVoices();
+    host.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
+    return () => host.speechSynthesis?.removeEventListener("voiceschanged", refreshVoices);
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -55,7 +66,7 @@ export function SettingsPage() {
                 ...DEFAULT_USER_SETTINGS,
                 ...(JSON.parse(localSettings) as Partial<UserSettings>),
               }
-            : { ...DEFAULT_USER_SETTINGS, ...data.settings },
+            : { ...DEFAULT_USER_SETTINGS, ...data.settings, ttsVoice: isBrowserTtsPreference(data.settings.ttsVoice) ? data.settings.ttsVoice : BROWSER_TTS_AUTO_PREFERENCE },
         );
         setStatus("idle");
       })
@@ -209,11 +220,11 @@ export function SettingsPage() {
             />
           </SettingRow>
           <SettingRow
-            title="Voz"
-            description="Ativar gravação, transcrição e leitura das respostas."
+            title="Leitura em voz alta"
+            description="Permitir que a Hanira leia respostas usando a voz disponível no seu navegador."
           >
             <Toggle
-              label="Ativar voz"
+              label="Ativar leitura em voz alta"
               checked={settings.voiceEnabled}
               onChange={(voiceEnabled) =>
                 setSettings((value) => ({ ...value, voiceEnabled }))
@@ -221,23 +232,17 @@ export function SettingsPage() {
             />
           </SettingRow>
           <SettingRow
-            title="Ler respostas automaticamente"
-            description="Gerar a leitura após cada nova resposta. Desativado por padrão."
+            title="Leitura automática"
+            description="Ainda não está disponível no Browser TTS V1. A leitura só começa quando você usa o controle na resposta."
           >
-            <Toggle
-              label="Leitura automática"
-              checked={settings.autoSpeak}
-              onChange={(autoSpeak) =>
-                setSettings((value) => ({ ...value, autoSpeak }))
-              }
-            />
+            <span className="text-xs text-zinc-500">Indisponível nesta versão</span>
           </SettingRow>
           <SettingRow
-            title="Voz da Hanira"
-            description="Voz usada na síntese server-side."
+            title="Voz do navegador"
+            description="Apenas vozes pt-BR instaladas no navegador ou dispositivo são oferecidas."
           >
             <select
-              value={settings.ttsVoice}
+              value={isBrowserTtsPreference(settings.ttsVoice) ? settings.ttsVoice : BROWSER_TTS_AUTO_PREFERENCE}
               onChange={(event) =>
                 setSettings((value) => ({
                   ...value,
@@ -246,38 +251,15 @@ export function SettingsPage() {
               }
               className="h-10 rounded-xl border border-white/[0.09] bg-[#151217] px-3 text-sm outline-none"
             >
-              {[
-                "alloy",
-                "ash",
-                "ballad",
-                "coral",
-                "echo",
-                "fable",
-                "onyx",
-                "nova",
-                "sage",
-                "shimmer",
-                "verse",
-                "marin",
-                "cedar",
-              ].map((voice) => (
-                <option key={voice} value={voice}>
-                  {voice}
-                </option>
-              ))}
+              <option value={BROWSER_TTS_AUTO_PREFERENCE}>Automática (pt-BR)</option>
+              {browserVoices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name}</option>)}
             </select>
           </SettingRow>
           <SettingRow
             title="Reprodução automática"
-            description="Iniciar a fala automaticamente quando a leitura automática estiver ativa."
+            description="Ainda não está disponível no Browser TTS V1. Nenhuma resposta inicia fala automaticamente."
           >
-            <Toggle
-              label="Reprodução automática"
-              checked={settings.audioAutoplay}
-              onChange={(audioAutoplay) =>
-                setSettings((value) => ({ ...value, audioAutoplay }))
-              }
-            />
+            <span className="text-xs text-zinc-500">Indisponível nesta versão</span>
           </SettingRow>
           <SettingRow
             title="Velocidade da fala"
@@ -300,31 +282,10 @@ export function SettingsPage() {
             />
           </SettingRow>
           <SettingRow
-            title="Transcrição"
-            description="Converter gravações em texto editável antes do envio."
+            title="Transcrição e conversa por voz"
+            description="Ainda não estão disponíveis. Microfone, STT e conversa ao vivo não são ativados pelo Browser TTS V1."
           >
-            <Toggle
-              label="Ativar transcrição"
-              checked={settings.transcriptionEnabled}
-              onChange={(transcriptionEnabled) =>
-                setSettings((value) => ({ ...value, transcriptionEnabled }))
-              }
-            />
-          </SettingRow>
-          <SettingRow
-            title="Conversa por voz"
-            description="Habilitar o fluxo ouvir, transcrever, responder e falar."
-          >
-            <Toggle
-              label="Ativar conversa por voz"
-              checked={settings.voiceConversationEnabled}
-              onChange={(voiceConversationEnabled) =>
-                setSettings((value) => ({
-                  ...value,
-                  voiceConversationEnabled,
-                }))
-              }
-            />
+            <span className="text-xs text-zinc-500">Indisponível nesta versão</span>
           </SettingRow>
         </section>
 

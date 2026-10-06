@@ -3,6 +3,13 @@
 
 Atualizado em 2026-10-06. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
 
+## Package 18.1 — Browser TTS V1 (em desenvolvimento)
+
+- Base: merge do Package 18.0 via PR #25, `4b3f6bff1b328a6dfcfe39267e65fdb6677c1fe2`; branch `pacote-18-1-browser-tts-v1`.
+- Speech é uma capacidade `limited`: leitura manual local pelo Web Speech do navegador e somente quando houver voz exatamente pt-BR.
+- STT, microfone e conversa por voz ao vivo seguem indisponíveis. Rotas legadas OpenAI continuam preservadas, mas não são ativadas, auditadas como R$0 nem usadas pelo Browser TTS V1.
+- Não há provider, modelo, cobrança, billing, crédito ou fallback pago novo.
+
 ## 1. PROJECT IDENTITY
 
 Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hanira, independentemente do provider ou modelo técnico usado. O criador e desenvolvedor é Ronne Maicon Amaro dos Reis.

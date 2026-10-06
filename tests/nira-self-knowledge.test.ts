@@ -23,6 +23,7 @@ describe("autoconhecimento determinístico da Nira", () => {
     ["Pode editar imagem?", "image_generation", "referências"],
     ["Consigo mandar uma imagem como referência?", "image_generation", "referências"],
     ["Você tem memória?", "memory", "memória"],
+    ["Você fala?", "voice", "voz pt-BR"],
     ["Você é ilimitada?", "usage_limits", "não é ilimitado"],
     ["Você tem créditos?", "credits", "não utiliza uma carteira"],
     ["Quantos créditos eu tenho?", "credits", "saldo"],

@@ -18,7 +18,6 @@ export function buildNiraProductCapabilities(state: ProductCapabilityRuntimeStat
   const demo = state.demoMode === true;
   const attachments = state.attachmentsEnabled === true;
   // Os caminhos multimodais legados não foram auditados como R$0.
-  const voiceStatus: NiraProductCapabilityStatus = !state.voiceEnabled ? "disabled" : "unavailable";
   const visionStatus: NiraProductCapabilityStatus = !state.visionEnabled ? "disabled" : "unavailable";
 
   return Object.freeze([
@@ -31,8 +30,8 @@ export function buildNiraProductCapabilities(state: ProductCapabilityRuntimeStat
     capability("current_time", "Hora atual", "available", "Consulta a hora atual de uma localidade específica."),
     capability("current_weather", "Clima atual", "available", "Consulta o clima atual de uma localidade específica."),
     capability("vision", "Visão", visionStatus, visionStatus === "disabled" ? "Análise de imagens desativada nesta instância." : "Análise de imagens indisponível na política gratuita atual."),
-    capability("transcription", "Transcrição", voiceStatus, voiceStatus === "disabled" ? "Transcrição de áudio desativada nesta instância." : "Transcrição indisponível na política gratuita atual."),
-    capability("speech", "Voz", voiceStatus, voiceStatus === "disabled" ? "Resposta por voz desativada nesta instância." : "Resposta por voz indisponível na política gratuita atual."),
+    capability("transcription", "Transcrição", "disabled", "Transcrição de áudio ainda não está disponível."),
+    capability("speech", "Voz", "limited", "Leitura em voz alta disponível em navegadores compatíveis com voz pt-BR."),
   ]);
 }
 
