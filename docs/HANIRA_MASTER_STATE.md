@@ -1,7 +1,7 @@
 # HANIRA AI — MASTER STATE REPORT
-## Recovery Snapshot — Packages 17.7 and 17.8
+## Recovery Snapshot — Packages 17.7, 17.8 and 18.0
 
-Atualizado em 2026-10-06. As seções anteriores ao addendum 17.8 preservam o snapshot histórico de fechamento do 17.7; o addendum abaixo é o estado corrente e autoritativo.
+Atualizado em 2026-10-06. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
 
 ## 1. PROJECT IDENTITY
 
@@ -12,15 +12,15 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7` (merge do Package 17.7 via PR #23)
-- Branch atual: `pacote-17-8-vision-ocr-feasibility`
+- Base atual sincronizada: `main` / `a34d6744258b0a51430bd3531b1de98ff25c7766` (merge do Package 17.8 via PR #24)
+- Branch atual: `pacote-18-0-voice-foundation-feasibility`
 - Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
 - Commit do Package 17.6: merge `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` via PR #22; 17.6 em produção operacional.
-- Package 17.7: MERGED via PR #23. Package 17.8: feasibility completed; documentation/research only.
+- Package 17.7: MERGED via PR #23. Package 17.8: MERGED via PR #24. Package 18.0: Voice Foundation Feasibility.
 
 ## 3. CURRENT GIT STATE
 
-Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carregava o Document Intelligence V1. Estado corrente: 17.7 foi MERGED via PR #23 no commit `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7`; 17.8 está concluído como feasibility/documentation only na branch `pacote-17-8-vision-ocr-feasibility`. Vision, OCR e scanned-PDF OCR não foram implementados. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar.
+Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carregava o Document Intelligence V1. Estado corrente: 17.7 foi MERGED via PR #23 no commit `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7`; 17.8 foi MERGED via PR #24 no commit `a34d6744258b0a51430bd3531b1de98ff25c7766`. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar. Vision, OCR, scanned-PDF OCR, STT e TTS públicos continuam não implementados.
 
 ## 4. PACKAGE TIMELINE
 
@@ -35,7 +35,8 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 17.5 | branch `pacote-17-5-distributed-usage-guard`; merge `90fd505` via PR #21 | MERGED. Guard distribuído + usage dashboard. Migration 009 remota: ACTIVE / VERIFIED. Smoke: text_count=1, image_count=1. |
 | 17.6 | branch `pacote-17-6-production-hardening`; merge `3c51be7` via PR #22 | MERGED e em produção operacional: hardening, readiness, release identity, multi-user safety. |
 | 17.7 | merge `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7` via PR #23 | MERGED. Document Intelligence V1 (TXT/Markdown/PDF-texto), anexos com ownership, orçamento de contexto determinístico, defesa de prompt injection e hotfix de layout do composer de imagem. |
-| 17.8 | branch `pacote-17-8-vision-ocr-feasibility` | FEASIBILITY COMPLETED. Documentation/research only; Option D. Vision, OCR and scanned-PDF OCR NOT IMPLEMENTED. |
+| 17.8 | merge `a34d6744258b0a51430bd3531b1de98ff25c7766` via PR #24 | MERGED. Documentation/research only; Option D. Vision, OCR and scanned-PDF OCR NOT IMPLEMENTED. |
+| 18.0 | branch `pacote-18-0-voice-foundation-feasibility` | Voice Foundation Feasibility. STT/TTS and live voice are not implemented as public production capabilities. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -229,11 +230,11 @@ Packages 16.4–17.5 concluídos; 17.5 mergeado via PR #21 em `90fd505`; migrati
 
 ### CURRENT
 
-Package 17.8 feasibility completed on `pacote-17-8-vision-ocr-feasibility`: Option D — architecture ready; wait for a sustainable zero-cost Vision provider. Vision, OCR and scanned-PDF OCR are not implemented.
+Package 18.0 Voice Foundation Feasibility is current. Package 17.8 was MERGED via PR #24; Option D remains in force for Vision. Vision, OCR and scanned-PDF OCR are not implemented. Voice audit found legacy OpenAI-only paths disabled by default; no public STT/TTS capability is approved.
 
 ### NEXT
 
-Revisão humana do Package 17.8 PR; Package 17.9 remains planned only and blocked by the sustainable-zero-cost-provider gate.
+Human review of Package 18.0. Package 17.9 remains planned only and blocked by the sustainable-zero-cost Vision-provider gate; any STT provider remains subject to its own zero-cost gate.
 
 ### LATER
 
@@ -244,7 +245,7 @@ Revisão humana do Package 17.8 PR; Package 17.9 remains planned only and blocke
 - Candidatos futuros: vídeo nativo no Cloudflare Workers AI (se introduzido); Wan open-weight self-hosted; família LTX sujeita a revisão de licença/hardware.
 - Sem router, sem endpoints, sem UI, sem colunas de quota, sem capability code enquanto não houver caminho R$0 confirmado.
 
-Package 17.8 is completed as feasibility only; other LATER items have not been started.
+Package 17.8 is merged; Package 18.0 is feasibility only. Other LATER items have not been started.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
@@ -252,9 +253,9 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 17.8 PR. Não fazer merge nem aplicar qualquer migration remota automaticamente.
+Revisão humana do Package 18.0 PR quando criado. Não fazer merge nem aplicar qualquer migration remota automaticamente.
 
-## PACKAGE 17.8 - CURRENT RECOVERY ADDENDUM
+## PACKAGE 17.8 - HISTORICAL RECOVERY ADDENDUM
 
 - Updated: 2026-10-05.
 - Package 17.7: **MERGED** via PR #23, merge `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7`.
@@ -263,6 +264,16 @@ Revisão humana do Package 17.8 PR. Não fazer merge nem aplicar qualquer migrat
 - Package 17.9: **PLANNED ONLY**; no implementation begins in this package.
 - Migration 009: REMOTE ACTIVE / VERIFIED and unchanged.
 - Source code: unchanged by Package 17.8. Provider activation, billing, paid resource, live Vision/OCR call, DB mutation, and migration: none.
+
+## PACKAGE 18.0 - CURRENT FEASIBILITY ADDENDUM
+
+- Package 17.8: **MERGED** via PR #24, merge `a34d6744258b0a51430bd3531b1de98ff25c7766`.
+- Package 17.9: **PLANNED ONLY / BLOCKED** by the sustainable-zero-cost Vision-provider gate.
+- Package 18.0: **FEASIBILITY COMPLETED** on `pacote-18-0-voice-foundation-feasibility`; documentation/research only.
+- Voice audit: OpenAI-only STT/TTS routes and UI exist as **legacy unaudited paths** and are disabled by default through `NEXT_PUBLIC_VOICE_ENABLED=false`; they are not public production capabilities.
+- STT: **NOT IMPLEMENTED**. TTS: **NOT IMPLEMENTED**. Live voice: **NOT IMPLEMENTED**.
+- Recommendation: Option C — browser `speechSynthesis` TTS first, feature-detected and opt-in; cloud STT remains behind a separate current zero-cost-provider gate.
+- Migration 009: REMOTE ACTIVE / VERIFIED and unchanged. No provider activation, billing, DB mutation, migration, dependency, or live STT/TTS call occurred.
 
 ## CHATGPT RECOVERY BLOCK — HISTORICAL 17.7 SNAPSHOT
 
