@@ -1,7 +1,7 @@
 # HANIRA AI — MASTER STATE REPORT
-## Recovery Snapshot — Package 17.7 (Document Intelligence V1)
+## Recovery Snapshot — Packages 17.7 and 17.8
 
-Atualizado em 2026-09-21. Este documento descreve o estado corrente; resultados antigos permanecem identificados como snapshots históricos no ledger.
+Atualizado em 2026-10-06. As seções anteriores ao addendum 17.8 preservam o snapshot histórico de fechamento do 17.7; o addendum abaixo é o estado corrente e autoritativo.
 
 ## 1. PROJECT IDENTITY
 
@@ -12,15 +12,15 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` (merge do Package 17.6 via PR #22)
-- Branch atual: `pacote-17-7-document-intelligence`
+- Base atual sincronizada: `main` / `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7` (merge do Package 17.7 via PR #23)
+- Branch atual: `pacote-17-8-vision-ocr-feasibility`
 - Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
 - Commit do Package 17.6: merge `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` via PR #22; 17.6 em produção operacional.
-- Package 17.7: Document Intelligence V1 + Attachment-Aware Chat + Source-Grounded UX + Image Composer Layout Hotfix.
+- Package 17.7: MERGED via PR #23. Package 17.8: feasibility completed; documentation/research only.
 
 ## 3. CURRENT GIT STATE
 
-O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.6 (`pacote-17-6-production-hardening`) foi mergeada e não está mais ativa. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar. A branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carrega o Document Intelligence V1: `main` NÃO foi modificada pelo 17.7; PR, merge e deploy permanecem decisões humanas posteriores. No fechamento do pacote, o estado validado era: testes 880 passed / 7 skipped (0 failed), typecheck, lint, build e verify:release PASS.
+Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877`; a branch 17.7 (`pacote-17-7-document-intelligence`) nasceu de `3c51be7` e carregava o Document Intelligence V1. Estado corrente: 17.7 foi MERGED via PR #23 no commit `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7`; 17.8 está concluído como feasibility/documentation only na branch `pacote-17-8-vision-ocr-feasibility`. Vision, OCR e scanned-PDF OCR não foram implementados. A migration 009 está ATIVA e VERIFICADA no Supabase remoto (schema_version = 009) — NÃO reaplicar.
 
 ## 4. PACKAGE TIMELINE
 
@@ -34,7 +34,8 @@ O Package 17.6 foi mergeado pelo PR #22 no commit `3c51be7bc4cd63f4522ebe59f16b8
 | 17.4 | branch `pacote-17-4-unified-composer-image-ux` | MERGED via PR #20 (`90a9d67`). Single composer, image intent determinístico, UX premium. |
 | 17.5 | branch `pacote-17-5-distributed-usage-guard`; merge `90fd505` via PR #21 | MERGED. Guard distribuído + usage dashboard. Migration 009 remota: ACTIVE / VERIFIED. Smoke: text_count=1, image_count=1. |
 | 17.6 | branch `pacote-17-6-production-hardening`; merge `3c51be7` via PR #22 | MERGED e em produção operacional: hardening, readiness, release identity, multi-user safety. |
-| 17.7 | branch `pacote-17-7-document-intelligence` | Implementado e validado na branch. Document Intelligence V1 (TXT/Markdown/PDF-texto), anexos com ownership, orçamento de contexto determinístico, defesa de prompt injection e hotfix de layout do composer de imagem. NÃO MERGED no momento da escrita. |
+| 17.7 | merge `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7` via PR #23 | MERGED. Document Intelligence V1 (TXT/Markdown/PDF-texto), anexos com ownership, orçamento de contexto determinístico, defesa de prompt injection e hotfix de layout do composer de imagem. |
+| 17.8 | branch `pacote-17-8-vision-ocr-feasibility` | FEASIBILITY COMPLETED. Documentation/research only; Option D. Vision, OCR and scanned-PDF OCR NOT IMPLEMENTED. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -228,11 +229,11 @@ Packages 16.4–17.5 concluídos; 17.5 mergeado via PR #21 em `90fd505`; migrati
 
 ### CURRENT
 
-Package 17.7 implementado e validado na branch `pacote-17-7-document-intelligence`: Document Intelligence V1, attachment-aware chat, source-grounded UX e image composer layout hotfix. Not merged.
+Package 17.8 feasibility completed on `pacote-17-8-vision-ocr-feasibility`: Option D — architecture ready; wait for a sustainable zero-cost Vision provider. Vision, OCR and scanned-PDF OCR are not implemented.
 
 ### NEXT
 
-Revisão humana da branch 17.7 e autorização explícita para PR / merge.
+Revisão humana do Package 17.8 PR; Package 17.9 remains planned only and blocked by the sustainable-zero-cost-provider gate.
 
 ### LATER
 
@@ -243,7 +244,7 @@ Revisão humana da branch 17.7 e autorização explícita para PR / merge.
 - Candidatos futuros: vídeo nativo no Cloudflare Workers AI (se introduzido); Wan open-weight self-hosted; família LTX sujeita a revisão de licença/hardware.
 - Sem router, sem endpoints, sem UI, sem colunas de quota, sem capability code enquanto não houver caminho R$0 confirmado.
 
-Package 17.8 e demais itens do LATER não foram iniciados.
+Package 17.8 is completed as feasibility only; other LATER items have not been started.
 
 ## 22. IMPORTANT DO-NOT-DO RULES
 
@@ -251,7 +252,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 17.7 (PR #23, branch `pacote-17-7-document-intelligence`) e autorização explícita de merge. Não fazer merge nem aplicar qualquer migration remota automaticamente.
+Revisão humana do Package 17.8 PR. Não fazer merge nem aplicar qualquer migration remota automaticamente.
 
 ## PACKAGE 17.8 - CURRENT RECOVERY ADDENDUM
 
@@ -263,7 +264,7 @@ Revisão humana do Package 17.7 (PR #23, branch `pacote-17-7-document-intelligen
 - Migration 009: REMOTE ACTIVE / VERIFIED and unchanged.
 - Source code: unchanged by Package 17.8. Provider activation, billing, paid resource, live Vision/OCR call, DB mutation, and migration: none.
 
-## CHATGPT RECOVERY BLOCK
+## CHATGPT RECOVERY BLOCK — HISTORICAL 17.7 SNAPSHOT
 
 - PROJECT: Hanira AI / Nira
 - PATH: `C:\Projetos\hanira-app`
