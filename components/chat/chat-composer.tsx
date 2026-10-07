@@ -921,14 +921,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               {!isImageMode && (
                 <button
                   type="button"
-                  disabled={
-                    !mediaConfig.voiceEnabled ||
-                    !settings.voiceEnabled ||
-                    !settings.transcriptionEnabled
-                  }
-                  onClick={() => void requestMediaAccess("microphone")}
-                  aria-label="Gravar voz"
-                  title={settings.voiceEnabled ? "Gravar voz" : "Ative a voz nas configuracoes"}
+                  disabled
+                  aria-label="Transcrição de áudio indisponível"
+                  title="Transcrição de áudio ainda não está disponível"
                   className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
                 >
                   <Mic className="size-[18px]" />

@@ -3,7 +3,6 @@ import {
   CHAT_MESSAGE_LENGTH_ERROR,
   CHAT_MESSAGE_MAX_LENGTH,
 } from "@/lib/chat/message-limits";
-import { TTS_VOICES } from "@/lib/media/config";
 
 export const chatRequestSchema = z.object({
   conversationId: z.uuid().optional(),
@@ -107,7 +106,7 @@ export const settingsSchema = z.object({
   voiceEnabled: z.boolean().optional(),
   autoSpeak: z.boolean().optional(),
   audioAutoplay: z.boolean().optional(),
-  ttsVoice: z.enum(TTS_VOICES).optional(),
+  ttsVoice: z.string().trim().min(1).max(512).optional(),
   speechRate: z.number().min(0.5).max(2).optional(),
   transcriptionEnabled: z.boolean().optional(),
   voiceConversationEnabled: z.boolean().optional(),

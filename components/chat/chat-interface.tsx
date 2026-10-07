@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioLines, Menu, PanelLeftOpen, RotateCcw } from "lucide-react";
+import { Menu, PanelLeftOpen, RotateCcw } from "lucide-react";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatMessage } from "@/components/chat/chat-message";
 import {
@@ -11,8 +11,6 @@ import {
 } from "@/components/chat/chat-states";
 import { Sidebar } from "@/components/chat/sidebar";
 import { IconButton } from "@/components/ui/icon-button";
-import { PrivacyDialog } from "@/components/media/privacy-dialog";
-import { VoiceConversationModal } from "@/components/voice/voice-conversation-modal";
 import { useChatStore } from "@/lib/stores/chat-store";
 import { niraRuntimeBadge } from "@/lib/chat/runtime-state";
 import { cn } from "@/lib/utils";
@@ -25,8 +23,6 @@ export function ChatInterface({ userName }: { userName: string }) {
   const messagesEnd = useRef<HTMLDivElement>(null);
   const shouldFollowStream = useRef(true);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   useEffect(() => {
     void store.initialize();
@@ -101,22 +97,6 @@ export function ChatInterface({ userName }: { userName: string }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {settings.voiceEnabled && settings.voiceConversationEnabled && (
-              <button
-                type="button"
-                onClick={() => {
-                  const dismissed =
-                    settings.privacyNoticeDismissed ||
-                    window.localStorage.getItem("hanira-media-privacy") === "dismissed";
-                  if (dismissed) setVoiceModeOpen(true);
-                  else setPrivacyOpen(true);
-                }}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-card/70 px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <AudioLines className="size-3.5 text-primary" />
-                <span className="hidden sm:inline">Conversa por voz</span>
-              </button>
-            )}
             {(() => {
               const badge = niraRuntimeBadge(store.runtimeState);
               if (!badge.label) return null;
@@ -182,12 +162,6 @@ export function ChatInterface({ userName }: { userName: string }) {
                         message={message}
                         previousUser={previousUser}
                         settings={settings}
-                        autoSpeak={
-                          settings.autoSpeak &&
-                          settings.audioAutoplay &&
-                          store.isThinking &&
-                          index === conversation.messages.length - 1
-                        }
                       />
                     );
                   })}
@@ -201,29 +175,6 @@ export function ChatInterface({ userName }: { userName: string }) {
         </div>
       </section>
 
-      <VoiceConversationModal
-        open={voiceModeOpen}
-        settings={settings}
-        onClose={() => setVoiceModeOpen(false)}
-      />
-      <PrivacyDialog
-        open={privacyOpen}
-        kind="microphone"
-        onClose={() => setPrivacyOpen(false)}
-        onAccept={(dismiss) => {
-          setPrivacyOpen(false);
-          if (dismiss) {
-            window.localStorage.setItem("hanira-media-privacy", "dismissed");
-            setSettings((value) => ({ ...value, privacyNoticeDismissed: true }));
-            void fetch("/api/settings", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ privacyNoticeDismissed: true }),
-            });
-          }
-          setVoiceModeOpen(true);
-        }}
-      />
     </main>
   );
 }

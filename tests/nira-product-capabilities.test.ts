@@ -16,15 +16,17 @@ describe("catálogo público de capacidades da Nira", () => {
     expect(catalog.find((item) => item.id === "image_generation")?.status).toBe("available");
   });
 
-  it("não anuncia flags desativadas nem multimodal legado como disponível", () => {
+  it("anuncia somente leitura local limitada e mantém STT desativado", () => {
     const disabled = buildNiraProductCapabilities({ visionEnabled: false, voiceEnabled: false });
     expect(disabled.find((item) => item.id === "vision")?.status).toBe("disabled");
-    expect(disabled.find((item) => item.id === "speech")?.status).toBe("disabled");
+    expect(disabled.find((item) => item.id === "speech")?.status).toBe("limited");
+    expect(disabled.find((item) => item.id === "transcription")?.status).toBe("disabled");
 
     const blocked = buildNiraProductCapabilities({ visionEnabled: true, voiceEnabled: true });
     expect(blocked.find((item) => item.id === "vision")?.status).toBe("unavailable");
-    expect(blocked.find((item) => item.id === "transcription")?.status).toBe("unavailable");
-    expect(blocked.find((item) => item.id === "speech")?.status).toBe("unavailable");
+    expect(blocked.find((item) => item.id === "transcription")?.status).toBe("disabled");
+    expect(blocked.find((item) => item.id === "speech")?.status).toBe("limited");
+    expect(blocked.find((item) => item.id === "speech")?.description).toContain("pt-BR");
   });
 
   it("marca documentos como limitados e não promete OCR", () => {

@@ -17,12 +17,10 @@ export function ChatMessage({
   message,
   previousUser,
   settings,
-  autoSpeak,
 }: {
   message: ChatMessageData;
   previousUser?: ChatMessageData;
   settings: UserSettings;
-  autoSpeak: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -134,13 +132,7 @@ export function ChatMessage({
             >
               {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
             </IconButton>
-            <SpeechControls
-              text={message.content}
-              pending={message.pending}
-              autoSpeak={autoSpeak}
-              voice={settings.ttsVoice}
-              speed={settings.speechRate}
-            />
+            {settings.voiceEnabled && <SpeechControls text={message.content} voice={settings.ttsVoice} speed={settings.speechRate} />}
           </div>
         )}
       </div>
