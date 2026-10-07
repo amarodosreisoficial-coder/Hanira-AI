@@ -1,9 +1,9 @@
 # HANIRA AI — MASTER STATE REPORT
-## Recovery Snapshot — Packages 17.7, 17.8 and 18.0
+## Current State — Package 18.1
 
-Atualizado em 2026-10-06. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
+Atualizado em 2026-10-07. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
 
-## Package 18.1 — Browser TTS V1 (em desenvolvimento)
+## Package 18.1 — Browser TTS V1 (implementado; validação e PR pendentes)
 
 - Base: merge do Package 18.0 via PR #25, `4b3f6bff1b328a6dfcfe39267e65fdb6677c1fe2`; branch `pacote-18-1-browser-tts-v1`.
 - Speech é uma capacidade `limited`: leitura manual local pelo Web Speech do navegador e somente quando houver voz exatamente pt-BR.
@@ -19,11 +19,11 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `a34d6744258b0a51430bd3531b1de98ff25c7766` (merge do Package 17.8 via PR #24)
-- Branch atual: `pacote-18-0-voice-foundation-feasibility`
+- Base atual sincronizada: `main` / `4b3f6bff1b328a6dfcfe39267e65fdb6677c1fe2` (merge do Package 18.0 via PR #25)
+- Branch atual: `pacote-18-1-browser-tts-v1`
 - Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
 - Commit do Package 17.6: merge `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` via PR #22; 17.6 em produção operacional.
-- Package 17.7: MERGED via PR #23. Package 17.8: MERGED via PR #24. Package 18.0: Voice Foundation Feasibility.
+- Package 17.7: MERGED via PR #23. Package 17.8: MERGED via PR #24. Package 18.0: MERGED via PR #25. Package 18.1: implementado e em validação.
 
 ## 3. CURRENT GIT STATE
 
@@ -43,7 +43,8 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 17.6 | branch `pacote-17-6-production-hardening`; merge `3c51be7` via PR #22 | MERGED e em produção operacional: hardening, readiness, release identity, multi-user safety. |
 | 17.7 | merge `597f7ed6f4e35b553405b321060f8bf8b5b3ddb7` via PR #23 | MERGED. Document Intelligence V1 (TXT/Markdown/PDF-texto), anexos com ownership, orçamento de contexto determinístico, defesa de prompt injection e hotfix de layout do composer de imagem. |
 | 17.8 | merge `a34d6744258b0a51430bd3531b1de98ff25c7766` via PR #24 | MERGED. Documentation/research only; Option D. Vision, OCR and scanned-PDF OCR NOT IMPLEMENTED. |
-| 18.0 | branch `pacote-18-0-voice-foundation-feasibility` | Voice Foundation Feasibility. STT/TTS and live voice are not implemented as public production capabilities. |
+| 18.0 | merge `4b3f6bff1b328a6dfcfe39267e65fdb6677c1fe2` via PR #25 | MERGED. Voice Foundation Feasibility; recomendou Browser TTS opt-in antes de qualquer STT. |
+| 18.1 | branch `pacote-18-1-browser-tts-v1` | IMPLEMENTED / VALIDATING / PR pending. Browser-native TTS manual, estritamente pt-BR; STT e live voice seguem indisponíveis. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -217,7 +218,7 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 ## 19. KNOWN LIMITATIONS
 
 - Quota distribuída depende da aplicação da migration 009 no remoto (decisão humana); sem ela, ativo fallback in-memory (por instância) e o snapshot marca `degraded`.
-- Vision/transcription/speech legados não são capacidades públicas disponíveis sob a política R$0 atual.
+- Vision e transcription seguem indisponíveis; speech é limitado ao Browser TTS opt-in quando houver suporte e voz pt-BR instalada.
 - Extração de PDF é textual e limitada; não é OCR completo.
 - Imagens geradas continuam efêmeras, sem gallery/storage persistente.
 - Ferramentas de hora/clima dependem de fonte externa gratuita e não fornecem web browsing geral.
@@ -233,15 +234,15 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ### DONE
 
-Packages 16.4–17.5 concluídos; 17.5 mergeado via PR #21 em `90fd505`; migration 009 ativa e verificada no remoto; smoke de produção do guard distribuído passou.
+Packages 16.4–18.0 concluídos; 18.0 mergeado via PR #25 em `4b3f6bf`; migration 009 ativa e verificada no remoto; smoke de produção do guard distribuído passou.
 
 ### CURRENT
 
-Package 18.0 Voice Foundation Feasibility is current. Package 17.8 was MERGED via PR #24; Option D remains in force for Vision. Vision, OCR and scanned-PDF OCR are not implemented. Voice audit found legacy OpenAI-only paths disabled by default; no public STT/TTS capability is approved.
+Package 18.1 Browser TTS V1 está implementado e em validação na branch `pacote-18-1-browser-tts-v1`; PR pendente. Speech é `limited`; STT e live voice não estão implementados. As rotas legadas OpenAI não participam do fluxo normal.
 
 ### NEXT
 
-Human review of Package 18.0. Package 17.9 remains planned only and blocked by the sustainable-zero-cost Vision-provider gate; any STT provider remains subject to its own zero-cost gate.
+Criar o PR do Package 18.1 após a validação, verificar o Vercel Preview e aguardar revisão humana. Package 18.2 será apenas a próxima investigação de viabilidade de STT/microfone a custo zero; nenhuma implementação ou provider foi iniciado.
 
 ### LATER
 
@@ -260,7 +261,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 18.0 PR quando criado. Não fazer merge nem aplicar qualquer migration remota automaticamente.
+Revisão humana e decisão de merge do Package 18.1 após PR e Preview validados. Não fazer merge nem iniciar código do Package 18.2 automaticamente.
 
 ## PACKAGE 17.8 - HISTORICAL RECOVERY ADDENDUM
 

@@ -16,6 +16,15 @@ describe("contrato Browser TTS V1", () => {
     expect(controls).not.toContain("autoSpeak");
   });
 
+  it("retoma somente a fala pausada pelo próprio controle e protege callbacks antigos", () => {
+    const controls = source("components/voice/speech-controls.tsx");
+    expect(controls).toContain('status === "paused" && activePlaybackRef.current');
+    expect(controls).toContain("utterance.onstart");
+    expect(controls).toMatch(/onstart[\s\S]*generationRef\.current === generation/);
+    expect(controls).toMatch(/onend[\s\S]*generationRef\.current === generation/);
+    expect(controls).toMatch(/onerror[\s\S]*generationRef\.current === generation/);
+  });
+
   it("mantém STT e conversa ao vivo fora dos pontos de entrada normais", () => {
     const chat = source("components/chat/chat-interface.tsx");
     const composer = source("components/chat/chat-composer.tsx");

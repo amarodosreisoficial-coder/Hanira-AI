@@ -12,10 +12,14 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
   const [hasPlayed, setHasPlayed] = useState(false);
   const playbackIdRef = useRef(crypto.randomUUID());
   const generationRef = useRef(0);
+  const activePlaybackRef = useRef(false);
 
   const stopLocalPlayback = useCallback(() => {
     generationRef.current += 1;
-    getBrowserTtsHost()?.speechSynthesis?.cancel();
+    if (activePlaybackRef.current) {
+      getBrowserTtsHost()?.speechSynthesis?.cancel();
+      activePlaybackRef.current = false;
+    }
     setStatus("idle");
   }, []);
 
@@ -33,7 +37,7 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
       setStatus("error");
       return;
     }
-    if (!restart && host!.speechSynthesis!.paused) {
+    if (!restart && status === "paused" && activePlaybackRef.current && host!.speechSynthesis!.paused) {
       host!.speechSynthesis!.resume();
       setStatus("playing");
       return;
@@ -46,9 +50,16 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
     utterance.lang = "pt-BR";
     utterance.rate = clampSpeechRate(speed);
     utterance.voice = selectPtBrVoice(host!.speechSynthesis!.getVoices(), voice) ?? null;
-    utterance.onend = () => { if (generationRef.current === generation) setStatus("idle"); };
+    utterance.onstart = () => { if (generationRef.current === generation) setStatus("playing"); };
+    utterance.onend = () => {
+      if (generationRef.current === generation) {
+        activePlaybackRef.current = false;
+        setStatus("idle");
+      }
+    };
     utterance.onerror = () => {
       if (generationRef.current === generation) {
+        activePlaybackRef.current = false;
         setError("Não foi possível concluir a leitura em voz alta.");
         setStatus("error");
       }
@@ -56,8 +67,9 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
     setError("");
     setHasPlayed(true);
     setStatus("playing");
+    activePlaybackRef.current = true;
     host!.speechSynthesis!.speak(utterance);
-  }, [speed, text, voice]);
+  }, [speed, status, text, voice]);
 
   const pause = useCallback(() => {
     getBrowserTtsHost()?.speechSynthesis?.pause();
