@@ -1,183 +1,49 @@
-import { headers } from "next/headers";
-import OpenAI from "openai";
-import { z } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
-import { getOpenAIVoiceConfig } from "@/lib/ai/models";
 import { createRequestId, logServerEvent } from "@/lib/logging/server";
-import { mediaConfig } from "@/lib/media/config";
-import { classifyOpenAIError } from "@/lib/openai/errors";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { validateMediaFile } from "@/lib/validation/media";
-import { storeAttachment } from "@/services/attachments";
-import { getOpenAIClient } from "@/services/openai";
 import { getUserSettingsForUser } from "@/services/user-settings";
+import { getSttRuntimeState } from "@/lib/ai/transcription/runtime";
+import { CloudflareWorkersAITranscriptionProvider } from "@/lib/ai/transcription/cloudflare-workers-ai-transcription-provider";
+import { publicTranscriptionError, TranscriptionError } from "@/lib/ai/transcription/provider";
+import { readBoundedSttBody, SttAudioValidationError, validateSttAudio } from "@/lib/validation/stt-audio";
 
-const conversationSchema = z.uuid();
+export function GET() {
+  const { eligible } = getSttRuntimeState();
+  return Response.json({ available: eligible }, { headers: { "Cache-Control": "no-store" } });
+}
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
+  const respond = (message: string, status: number) => Response.json(
+    { error: message, requestId },
+    { status, headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" } },
+  );
   try {
-    if (!mediaConfig.voiceEnabled) {
-      return Response.json(
-        {
-          error: "A transcricao de audio esta desativada nesta instancia.",
-          requestId,
-        },
-        { status: 409, headers: { "X-Request-ID": requestId } },
-      );
-    }
-
     const user = await requireSessionUser();
-    const userSettings = await getUserSettingsForUser(user.id);
-    if (!userSettings.voiceEnabled || !userSettings.transcriptionEnabled) {
-      return Response.json(
-        {
-          error: "A transcricao esta desativada nas configuracoes do usuario.",
-          requestId,
-        },
-        { status: 409, headers: { "X-Request-ID": requestId } },
-      );
-    }
-    const headerStore = await headers();
-    const ip =
-      headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      headerStore.get("x-real-ip") ??
-      "unknown";
-    const rate = checkRateLimit(`transcribe:${user.id}:${ip}`);
-    if (!rate.allowed) {
-      return Response.json(
-        { error: "Aguarde antes de transcrever outro audio.", requestId },
-        { status: 429, headers: { "X-Request-ID": requestId } },
-      );
-    }
-
-    const contentLength = Number(headerStore.get("content-length") ?? 0);
-    if (contentLength > mediaConfig.maxAudioSizeBytes + 1_000_000) {
-      return Response.json(
-        { error: "O audio excede o limite permitido.", requestId },
-        { status: 413, headers: { "X-Request-ID": requestId } },
-      );
-    }
-
-    const formData = await request.formData();
-    const audio = formData.get("audio");
-    if (!(audio instanceof File)) {
-      return Response.json(
-        { error: "Nenhum audio foi recebido.", requestId },
-        { status: 400, headers: { "X-Request-ID": requestId } },
-      );
-    }
-
-    await validateMediaFile(audio, "audio");
-    const rawConversationId = formData.get("conversationId");
-    const conversationId =
-      typeof rawConversationId === "string" && rawConversationId
-        ? conversationSchema.parse(rawConversationId)
-        : null;
-
-    if (user.demo) {
-      return Response.json(
-        {
-          transcript:
-            "Transcricao simulada no modo demonstracao - revise este texto antes de enviar.",
-          text:
-            "Transcricao simulada no modo demonstracao - revise este texto antes de enviar.",
-          simulated: true,
-          attachment: null,
-          requestId,
-        },
-        { headers: { "X-Request-ID": requestId } },
-      );
-    }
-
-    const abortController = new AbortController();
-    const abort = () => abortController.abort();
-    request.signal.addEventListener("abort", abort, { once: true });
-    const timeout = setTimeout(() => abortController.abort(), 60_000);
-    try {
-      logServerEvent({
-        level: "info",
-        requestId,
-        route: "/api/audio/transcribe",
-        event: "transcription_started",
-        status: 200,
-        durationMs: Date.now() - startedAt,
-      });
-
-      const transcription = await getOpenAIClient().audio.transcriptions.create(
-        {
-          file: audio,
-          model: getOpenAIVoiceConfig().transcription,
-          language: "pt",
-          response_format: "json",
-        },
-        { signal: abortController.signal },
-      );
-
-      const attachment = conversationId
-        ? await storeAttachment({
-            userId: user.id,
-            conversationId,
-            file: audio,
-            type: "audio",
-            metadata: { purpose: "transcription" },
-          })
-        : null;
-
-      logServerEvent({
-        level: "info",
-        requestId,
-        route: "/api/audio/transcribe",
-        event: "transcription_completed",
-        status: 200,
-        durationMs: Date.now() - startedAt,
-      });
-      return Response.json(
-        {
-          transcript: transcription.text,
-          text: transcription.text,
-          simulated: false,
-          attachment,
-          requestId,
-        },
-        { headers: { "X-Request-ID": requestId } },
-      );
-    } finally {
-      clearTimeout(timeout);
-      request.signal.removeEventListener("abort", abort);
-    }
+    if (user.demo) return respond("A transcrição está indisponível no modo demonstração.", 409);
+    if (!getSttRuntimeState().eligible) return respond("A transcrição está indisponível nesta instância.", 409);
+    const settings = await getUserSettingsForUser(user.id);
+    if (!settings.transcriptionEnabled) return respond("Ative a transcrição por microfone nas configurações.", 409);
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? "unknown";
+    if (!checkRateLimit(`stt:${user.id}:${ip}`).allowed) return respond("Aguarde antes de transcrever outro áudio.", 429);
+    const contentType = request.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().startsWith("multipart/form-data;")) return respond("Envie um arquivo de áudio.", 400);
+    const body = await readBoundedSttBody(request);
+    const upload = new Request("http://localhost/audio", { method: "POST", headers: { "content-type": contentType }, body: Uint8Array.from(body).buffer });
+    const form = await upload.formData();
+    const audio = form.get("audio");
+    if (!(audio instanceof File) || form.getAll("audio").length !== 1 || [...form.values()].filter((value) => value instanceof File).length !== 1) return respond("Envie um único arquivo de áudio.", 400);
+    const bytes = await validateSttAudio(audio);
+    const transcript = await new CloudflareWorkersAITranscriptionProvider().transcribe(bytes, request.signal);
+    logServerEvent({ level: "info", requestId, route: "/api/audio/transcribe", event: "transcription_completed", status: 200, durationMs: Date.now() - startedAt });
+    return Response.json({ transcript, requestId }, { headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" } });
   } catch (error) {
-    const safe =
-      error instanceof OpenAI.APIError
-        ? classifyOpenAIError(error)
-        : {
-            status:
-              error instanceof Error && error.message === "UNAUTHENTICATED"
-                ? 401
-                : 400,
-            type: error instanceof Error ? error.name : "AudioError",
-            message:
-              error instanceof Error &&
-              (error.message.includes("audio") ||
-                error.message.includes("arquivo") ||
-                error.message.includes("extensao") ||
-                error.message.includes("limite"))
-                ? error.message
-                : "Nao foi possivel transcrever o audio.",
-          };
-    logServerEvent({
-      level: "warn",
-      requestId,
-      route: "/api/audio/transcribe",
-      event: "transcription_failed",
-      status: safe.status,
-      durationMs: Date.now() - startedAt,
-      errorType: safe.type,
-    });
-    return Response.json(
-      { error: safe.message, requestId },
-      { status: safe.status, headers: { "X-Request-ID": requestId } },
-    );
+    const code = error instanceof TranscriptionError || error instanceof SttAudioValidationError ? error.code : null;
+    const safe = code ? publicTranscriptionError(code) : error instanceof Error && error.message === "UNAUTHENTICATED"
+      ? { status: 401, message: "Entre na sua conta para transcrever áudio." }
+      : { status: 400, message: "Não foi possível transcrever o áudio." };
+    logServerEvent({ level: "warn", requestId, route: "/api/audio/transcribe", event: "transcription_failed", status: safe.status, durationMs: Date.now() - startedAt, errorType: code ?? "request_error" });
+    return respond(safe.message, safe.status);
   }
 }

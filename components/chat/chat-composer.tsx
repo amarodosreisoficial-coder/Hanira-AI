@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
@@ -79,12 +80,19 @@ function previewUrlForFile(file: File, type: AttachmentType) {
   return type === "image" || type === "audio" ? URL.createObjectURL(file) : "";
 }
 
+function subscribeBrowserRecordingSupport() { return () => undefined; }
+function browserRecordingSupported() {
+  return typeof navigator.mediaDevices?.getUserMedia === "function" && typeof window.MediaRecorder !== "undefined";
+}
+
 export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [error, setError] = useState("");
   const [issue, setIssue] = useState<ChatIssue | null>(null);
   const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [recorderOpen, setRecorderOpen] = useState(false);
+  const [sttAvailable, setSttAvailable] = useState(false);
+  const browserCanRecord = useSyncExternalStore(subscribeBrowserRecordingSupport, browserRecordingSupported, () => false);
   const [privacyKind, setPrivacyKind] = useState<"camera" | "microphone" | null>(
     null,
   );
@@ -101,6 +109,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const { ref, resize } = useAutoResize();
   const store = useChatStore();
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/audio/transcribe", { signal: controller.signal, cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ available?: boolean }> : null)
+      .then((data) => { if (data) setSttAvailable(data.available === true); })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
   const messageLength = getChatMessageLength(store.draft);
   const remainingCharacters = getRemainingChatMessageCharacters(store.draft);
   const showOperationalIssue = Boolean(
@@ -638,8 +654,12 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     if (files.length) void addFiles(files);
   }
 
-  async function dismissPrivacy(dismiss: boolean) {
+  async function dismissPrivacy(dismiss: boolean, kind: "camera" | "microphone") {
     if (!dismiss) return;
+    if (kind === "microphone") {
+      window.localStorage.setItem("hanira-stt-cloud-privacy", "dismissed");
+      return;
+    }
     window.localStorage.setItem("hanira-media-privacy", "dismissed");
     await fetch("/api/settings", {
       method: "PATCH",
@@ -650,9 +670,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
 
   async function requestMediaAccess(kind: "camera" | "microphone") {
     await ensureConversation();
-    const dismissed =
-      settings.privacyNoticeDismissed ||
-      window.localStorage.getItem("hanira-media-privacy") === "dismissed";
+    const dismissed = kind === "microphone"
+      ? window.localStorage.getItem("hanira-stt-cloud-privacy") === "dismissed"
+      : settings.privacyNoticeDismissed || window.localStorage.getItem("hanira-media-privacy") === "dismissed";
     if (!dismissed) {
       setPrivacyKind(kind);
       return;
@@ -709,29 +729,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           <div className="mb-3">
             <VoiceRecorder
               compact
-              conversationId={store.activeConversation()?.id}
               onCancel={() => setRecorderOpen(false)}
-              onComplete={({ text, attachment, localFile, simulated }) => {
-                const previewUrl = URL.createObjectURL(localFile);
+              onComplete={({ text }) => {
                 const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();
-                setPendingMedia((value) => [
-                  ...value,
-                  {
-                    id: attachment?.id ?? crypto.randomUUID(),
-                    file: localFile,
-                    type: "audio",
-                    previewUrl,
-                    attachment: attachment ?? undefined,
-                  },
-                ]);
                 if (isChatMessageTooLong(nextDraft)) {
                   showMessageLengthError();
                 } else {
                   clearMessageLengthError();
                   store.setDraft(nextDraft);
-                }
-                if (simulated) {
-                  setError("Transcricao simulada no modo demonstracao. Revise antes de enviar.");
                 }
                 setRecorderOpen(false);
               }}
@@ -921,9 +926,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               {!isImageMode && (
                 <button
                   type="button"
-                  disabled
-                  aria-label="Transcrição de áudio indisponível"
-                  title="Transcrição de áudio ainda não está disponível"
+                  disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                  onClick={() => void requestMediaAccess("microphone")}
+                  aria-label="Transcrever áudio do microfone"
+                  title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
                   className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
                 >
                   <Mic className="size-[18px]" />
@@ -980,7 +986,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         onAccept={(dismiss) => {
           const kind = privacyKind;
           setPrivacyKind(null);
-          void dismissPrivacy(dismiss);
+          if (kind) void dismissPrivacy(dismiss, kind);
           if (kind === "camera") cameraInputRef.current?.click();
           if (kind === "microphone") setRecorderOpen(true);
         }}

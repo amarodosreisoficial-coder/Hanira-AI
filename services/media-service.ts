@@ -23,12 +23,10 @@ export async function uploadMediaFiles(
 
 export async function transcribeAudio(
   audio: File,
-  conversationId?: string,
   signal?: AbortSignal,
 ) {
   const formData = new FormData();
   formData.set("audio", audio);
-  if (conversationId) formData.set("conversationId", conversationId);
   const response = await fetch("/api/audio/transcribe", {
     method: "POST",
     body: formData,
@@ -36,19 +34,13 @@ export async function transcribeAudio(
   });
   const data = (await response.json()) as {
     transcript?: string;
-    text?: string;
-    simulated?: boolean;
-    attachment?: Attachment | null;
     error?: string;
   };
   if (!response.ok) {
     throw new Error(data.error ?? "Não foi possível transcrever o áudio.");
   }
-  return {
-    text: data.transcript ?? data.text ?? "",
-    simulated: Boolean(data.simulated),
-    attachment: data.attachment ?? null,
-  };
+  if (!data.transcript?.trim()) throw new Error("A transcrição retornou vazia.");
+  return data.transcript;
 }
 
 export async function requestSpeech(

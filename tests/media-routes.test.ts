@@ -15,13 +15,16 @@ describe("contratos das rotas de voz e visao", () => {
     expect(route(file)).toContain("requireSessionUser");
   });
 
-  it("transcricao usa configuracao central, timeout e logs seguros", () => {
+  it("transcricao usa gates e adapter Cloudflare sem persistência", () => {
     const source = route("app/api/audio/transcribe/route.ts");
-    expect(source).toContain('from "@/lib/ai/models"');
-    expect(source).toContain("getOpenAIVoiceConfig().transcription");
-    expect(source).toContain("60_000");
+    expect(source).toContain("getSttRuntimeState().eligible");
+    expect(source).toContain("validateSttAudio");
+    expect(source).toContain("checkRateLimit");
+    expect(source).toContain("CloudflareWorkersAITranscriptionProvider");
     expect(source).toContain("logServerEvent");
     expect(source).not.toContain("console.log");
+    expect(source).not.toContain("storeAttachment");
+    expect(source).not.toContain("OpenAIClient");
   });
 
   it("sintese limita payload e entrega MIME de audio", () => {

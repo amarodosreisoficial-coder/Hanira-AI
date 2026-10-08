@@ -5,7 +5,7 @@ import { createDeterministicTextResponse } from "./deterministic-response";
 
 export const SELF_KNOWLEDGE_INTENTS = [
   "identity", "creator", "capabilities", "image_generation", "documents",
-  "memory", "vision", "voice", "usage_limits", "credits", "chatgpt", "model",
+  "memory", "vision", "voice", "transcription", "usage_limits", "credits", "chatgpt", "model",
 ] as const;
 export type SelfKnowledgeIntent = (typeof SELF_KNOWLEDGE_INTENTS)[number];
 
@@ -30,6 +30,7 @@ function detectIntent(value: string): SelfKnowledgeIntent | null {
   if (/^(voce tem memoria|voce lembra das conversas|do you (?:have memory|remember conversations))\??$/.test(value)) return "memory";
   if (/^(voce (?:entende|analisa|enxerga) imagens?|do you (?:understand|analyze|see) images?)\??$/.test(value)) return "vision";
   if (/^(voce tem voz|voce fala|can you speak|do you have a voice)\??$/.test(value)) return "voice";
+  if (/^(voce (?:entende|transcreve|pode transcrever) audio|voce entende audio|can you transcribe audio)\??$/.test(value)) return "transcription";
   if (/^(voce (?:e|eh) ilimitad[ao]|(?:existe|ha|tem) limite de uso|is (?:usage|it) unlimited|are you unlimited)\??$/.test(value)) return "usage_limits";
   if (/^(voce tem creditos|quantos creditos (?:eu tenho|tenho)|qual (?:e|eh) (?:o )?meu saldo|do i have credits|how many credits do i have)\??$/.test(value)) return "credits";
   if (/^(voce (?:e|eh|usa) (?:o )?chatgpt|are you chatgpt|do you use chatgpt)\??$/.test(value)) return "chatgpt";
@@ -65,6 +66,7 @@ export function resolveSelfKnowledge(options: {
     memory: () => answerCapability(cap("memory"), "Tenho memória contextual controlada pela Hanira.", "A memória não está disponível nesta experiência."),
     vision: () => answerCapability(cap("vision"), "Posso analisar imagens.", "A análise de imagens não está disponível agora."),
     voice: () => answerCapability(cap("speech"), "Posso ler minhas respostas em voz alta em navegadores compatíveis que tenham uma voz pt-BR disponível.", "A leitura em voz alta não está disponível agora."),
+    transcription: () => answerCapability(cap("transcription"), "Posso transcrever uma gravação curta do microfone em texto quando esse recurso está disponível. Você pode revisar e editar o texto antes de enviar.", "A transcrição por microfone não está disponível agora."),
     usage_limits: () => buildUsagePolicySummary("pt-BR"),
     credits: () => `A Hanira ainda não utiliza uma carteira de créditos exibida como saldo. ${buildUsagePolicySummary("pt-BR")}`,
     chatgpt: () => "Não sou o ChatGPT. Sou a Nira, a inteligência da Hanira AI. Serviços e modelos de terceiros podem fazer parte da infraestrutura técnica substituível, sem mudar minha identidade.",
@@ -79,6 +81,7 @@ export function resolveSelfKnowledge(options: {
     memory: () => answerCapability(cap("memory"), "I have contextual memory controlled by Hanira.", "Memory is not available in this experience."),
     vision: () => answerCapability(cap("vision"), "I can analyze images.", "Image analysis is not available right now."),
     voice: () => answerCapability(cap("speech"), "I can read my responses aloud in compatible browsers with an available pt-BR voice.", "Read-aloud is not available right now."),
+    transcription: () => answerCapability(cap("transcription"), "I can transcribe a short microphone recording when this feature is available. You can review and edit the text before sending.", "Microphone transcription is not available right now."),
     usage_limits: () => buildUsagePolicySummary("en"),
     credits: () => `Hanira does not currently use a displayed credit wallet or balance. ${buildUsagePolicySummary("en")}`,
     chatgpt: () => "I am not ChatGPT. I am Nira, Hanira AI's intelligence. Third-party services or models may be replaceable technical infrastructure without changing my identity.",
