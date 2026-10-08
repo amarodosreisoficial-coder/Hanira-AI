@@ -43,9 +43,9 @@ export function PrivacyDialog({
           Sua privacidade vem primeiro
         </h2>
         <p className="mt-3 text-sm leading-6 text-zinc-400">
-          A Hanira só acessará sua câmera ou microfone quando você permitir. O
-          conteúdo enviado poderá ser processado para responder à sua
-          solicitação.
+          {kind === "microphone"
+            ? "Para transcrever, o áudio do microfone sairá deste dispositivo e será processado remotamente pela Cloudflare. Não é uma transcrição local ou offline. Você poderá revisar e editar o texto antes de enviá-lo à Nira."
+            : "A Hanira acessará sua câmera quando você permitir. A imagem enviada poderá ser processada para responder à sua solicitação."}
         </p>
         <label className="mt-5 flex items-center gap-3 text-xs text-zinc-500">
           <input

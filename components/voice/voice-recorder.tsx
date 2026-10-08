@@ -10,9 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMediaRecorder } from "@/hooks/use-media-recorder";
-import { MAX_RECORDING_SECONDS } from "@/lib/media/config";
+import { STT_MAX_AUDIO_BYTES, STT_MAX_RECORDING_SECONDS } from "@/lib/validation/stt-audio";
 import { transcribeAudio } from "@/services/media-service";
-import type { Attachment } from "@/types/media";
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -20,40 +19,51 @@ function formatDuration(seconds: number) {
 }
 
 export function VoiceRecorder({
-  conversationId,
   onComplete,
   onCancel,
   compact = false,
 }: {
-  conversationId?: string;
-  onComplete: (result: {
-    text: string;
-    attachment: Attachment | null;
-    localFile: File;
-    simulated: boolean;
-  }) => void;
+  onComplete: (result: { text: string }) => void;
   onCancel: () => void;
   compact?: boolean;
 }) {
   const recorder = useMediaRecorder();
   const finishingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const requestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    cancelledRef.current = true;
+    requestRef.current?.abort();
+  }, []);
 
   async function finishAndTranscribe() {
     if (finishingRef.current) return;
     finishingRef.current = true;
     const file = await recorder.finish();
+    if (cancelledRef.current) return;
     if (!file) {
       recorder.setError("A gravação ficou vazia.");
       recorder.setStatus("error");
       finishingRef.current = false;
       return;
     }
+    if (file.size > STT_MAX_AUDIO_BYTES) {
+      recorder.setError("O áudio excede o limite de 4 MiB. Grave um trecho menor.");
+      recorder.setStatus("error");
+      finishingRef.current = false;
+      return;
+    }
     recorder.setStatus("transcribing");
+    const controller = new AbortController();
+    requestRef.current = controller;
     try {
-      const result = await transcribeAudio(file, conversationId);
+      const text = await transcribeAudio(file, controller.signal);
+      if (controller.signal.aborted) return;
       recorder.setStatus("complete");
-      onComplete({ ...result, localFile: file });
+      onComplete({ text });
     } catch (caught) {
+      if (controller.signal.aborted) return;
       recorder.setError(
         caught instanceof Error
           ? caught.message
@@ -61,14 +71,15 @@ export function VoiceRecorder({
       );
       recorder.setStatus("error");
     } finally {
+      requestRef.current = null;
       finishingRef.current = false;
     }
   }
 
   useEffect(() => {
     if (
-      recorder.duration >= MAX_RECORDING_SECONDS &&
-      recorder.status === "recording"
+      recorder.duration >= STT_MAX_RECORDING_SECONDS &&
+      (recorder.status === "recording" || recorder.status === "paused")
     ) {
       void finishAndTranscribe();
     }
@@ -116,7 +127,7 @@ export function VoiceRecorder({
             </p>
             <p className="mt-0.5 text-xs tabular-nums text-zinc-600">
               {formatDuration(recorder.duration)} /{" "}
-              {formatDuration(MAX_RECORDING_SECONDS)}
+              {formatDuration(STT_MAX_RECORDING_SECONDS)}
             </p>
           </div>
         </div>
@@ -161,6 +172,8 @@ export function VoiceRecorder({
           ) : null}
           <button
             onClick={() => {
+              cancelledRef.current = true;
+              requestRef.current?.abort();
               recorder.cancel();
               onCancel();
             }}

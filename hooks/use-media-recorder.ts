@@ -29,6 +29,7 @@ export function useMediaRecorder() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishRef = useRef<((file: File | null) => void) | null>(null);
   const discardRef = useRef(false);
+  const generationRef = useRef(0);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -38,9 +39,19 @@ export function useMediaRecorder() {
     recorderRef.current = null;
   }, []);
 
-  useEffect(() => cleanup, [cleanup]);
+  useEffect(() => () => {
+    generationRef.current += 1;
+    discardRef.current = true;
+    chunksRef.current = [];
+    finishRef.current?.(null);
+    finishRef.current = null;
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    cleanup();
+  }, [cleanup]);
 
   const start = useCallback(async () => {
+    const generation = ++generationRef.current;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError("Este navegador não oferece gravação de áudio.");
       setStatus("error");
@@ -53,16 +64,22 @@ export function useMediaRecorder() {
     chunksRef.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (generation !== generationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+      streamRef.current = stream;
       const mimeType = preferredMimeType();
       const recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
-      streamRef.current = stream;
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
-        if (event.data.size) chunksRef.current.push(event.data);
+        if (!discardRef.current && event.data.size) chunksRef.current.push(event.data);
       };
       recorder.onerror = () => {
+        finishRef.current?.(null);
+        finishRef.current = null;
         setError("A gravação foi interrompida pelo navegador.");
         setStatus("error");
         cleanup();
@@ -82,6 +99,7 @@ export function useMediaRecorder() {
             : null;
         finishRef.current?.(file);
         finishRef.current = null;
+        chunksRef.current = [];
         cleanup();
       };
       recorder.start(500);
@@ -92,6 +110,7 @@ export function useMediaRecorder() {
       );
       return true;
     } catch (caught) {
+      if (generation !== generationRef.current) return false;
       const denied =
         caught instanceof DOMException &&
         ["NotAllowedError", "PermissionDeniedError"].includes(caught.name);
@@ -117,10 +136,13 @@ export function useMediaRecorder() {
   }, []);
 
   const cancel = useCallback(() => {
+    generationRef.current += 1;
     discardRef.current = true;
+    chunksRef.current = [];
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") {
-      finishRef.current = () => undefined;
+      finishRef.current?.(null);
+      finishRef.current = null;
       recorder.stop();
     } else {
       cleanup();
@@ -134,7 +156,6 @@ export function useMediaRecorder() {
     if (recorder?.state === "recording") {
       recorder.pause();
       setStatus("paused");
-      if (timerRef.current) clearInterval(timerRef.current);
     }
   }, []);
 
@@ -143,10 +164,6 @@ export function useMediaRecorder() {
     if (recorder?.state === "paused") {
       recorder.resume();
       setStatus("recording");
-      timerRef.current = setInterval(
-        () => setDuration((value) => value + 1),
-        1_000,
-      );
     }
   }, []);
 

@@ -35,6 +35,16 @@ export function SettingsPage() {
   );
   const [message, setMessage] = useState("");
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [sttAvailable, setSttAvailable] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/audio/transcribe", { signal: controller.signal, cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ available?: boolean }> : null)
+      .then((data) => { if (data) setSttAvailable(data.available === true); })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const host = getBrowserTtsHost();
@@ -282,8 +292,20 @@ export function SettingsPage() {
             />
           </SettingRow>
           <SettingRow
-            title="Transcrição e conversa por voz"
-            description="Ainda não estão disponíveis. Microfone, STT e conversa ao vivo não são ativados pelo Browser TTS V1."
+            title="Transcrição por microfone"
+            description="Envia uma gravação curta à Cloudflare e coloca o texto no campo de mensagem para revisão. Independente da leitura em voz alta."
+          >
+            {sttAvailable && mode !== "demo" ? (
+              <Toggle
+                label="Ativar transcrição por microfone"
+                checked={settings.transcriptionEnabled}
+                onChange={(transcriptionEnabled) => setSettings((value) => ({ ...value, transcriptionEnabled }))}
+              />
+            ) : <span className="text-xs text-zinc-500">Indisponível nesta instância</span>}
+          </SettingRow>
+          <SettingRow
+            title="Conversa ao vivo"
+            description="A conversa contínua por voz ainda não foi implementada."
           >
             <span className="text-xs text-zinc-500">Indisponível nesta versão</span>
           </SettingRow>

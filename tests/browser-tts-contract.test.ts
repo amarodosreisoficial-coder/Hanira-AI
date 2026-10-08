@@ -25,10 +25,11 @@ describe("contrato Browser TTS V1", () => {
     expect(controls).toMatch(/onerror[\s\S]*generationRef\.current === generation/);
   });
 
-  it("mantém STT e conversa ao vivo fora dos pontos de entrada normais", () => {
+  it("mantém STT condicionado a gates e conversa ao vivo fora dos pontos de entrada", () => {
     const chat = source("components/chat/chat-interface.tsx");
     const composer = source("components/chat/chat-composer.tsx");
     expect(chat).not.toContain("VoiceConversationModal");
-    expect(composer).toMatch(/disabled\s+aria-label="Transcrição de áudio indisponível"/);
+    expect(composer).toContain('disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}');
+    expect(composer).toContain('requestMediaAccess("microphone")');
   });
 });

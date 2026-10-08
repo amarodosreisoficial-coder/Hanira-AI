@@ -27,7 +27,6 @@ export function VoiceConversationModal({
   settings: UserSettings;
   onClose: () => void;
 }) {
-  const conversation = useChatStore((state) => state.activeConversation());
   const mode = useChatStore((state) => state.mode);
   const [status, setStatus] = useState<VoiceConversationStatus>("idle");
   const [transcript, setTranscript] = useState("");
@@ -150,7 +149,6 @@ export function VoiceConversationModal({
         <div className="mt-8 w-full">
           {recorderVisible ? (
             <VoiceRecorder
-              conversationId={conversation?.id}
               onCancel={() => {
                 setRecorderVisible(false);
                 setStatus("idle");
@@ -158,12 +156,7 @@ export function VoiceConversationModal({
               onComplete={({ text }) => {
                 setTranscript(text);
                 setRecorderVisible(false);
-                setStatus("thinking");
-                window.dispatchEvent(
-                  new CustomEvent("hanira:voice-submit", {
-                    detail: { content: text },
-                  }),
-                );
+                setStatus("idle");
               }}
             />
           ) : (

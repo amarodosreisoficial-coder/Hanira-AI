@@ -7,6 +7,7 @@ export interface ProductCapabilityRuntimeState {
   readonly attachmentsEnabled?: boolean;
   readonly visionEnabled?: boolean;
   readonly voiceEnabled?: boolean;
+  readonly transcriptionEligible?: boolean;
 }
 
 function capability(id: NiraProductCapabilityId, label: string, status: NiraProductCapabilityStatus, description: string): NiraProductCapability {
@@ -30,7 +31,7 @@ export function buildNiraProductCapabilities(state: ProductCapabilityRuntimeStat
     capability("current_time", "Hora atual", "available", "Consulta a hora atual de uma localidade específica."),
     capability("current_weather", "Clima atual", "available", "Consulta o clima atual de uma localidade específica."),
     capability("vision", "Visão", visionStatus, visionStatus === "disabled" ? "Análise de imagens desativada nesta instância." : "Análise de imagens indisponível na política gratuita atual."),
-    capability("transcription", "Transcrição", "disabled", "Transcrição de áudio ainda não está disponível."),
+    capability("transcription", "Transcrição", state.transcriptionEligible ? "limited" : "disabled", state.transcriptionEligible ? "Transcreve gravações curtas do microfone em texto editável quando há capacidade gratuita; não oferece conversa ao vivo." : "Transcrição de áudio indisponível nesta instância."),
     capability("speech", "Voz", "limited", "Leitura em voz alta disponível em navegadores compatíveis com voz pt-BR."),
   ]);
 }
@@ -50,6 +51,7 @@ export function getPublicAICapabilities(): readonly NiraProductCapability[] {
     attachmentsEnabled: process.env.NEXT_PUBLIC_ATTACHMENTS_ENABLED === "true",
     visionEnabled: process.env.NEXT_PUBLIC_VISION_ENABLED === "true",
     voiceEnabled: process.env.NEXT_PUBLIC_VOICE_ENABLED === "true",
+    transcriptionEligible: process.env.HANIRA_STT_ENABLED === "true" && process.env.HANIRA_STT_COST_CLASS === "FREE" && nonEmpty("CLOUDFLARE_AI_ACCOUNT_ID") && nonEmpty("CLOUDFLARE_AI_API_TOKEN"),
   });
 }
 
