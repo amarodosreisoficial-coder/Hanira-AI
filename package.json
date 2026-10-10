@@ -13,6 +13,7 @@
     "doctor": "node scripts/doctor.mjs",
     "dev:local:doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local/doctor.ps1",
     "dev:local:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local/status.ps1",
+    "dev:local:benchmark": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local/benchmark.ps1",
     "verify:release": "node scripts/verify-release.mjs",
     "verify:capacity": "node scripts/verify-capacity.mjs",
     "verify:free-router": "node scripts/verify-free-router.mjs",

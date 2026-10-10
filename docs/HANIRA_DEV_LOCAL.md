@@ -85,3 +85,24 @@ Permissões iniciais do agente: ler/pesquisar source, criar branch, editar nela,
 | DL-05 | Comparação de modelos |
 | DL-06 | Segurança e permissões do agente local |
 | DL-07 | Perfil opcional para hardware mais forte |
+
+## DL-02 — First Local Model (2026-10-10)
+
+O modelo aprovado `qwen2.5-coder:3b` foi baixado com `ollama pull` e consta em `ollama list` com 1,9 GB. `qwen2.5:7b` permaneceu instalado. Ollama 0.40.2 respondeu apenas em `http://127.0.0.1:11434`; nenhum provider cloud foi chamado. O hardware é o descrito acima (i5-3470, 15,9 GiB RAM, Intel HD Graphics integrada). O contexto de todos os testes foi 4096, `stream:false`, `temperature:0` e limite de 160 tokens gerados.
+
+O smoke local com a função `sum` passou: resposta TypeScript correta; 11,30 s de parede, 10,91 s medidos pelo Ollama, 4,86 s de carregamento, 62 tokens de prompt, 24 gerados e 8,19 tokens/s de geração.
+
+| Teste sintético no Coder 3B | Parede | Carga | Prompt / gerados | Geração | Observação |
+| --- | ---: | ---: | ---: | ---: | --- |
+| A — geração | 4,90 s | 0,01 s | 55 / 24 | 8,09 tokens/s | Função `sum` correta. |
+| B — explicação | 23,92 s | 0,01 s | 69 / 160 | 7,46 tokens/s | Explicação correta, mas excedeu o limite de 3 frases e terminou truncada no limite de geração. |
+| C — correção | 18,50 s | 0,01 s | 70 / 131 | 8,21 tokens/s | Tratou divisor zero com exceção e manteve a divisão normal. |
+| D — refatoração | 7,77 s | 0,03 s | 91 / 35 | 8,71 tokens/s | Removeu duplicação com expressão condicional clara. |
+
+RAM do sistema **usada** no benchmark: 11,21 GiB antes (modelo já aquecido pelo smoke), 11,26 GiB no máximo **amostrado** após um teste, 11,03 GiB ao final. A amostragem não captura o pico contínuo. O preflight anterior ao download mostrou 7,5 GiB livres, em outro instante.
+
+Na validação final, após carregar também o 7B, o benchmark foi repetido: A 2,83 s / 8,98 tokens/s; B 21,16 s / 8,60 tokens/s; C 4,74 s / 8,94 tokens/s; D 4,31 s / 8,92 tokens/s. A RAM usada foi de 14,28 a 14,33 GiB (máximo amostrado 14,33 GiB). `ollama ps` mostrou **ambos** os modelos carregados em CPU com contexto 4096; portanto a RAM dessa rodada não representa o Coder 3B isolado. A segunda saída C tratou zero retornando `null`, outra escolha segura. A segunda saída D adicionou `Status: ` ao texto retornado e **mudou o comportamento** pedido. B novamente excedeu 3 frases e foi truncado em 160 tokens. Esses erros de aderência impedem classificar a qualidade como consistentemente razoável.
+
+Comparação opcional, somente teste A, com `qwen2.5:7b` já instalado: função correta; 31,74 s de parede, 18,63 s de carga, 55 / 24 tokens, 4,31 tokens/s, RAM usada de 10,86 para 14,71 GiB. A comparação inclui carga fria do 7B contra execução aquecida do 3B; não é benchmark rigoroso de qualidade. Nesta máquina, o 3B foi mais prático para a tarefa curta.
+
+Classificação observada: velocidade **SLOW** para ciclos de agente, qualidade **BASIC** pela falha semântica no refactor e baixa aderência na explicação, potencial agentic **LOW** até testes específicos em DL-03. Este benchmark **não prova equivalência com Codex cloud**. DL-03 pode prosseguir **com limites**, medindo latência e revisando toda edição. Os prompts eram inventados no script; nenhum source real, `.env` ou segredo foi enviado. O [benchmark.ps1](../scripts/dev-local/benchmark.ps1) aceita `-Model`, exige um modelo listado pelo Ollama local, rejeita nomes cloud e usa só localhost. `-OnlyA` executa apenas a geração curta.
