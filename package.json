@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:ci": "vitest run --pool=threads --maxWorkers=1",
     "doctor": "node scripts/doctor.mjs",
+    "dev:local:doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local/doctor.ps1",
+    "dev:local:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-local/status.ps1",
     "verify:release": "node scripts/verify-release.mjs",
     "verify:capacity": "node scripts/verify-capacity.mjs",
     "verify:free-router": "node scripts/verify-free-router.mjs",
