@@ -1,4 +1,5 @@
 import type { NiraProductCapability, NiraProductCapabilityId, NiraProductCapabilityStatus } from "@/types/capabilities";
+import { getSttRuntimeState } from "@/lib/ai/transcription/runtime";
 
 export interface ProductCapabilityRuntimeState {
   readonly demoMode?: boolean;
@@ -44,6 +45,10 @@ function nonEmpty(name: string) {
 /** Resolve estado localmente, sem rede, e descarta os valores do ambiente. */
 export function getPublicAICapabilities(): readonly NiraProductCapability[] {
   const demoMode = process.env.HANIRA_DEMO_MODE === "true";
+  // Fonte única de verdade para elegibilidade de STT (Package 18.3.4): reusa o
+  // gate fail-closed do runtime, então a capacidade pública e o botão de
+// microfone do chat concordam. Não expõe provider, modelo ou segredos.
+  const transcriptionEligible = getSttRuntimeState().eligible;
   return buildNiraProductCapabilities({
     demoMode,
     textConfigured: demoMode || nonEmpty("GROQ_API_KEY") || (process.env.AI_ENGINE_OLLAMA_ENABLED === "true" && nonEmpty("OLLAMA_BASE_URL") && nonEmpty("OLLAMA_MODEL")),
@@ -51,7 +56,7 @@ export function getPublicAICapabilities(): readonly NiraProductCapability[] {
     attachmentsEnabled: process.env.NEXT_PUBLIC_ATTACHMENTS_ENABLED === "true",
     visionEnabled: process.env.NEXT_PUBLIC_VISION_ENABLED === "true",
     voiceEnabled: process.env.NEXT_PUBLIC_VOICE_ENABLED === "true",
-    transcriptionEligible: process.env.HANIRA_STT_ENABLED === "true" && process.env.HANIRA_STT_COST_CLASS === "FREE" && nonEmpty("CLOUDFLARE_AI_ACCOUNT_ID") && nonEmpty("CLOUDFLARE_AI_API_TOKEN"),
+    transcriptionEligible,
   });
 }
 

@@ -7,14 +7,30 @@ const fakeFetch = (fn: (...args: Parameters<typeof fetch>) => Promise<Response>)
 const audio = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3]);
 
 describe("Cloudflare STT V1", () => {
-  it("falha fechada sem habilitação, conta Free e credenciais", () => {
-    const env = { CLOUDFLARE_AI_ACCOUNT_ID: "account", CLOUDFLARE_AI_API_TOKEN: "secret" };
-    expect(getSttRuntimeState(env).eligible).toBe(false);
+  it("falha fechada sem todos os gates de produção (Package 18.3.4)", () => {
+    const creds = { CLOUDFLARE_AI_ACCOUNT_ID: "account", CLOUDFLARE_AI_API_TOKEN: "secret" };
+    const full = {
+      ...creds,
+      HANIRA_STT_ENABLED: "true",
+      HANIRA_STT_LIVE_ENABLED: "true",
+      HANIRA_STT_COST_CLASS: "FREE",
+      HANIRA_STT_ACCOUNT_VERIFIED_FREE: "true",
+    };
+    // Sem nada: bloqueado.
+    expect(getSttRuntimeState(creds).eligible).toBe(false);
+    // Custos não-FREE sempre bloqueiam, mesmo com os outros gates.
     for (const cost of ["UNKNOWN", "PAID", "PROMOTIONAL"]) {
-      expect(getSttRuntimeState({ ...env, HANIRA_STT_ENABLED: "true", HANIRA_STT_COST_CLASS: cost }).eligible).toBe(false);
+      expect(getSttRuntimeState({ ...creds, HANIRA_STT_ENABLED: "true", HANIRA_STT_LIVE_ENABLED: "true", HANIRA_STT_COST_CLASS: cost, HANIRA_STT_ACCOUNT_VERIFIED_FREE: "true" }).eligible).toBe(false);
     }
-    expect(getSttRuntimeState({ ...env, HANIRA_STT_ENABLED: "true", HANIRA_STT_COST_CLASS: "FREE" }).eligible).toBe(true);
-    expect(getSttRuntimeState({ HANIRA_STT_ENABLED: "true", HANIRA_STT_COST_CLASS: "FREE" }).eligible).toBe(false);
+    // Faltando LIVE_ENABLED: bloqueado (não assume live silenciosamente).
+    expect(getSttRuntimeState({ ...creds, HANIRA_STT_ENABLED: "true", HANIRA_STT_COST_CLASS: "FREE", HANIRA_STT_ACCOUNT_VERIFIED_FREE: "true" }).eligible).toBe(false);
+    // Faltando ACCOUNT_VERIFIED_FREE: bloqueado.
+    expect(getSttRuntimeState({ ...creds, HANIRA_STT_ENABLED: "true", HANIRA_STT_LIVE_ENABLED: "true", HANIRA_STT_COST_CLASS: "FREE" }).eligible).toBe(false);
+    // Faltando credenciais: bloqueado.
+    expect(getSttRuntimeState({ HANIRA_STT_ENABLED: "true", HANIRA_STT_LIVE_ENABLED: "true", HANIRA_STT_COST_CLASS: "FREE", HANIRA_STT_ACCOUNT_VERIFIED_FREE: "true" }).eligible).toBe(false);
+    // Todos os gates + credenciais: elegível.
+    expect(getSttRuntimeState(full).eligible).toBe(true);
+    expect(getSttRuntimeState(full)).toMatchObject({ enabled: true, liveEnabled: true, costClass: "FREE", accountVerifiedFree: true, configured: true });
   });
 
   it("envia somente transcribe pt, recebe texto e não inclui segredos na resposta", async () => {
