@@ -7,7 +7,7 @@ Atualizado em 2026-10-11. Seções e blocos explicitamente marcados como histór
 
 - Package 18.1: MERGED via PR #26 no commit `d16147da6008d7ecae137157aa81009b8b40d096`. Package 18.2: MERGED via PR #27 no commit `f08ae5b0733e074db7120d4f2677013e232fe7ed`.
 - Package 18.3: **MERGED** via PR #28 no commit `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. STT Cloudflare V1 segue desligado por padrão, sem ativação de produção ou teste ao vivo.
-- Package 18.3.1: preparação do smoke controlado na branch `pacote-18-3-1-stt-controlled-activation`; conta Cloudflare ainda sem classificação financeira comprovada, então nenhuma inferência STT foi autorizada ou executada.
+- Package 18.3.1: smoke controlado ao vivo **executado** na branch `pacote-18-3-1-stt-controlled-activation` com autorização humana — **INFRASTRUCTURE LIVE SMOKE: PASS** (HTTP 200, exatamente 1 provider call, retry 0, duração 6,36 s, ~4,94 Neurons, transcrição presente). A correspondência textual exata **NÃO** foi confirmada; precisão **NÃO** validada. Produção continua desativada / fail-closed; nenhuma mudança de billing, migration ou produção.
 - Speech é uma capacidade `limited`: leitura manual local pelo Web Speech do navegador e somente quando houver voz exatamente pt-BR.
 - STT/transcrição permanece `disabled` enquanto o gate financeiro e operacional estiver fechado; quando todas as condições seguras forem atendidas, será `limited`. Live voice não foi implementada. A rota OpenAI de STT foi substituída.
 - Não há provider, modelo, cobrança, billing, crédito ou fallback pago novo.
@@ -49,7 +49,7 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 18.1 | merge `d16147da6008d7ecae137157aa81009b8b40d096` via PR #26 | MERGED. Browser TTS manual pt-BR; speech `limited`, transcription `disabled`, live voice não implementada. |
 | 18.2 | merge `f08ae5b0733e074db7120d4f2677013e232fe7ed` via PR #27 | MERGED. Viabilidade de STT/microfone e decisão condicional Cloudflare Workers Free. |
 | 18.3 | merge `b737175c7690d0bb653a5dbcf50d2d3aa7771936` via PR #28 | MERGED. STT Cloudflare V1 implementado; gate de produção fechado por padrão. |
-| 18.3.1 | `pacote-18-3-1-stt-controlled-activation` | Preparação de smoke controlado; conta e uso Free ainda não comprovados. Nenhuma chamada STT ao vivo. |
+| 18.3.1 | `pacote-18-3-1-stt-controlled-activation` | Smoke controlado ao vivo executado com autorização humana: PASS de infraestrutura (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente). Correspondência exata NÃO confirmada; produção desativada / fail-closed. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -243,11 +243,11 @@ Packages 16.4–18.3 concluídos; 18.3 mergeado via PR #28 em `b737175c7690d0bb6
 
 ### CURRENT
 
-Package 18.3 está MERGED via PR #28 (`b737175c7690d0bb653a5dbcf50d2d3aa7771936`). Package 18.3.1 prepara o smoke STT controlado; a classificação financeira da conta permanece `UNKNOWN` porque o token disponível não permite ler plano nem uso. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
+Package 18.3 está MERGED via PR #28 (`b737175c7690d0bb653a5dbcf50d2d3aa7771936`). Package 18.3.1 executou o smoke STT controlado com autorização humana: infraestrutura **PASS** (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente); a correspondência textual exata **NÃO** foi confirmada e a precisão **NÃO** foi validada. Produção permanece `disabled` / fail-closed. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
 
 ### NEXT
 
-Comprovar no painel Cloudflare que a conta usa Workers Free sem cobrança e verificar uso diário disponível antes de qualquer smoke; depois exigir autorização humana explícita. Antes de ativar produção, verificar comportamento real do modelo/formatos e estabelecer política operacional para a franquia compartilhada com imagens.
+Workers Free confirmado manualmente e smoke controlado executado (PASS de infraestrutura; correspondência exata não confirmada). Próximo pacote provável: **18.3.2 Mobile Audio Compatibility** (Chrome Android e Safari/iPhone; validação real dos contêineres pela Cloudflare). Ainda pendente, antes de qualquer ativação de produção: verificar comportamento real dos formatos de áudio e estabelecer política operacional para a franquia compartilhada com imagens.
 
 ### LATER
 
@@ -266,7 +266,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Verificação humana do plano e uso da conta Workers AI Free. Smoke STT permanece bloqueado enquanto a classificação for `UNKNOWN`; não fazer merge automático nem ativar produção.
+Smoke controlado STT concluído com PASS de infraestrutura (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente); Workers Free confirmado manualmente. Correspondência exata NÃO confirmada; precisão NÃO validada. Próximo pacote provável: **18.3.2 Mobile Audio Compatibility**. Produção continua desativada / fail-closed; não ativar produção nem fazer merge automático.
 
 ## PACKAGE 17.8 - HISTORICAL RECOVERY ADDENDUM
 

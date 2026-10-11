@@ -1,6 +1,46 @@
 # Package 18.3.1 — Controlled STT Activation & Live Smoke
 
-**Estado em 2026-10-11:** preparação concluída; smoke real **BLOCKED**; chamadas de inferência Cloudflare **0**. Base: `origin/main` no merge do Package 18.3, PR #28, `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. Branch: `pacote-18-3-1-stt-controlled-activation`. A trilha experimental HANIRA DEV LOCAL não foi incorporada.
+**Estado em 2026-10-11:** smoke controlado ao vivo **executado** com autorização humana — **INFRASTRUCTURE LIVE SMOKE: PASS** (HTTP 200, exatamente 1 provider call, retry 0, duração 6,36 s, ~4,94 Neurons, transcrição presente). A correspondência textual exata **NÃO** foi confirmada e a precisão **NÃO** foi validada. **Produção continua desativada / fail-closed.** Base: `origin/main` no merge do Package 18.3, PR #28, `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. Branch: `pacote-18-3-1-stt-controlled-activation`. A trilha experimental HANIRA DEV LOCAL não foi incorporada.
+
+## Resultado do smoke controlado ao vivo (2026-10-11)
+
+Smoke real **autorizado e executado manualmente pelo humano** nesta sessão. Nenhuma segunda chamada foi feita para investigar o resultado. Resultado factual:
+
+| Métrica | Valor |
+| --- | --- |
+| status | PASS |
+| httpStatus | 200 |
+| latencyMs | 1829 |
+| durationSeconds | 6.36 |
+| estimatedNeurons | 4.94 |
+| neuronUsage | 4.942805196624 |
+| transcriptionPresent | true |
+| transcriptionMatchesSample | false |
+| providerCalls | 1 |
+| retry | 0 |
+
+Interpretação obrigatória:
+
+- O Cloudflare STT respondeu com **HTTP 200**.
+- Houve **exatamente UMA** chamada real ao provider (`providerCalls = 1`).
+- **Não houve retry** (`retry = 0`).
+- **Houve transcrição** (`transcriptionPresent = true`).
+- O consumo real ficou em aproximadamente **4,94 Neurons** (`neuronUsage = 4,942805196624`), dentro da franquia diária Free de 10.000 Neurons.
+- A comparação textual com a frase de amostra retornou **false** (`transcriptionMatchesSample = false`).
+- **NÃO** assumir que a precisão foi validada.
+- **NÃO** executar segunda chamada para investigar isso.
+- **Produção continua desativada.**
+
+Classificação:
+
+- **INFRASTRUCTURE LIVE SMOKE: PASS**
+- **TRANSCRIPTION PRESENCE: PASS**
+- **EXACT SAMPLE MATCH: NOT CONFIRMED**
+- **PRODUCTION ACTIVATION: NOT AUTHORIZED**
+
+Garantias preservadas: Workers Free confirmado manualmente pelo humano; nenhum fallback; nenhuma mudança em produção; nenhuma mudança de billing; nenhuma migration; produção continua **fail-closed**. Nenhuma API key, Account ID, token, áudio em Base64 ou transcrição bruta foi registrado neste documento.
+
+As seções abaixo descrevem a fase de **preparação** do smoke, quando o estado era `BLOCKED` e nenhuma inferência havia sido executada. O resultado executado acima é autoritativo para o estado de infraestrutura; a preparação permanece como registro histórico.
 
 ## Verificação oficial Cloudflare em 2026-10-11
 
