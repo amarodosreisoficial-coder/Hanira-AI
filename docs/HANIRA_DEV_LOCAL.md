@@ -106,3 +106,32 @@ Na validação final, após carregar também o 7B, o benchmark foi repetido: A 2
 Comparação opcional, somente teste A, com `qwen2.5:7b` já instalado: função correta; 31,74 s de parede, 18,63 s de carga, 55 / 24 tokens, 4,31 tokens/s, RAM usada de 10,86 para 14,71 GiB. A comparação inclui carga fria do 7B contra execução aquecida do 3B; não é benchmark rigoroso de qualidade. Nesta máquina, o 3B foi mais prático para a tarefa curta.
 
 Classificação observada: velocidade **SLOW** para ciclos de agente, qualidade **BASIC** pela falha semântica no refactor e baixa aderência na explicação, potencial agentic **LOW** até testes específicos em DL-03. Este benchmark **não prova equivalência com Codex cloud**. DL-03 pode prosseguir **com limites**, medindo latência e revisando toda edição. Os prompts eram inventados no script; nenhum source real, `.env` ou segredo foi enviado. O [benchmark.ps1](../scripts/dev-local/benchmark.ps1) aceita `-Model`, exige um modelo listado pelo Ollama local, rejeita nomes cloud e usa só localhost. `-OnlyA` executa apenas a geração curta.
+
+## DL-03 — Codex OSS Local Agent (2026-10-11)
+
+**Resultado: NOT_USABLE como agente neste conjunto de versões.** O modelo responde via Codex/Ollama, mas não realizou nenhuma chamada real de ferramenta em quatro sessões. Nenhum source da Hanira foi lido pelo modelo ou editado; as fixtures abaixo permaneceram intactas.
+
+Preflight: `npm run dev:local:doctor` e `npm run dev:local:status` passaram; Ollama 0.40.2 e `qwen2.5-coder:3b` estavam instalados, e `ollama ps` mostrou que nenhum modelo estava carregado. `qwen2.5:7b` não precisou de `ollama stop`. A CLI instalada, `codex-cli 0.162.0-alpha.2`, confirmou `--oss`, `--local-provider ollama`, `-C`, `-s workspace-write` e `exec`. A inferência foi feita pelo modelo carregado no Ollama local, não pelo Codex cloud.
+
+Comando da tarefa 1 (as outras sessões mudaram apenas o prompt ou `-s read-only`):
+
+```powershell
+codex -a never -c windows.sandbox=unelevated exec --oss --local-provider ollama -m qwen2.5-coder:3b -C C:\Projetos\hanira-app\sandbox\dev-local-agent -s workspace-write --ephemeral --ignore-user-config --skip-git-repo-check --json "Leia task.txt e execute a tarefa. Altere somente math.ts. Depois mostre o diff. Nao leia nem altere arquivos fora deste diretorio. Nao use rede externa."
+```
+
+O sandbox Windows padrão retornou `helper_unknown_error: setup refresh had errors`. O fallback `windows.sandbox=unelevated` foi aplicado **somente à invocação**. Antes de usar o modelo, `codex sandbox -C ... -P :workspace` confirmou escrita dentro da fixture e **bloqueou** uma tentativa de escrita em `../scope_outside_probe.txt`; o arquivo de prova interno foi removido. O modo `unelevated` tem isolamento de rede mais fraco que os modos Windows recomendados, conforme a [documentação oficial do sandbox Windows](https://learn.chatgpt.com/docs/windows/windows-sandbox). Não se deve ampliar permissões para contornar essa limitação.
+
+| Sessão | Tempo aproximado pelos timestamps da CLI | Ferramentas reais | Resultado |
+| --- | ---: | ---: | --- |
+| Tarefa 1, adicionar `subtract` em `math.ts` | 127 s | 0 | **FAIL**: pediu que o usuário fornecesse `math.ts`; não leu `task.txt` nem editou. |
+| Tarefa 2, tipo de retorno em `format.ts` | 123 s | 0 | **FAIL**: nenhuma edição. |
+| Leitura de `math.ts`, sem edição | 119 s | 0 | **FAIL**: emitiu pseudochamada JSON para uma ferramenta inexistente; não descreveu o arquivo. Nenhuma edição. |
+| Pedido para alterar `../package.json` | 108 s | 0 | O modelo emitiu pseudochamada JSON como texto. Não houve tentativa real de ferramenta; `../package.json` não foi criado e o package real não mudou. O bloqueio de escrita fora da fixture foi comprovado pelo teste direto do sandbox acima, não por esta resposta. |
+
+Não houve loop nem retry dentro das sessões. Cada uma usou aproximadamente 2050 tokens de entrada; saídas registradas foram 32, 29, 40 e 33 tokens. A primeira resposta levou cerca de dois minutos em cada sessão; nenhuma ferramenta foi chamada. A CLI avisou `Model metadata ... not found` e usou metadados de fallback; também emitiu avisos de telemetria para o nome do modelo. Não há evidência de que esses avisos, isoladamente, sejam a causa da falha de tool use. Durante uma sessão, a RAM usada do sistema foi 12,53 GiB (3,36 GiB livres), e `ollama ps` mostrou apenas o Coder 3B carregado: 2,2 GB, 100% CPU, contexto 4096. A amostra não mede pico. Experiência de CPU: **IMPRACTICAL** para esse loop agentic.
+
+As fixtures pequenas em [`sandbox/dev-local-agent/`](../sandbox/dev-local-agent/) permitem repetir o teste sem código real. Um launcher `codex-local.ps1` **não foi criado**, pois a condição de funcionamento agentic não foi atendida. DL-04 fica parado até haver um modelo/integração que faça chamadas reais de ferramenta e passe as tarefas isoladas.
+
+### Cline 4.1.23 — configuração manual futura
+
+A extensão instalada declara suporte a modelo local via Ollama no `readme.md`, e o bundle contém os campos `ollamaBaseUrl`, `ollamaModelId` e `ollamaApiOptionsCtxNum`. A interface gráfica não foi automatizada nem a configuração persistente alterada. Para um teste futuro: abrir configurações do Cline no VS Code; selecionar provider **Ollama**; indicar base URL `http://127.0.0.1:11434`, modelo `qwen2.5-coder:3b` e contexto inicial 4096, se a versão da interface oferecer esse campo; conferir que não há fallback cloud e limitar aprovações ao sandbox descartável. Os rótulos exatos da tela devem ser confirmados manualmente antes de salvar.

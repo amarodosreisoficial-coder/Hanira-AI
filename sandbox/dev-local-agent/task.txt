@@ -1,0 +1,4 @@
+TASK:
+Adicionar uma função subtract(a, b) mantendo multiply intacta.
+Não alterar nenhum outro arquivo.
+Depois explicar o que foi alterado.
