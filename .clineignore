@@ -1,0 +1,47 @@
+# ============================================================================
+# HANIRA AI — .clineignore
+# Reduz o contexto lido pelo Cline sem impedir o desenvolvimento normal.
+# Estilo gitignore: os padrões abaixo EXCLUEM caminhos da leitura do agente.
+# ============================================================================
+
+# --- Dependências e artefatos de build (nunca úteis para o agente) ---
+node_modules/
+.next/
+.git/
+test-results/
+coverage/
+dist/
+build/
+
+# --- Logs e caches de build ---
+*.log
+debug.log
+tsconfig.tsbuildinfo
+
+# --- Segredos e variáveis de ambiente locais ---
+.env
+.env.local
+.env.*.local
+
+# ============================================================================
+# RE-AFIRMAÇÃO (negações): código-fonte, testes, docs e configuração base
+# continuam LEGÍVEIS. Linhas com '!' re-incluem o caminho caso algum padrão
+# acima o cubra. Como os padrões acima são específicos, estas linhas também
+# documentam a intenção: nunca bloquear as pastas/arquivos abaixo.
+# ============================================================================
+!app/
+!components/
+!hooks/
+!lib/
+!services/
+!scripts/
+!tests/
+!docs/
+!supabase/
+!types/
+
+!.env.example
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.ts
