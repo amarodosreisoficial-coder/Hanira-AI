@@ -157,3 +157,40 @@ O pedido direto ofereceu somente a ferramenta fictícia `get_test_file` com par�
 **Diagnóstico:** `MODEL_TOOL_CALL_FAILURE` é observado no teste `/api/chat`. A causa exata entre pesos/comportamento do modelo, template de ferramentas do Ollama e opções de decodificação não fica demonstrada por uma única amostra; `OLLAMA_TOOL_INTERFACE_FAILURE` não está comprovada. `CODEX_METADATA_COMPATIBILITY_SUSPECTED` também se aplica ao caminho `ollama launch`: o modelo não suporta “thinking” solicitado naquela sessão. O Codex direto do DL-03 não é a causa única do `tool_calls` ausente, pois a API direta falhou sem ele. A capacidade agentic do 3B permanece insuficiente **nesta configuração testada**; um loop real não pôde ser avaliado. Na CPU i5-3470, as sessões Codex anteriores levaram ~108–127 s cada sem ferramentas, uma experiência impraticável para o objetivo do DL-03.
 
 **Recomendação para DL-03.2:** `TRY_DIFFERENT_LOCAL_MODEL`, sujeito a escolha explícita no próximo pacote. Nenhum modelo novo foi baixado aqui; não iniciar DL-04 antes de uma chamada estruturada e um loop isolado bem-sucedidos. Não houve chamadas de modelo cloud, mudanças de runtime, banco, migrations, produção ou billing.
+
+## DL-03.2 — Qwen3 4B Agent Test (2026-10-11)
+
+Base `5557fbe66c976542266a2fc0214e3cc7261f11df`, branch `dev-local-dl-03-2-qwen3-agent`. O único download foi `ollama pull qwen3:4b`; `ollama list` confirmou **2,5 GB**. Não houve remoção de modelos. `ollama ps` estava vazio antes do pull, então não foi necessário descarregar os modelos anteriores. `ollama show qwen3:4b` informou literalmente: `architecture qwen3`, `parameters 4.0B`, `context length 262144`, `quantization Q4_K_M`, capabilities `completion`, `tools` e `thinking` (levels `true`, default `true`). Os testes usaram contexto **4096**, não o máximo anunciado.
+
+Hardware: Intel i5-3470, 4 cores/4 threads, 15,89 GiB RAM, sem GPU dedicada. RAM usada antes do smoke: **7,74 GiB**; após carregamento: **10,59 GiB**; após os testes: **10,89 GiB**, 5,00 GiB livres. `ollama ps` mostrou somente `qwen3:4b`, **3,2 GB**, 100% CPU, contexto 4096. São amostras, não o pico contínuo.
+
+### Texto e chamadas diretas
+
+O smoke com o prompt exato para retornar `sum`, `stream:false`, falhou em obedecer ao formato: com `thinking` padrão, consumiu o limite de 256 tokens no campo de raciocínio e deixou `response` vazio. Tempo de parede **44,54 s**, carga **3,25 s**, 34 tokens de prompt, 256 gerados, **6,73 tokens/s**. Uma repetição diagnóstica com `think:false` levou **18,82 s**, carga **0,01 s**, 128 gerados, **6,91 tokens/s**, mas respondeu com explicação repetitiva e truncada, não apenas a função solicitada. Assim, `TEXT SMOKE = FAIL` e qualidade textual observada **BASIC** para aderência a essa instrução curta.
+
+O gate de ferramenta usou `POST /api/chat` em localhost, uma única função fictícia `get_test_file(filename: string)`, `stream:false`, `think:false` e contexto 4096. PASS exigia `message.tool_calls` estruturado, conforme a [API de tool calling do Ollama](https://docs.ollama.com/capabilities/tool-calling). O modelo ainda incluiu texto semelhante a raciocínio em `message.content` em algumas respostas, embora `think:false` tenha sido enviado.
+
+| Repetição | `tool_calls` estruturado | Tempo de parede | Observação |
+| --- | --- | ---: | --- |
+| 1 | **PASS** | 43,71 s | `get_test_file(filename="math.ts")` real; 160 tokens de prompt, 215 gerados, 6,33 tokens/s. |
+| 2 | **FAIL** | 40,35 s | `tool_calls: null`; esgotou 256 tokens em texto. |
+| 3 | **PASS** | 37,13 s | `get_test_file(filename="math.ts")` real; 233 tokens gerados. |
+
+Taxa **2/3**: gate mínimo atingido, porém comportamento **WORKING**, não consistente.
+
+### Loop controlado e segurança
+
+O script [qwen3-tool-test.ps1](../scripts/dev-local/qwen3-tool-test.ps1) oferece apenas `read_fixture` e `write_fixture` ao Ollama local, até quatro rodadas, com timeout de 120 s por requisição e orçamento total de cinco minutos. Usa exclusivamente `sandbox/dev-local-agent/`; aceita leitura de `math.ts`, `format.ts`, `task.txt` e escrita de `math.ts`, `format.ts`. Rejeita `..`, caminhos absolutos, separadores, dois-pontos, arquivos fora da lista e reparse points nos componentes da raiz ou no arquivo. O modo `-GuardOnly` rejeitou cinco caminhos indevidos, incluindo absoluto e UNC, e aceitou somente os usos permitidos de `math.ts`. Não executa código, terminal, Git ou rede externa. A sequência de mensagens de ferramenta segue a [documentação do Ollama](https://docs.ollama.com/capabilities/tool-calling).
+
+| Teste | Resultado | Evidência |
+| --- | --- | --- |
+| Edição, primeira tentativa | **FAIL** | 76,41 s, uma rodada; 0 reads, 0 writes; descreveu ferramenta em texto. |
+| Edição, repetição com instrução de sistema explícita | **FAIL** | 78,73 s, uma rodada; 0 reads, 0 writes; nova descrição textual. |
+| Read only | **PASS** | 109,74 s, duas rodadas; 1 `read_fixture` real, 0 writes; respondeu sobre `multiply`. |
+| Escape `../outside.txt` | **BLOCKED** | 62,42 s; nenhuma chamada de escrita, `sandbox/outside.txt` ausente. A verificação direta do guard rejeitou o caminho. O modelo apenas discutiu a solicitação em texto. |
+
+Nenhuma fixture foi modificada. Chamadas reais observadas neste pacote: **3** (duas chamadas fictícias no gate, uma leitura no loop); chamadas reais de escrita: **0**. Duas tentativas de edição e o prompt de escape produziram menções às ferramentas em texto sem invocação. O script não interpreta esse texto como autorização para uma ação.
+
+Como o loop direto de edição não passou, `ollama launch codex` não foi executado (fase 11 condicionada a PASS). Codex direto também não foi necessário para comparação, e Cline dependia de loop direto funcional. Nenhuma configuração Codex real foi alterada.
+
+**Conclusão:** `TOOL CALLING = WORKING` no gate simples de 2/3, mas `AGENT = NOT_USABLE` para a tarefa de edição testada. Experiência de CPU **IMPRACTICAL**: 37–44 s para uma chamada simples; ~76–79 s por tentativa de edição sem ferramenta; 110 s para leitura e explicação. **DL-04: STOP.** A condição de loop direto PASS e integração Codex ou Cline funcional não foi atendida. Nenhum source real da Hanira, banco, migration, produção, billing ou modelo cloud foi tocado. Aguardar decisão explícita antes de qualquer tarefa no repositório real.
