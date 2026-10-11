@@ -135,3 +135,25 @@ As fixtures pequenas em [`sandbox/dev-local-agent/`](../sandbox/dev-local-agent/
 ### Cline 4.1.23 — configuração manual futura
 
 A extensão instalada declara suporte a modelo local via Ollama no `readme.md`, e o bundle contém os campos `ollamaBaseUrl`, `ollamaModelId` e `ollamaApiOptionsCtxNum`. A interface gráfica não foi automatizada nem a configuração persistente alterada. Para um teste futuro: abrir configurações do Cline no VS Code; selecionar provider **Ollama**; indicar base URL `http://127.0.0.1:11434`, modelo `qwen2.5-coder:3b` e contexto inicial 4096, se a versão da interface oferecer esse campo; conferir que não há fallback cloud e limitar aprovações ao sandbox descartável. Os rótulos exatos da tela devem ser confirmados manualmente antes de salvar.
+
+## DL-03.1 — Tool Calling Root Cause (2026-10-11)
+
+Base `a02477283261e2e932ab1fb59443d431a5b514e5`, branch `dev-local-dl-03-1-tool-calling`. Nenhum source real da Hanira foi testado ou alterado. O modelo e a API permaneceram locais.
+
+`ollama show qwen2.5-coder:3b` em Ollama 0.40.2 informou literalmente as capabilities `completion`, `tools` e `insert` (Qwen2, 3.1B, Q4_K_M, contexto 32768). Isso declara suporte a ferramentas, mas não prova que esta geração emita uma chamada estruturada. O formato do teste segue a [documentação oficial de tool calling do Ollama](https://docs.ollama.com/capabilities/tool-calling): ferramenta `type: function`, esquema `parameters`, resposta esperada em `message.tool_calls`.
+
+| Camada / teste | Resultado | Evidência |
+| --- | --- | --- |
+| API direta `POST /api/chat`, sem Codex | **FAIL** | `message.tool_calls` ausente; `message.content` foi `{"name": "get_test_file", "arguments": {"filename": "math.ts"}}`. Uma pseudochamada em texto, não invocação estruturada. |
+| Loop direto `read_fixture` / `write_fixture` | **NOT RUN** | Condição da fase 3 não atendida: o teste direto não produziu `tool_calls`. Nenhum script foi criado. |
+| Codex `--oss` direto | **FAIL** no DL-03; não repetido | Quatro sessões anteriores, zero chamadas reais. A repetição da fase 6 dependia de sucesso na API direta. |
+| `ollama launch codex` | **SUPPORTED**, teste **FAIL** | A CLI local reconheceu o comando. Com perfil descartável e o mesmo modelo, a sessão falhou antes de responder: `"qwen2.5-coder:3b" does not support thinking`, após cinco reconexões; zero chamadas reais. |
+| Cline | **NOT RUN** | A fase 7 exigia sucesso na API direta e falha do Codex. |
+
+O pedido direto ofereceu somente a ferramenta fictícia `get_test_file` com parâmetro obrigatório `filename: string`, descrição “Read a test file from the isolated sandbox.” e prompt para ler `math.ts` por ferramenta. Usou `stream:false`, `temperature:0`, `num_ctx:4096` e `num_predict:128`. Tempo de parede: **16,04 s**; Ollama: **15,92 s**, 181 tokens de entrada e 19 gerados. Nenhum arquivo foi lido pelo teste: ele examinou só a forma da resposta. Uma chamada de API não prova que o modelo jamais consiga usar ferramentas em outros prompts, mas localiza esta falha antes da integração Codex.
+
+`ollama launch --help` e `ollama launch codex --help` confirmaram `--model`, `--config`, `--restore` e `--yes`. O launcher avisou que este 3B “does not work well with Codex CLI” e pediu confirmação para prosseguir. A [implementação oficial do launcher](https://github.com/ollama/ollama/blob/main/cmd/launch/codex.go) mostra escrita do catálogo `model.json` e do perfil `ollama-launch.config.toml` sob o diretório `.codex` do usuário, além de possível limpeza de perfil legado no `config.toml`. O teste ajustou `USERPROFILE` **apenas no processo filho** para `sandbox/dev-local-agent/launch-home`, sem tocar na configuração Codex real. Ali foram gerados `.codex/model.json`, `.codex/ollama-launch.config.toml` e `.ollama/config.json`. O catálogo gerado marcou `supported_reasoning_levels: []`, mas a tentativa de execução por `wire_api = "responses"` recebeu a recusa de “thinking”. O teste durou **10,87 s** (parede do comando), com saída `turn.failed`, e não editou `math.ts`.
+
+**Diagnóstico:** `MODEL_TOOL_CALL_FAILURE` é observado no teste `/api/chat`. A causa exata entre pesos/comportamento do modelo, template de ferramentas do Ollama e opções de decodificação não fica demonstrada por uma única amostra; `OLLAMA_TOOL_INTERFACE_FAILURE` não está comprovada. `CODEX_METADATA_COMPATIBILITY_SUSPECTED` também se aplica ao caminho `ollama launch`: o modelo não suporta “thinking” solicitado naquela sessão. O Codex direto do DL-03 não é a causa única do `tool_calls` ausente, pois a API direta falhou sem ele. A capacidade agentic do 3B permanece insuficiente **nesta configuração testada**; um loop real não pôde ser avaliado. Na CPU i5-3470, as sessões Codex anteriores levaram ~108–127 s cada sem ferramentas, uma experiência impraticável para o objetivo do DL-03.
+
+**Recomendação para DL-03.2:** `TRY_DIFFERENT_LOCAL_MODEL`, sujeito a escolha explícita no próximo pacote. Nenhum modelo novo foi baixado aqui; não iniciar DL-04 antes de uma chamada estruturada e um loop isolado bem-sucedidos. Não houve chamadas de modelo cloud, mudanças de runtime, banco, migrations, produção ou billing.
