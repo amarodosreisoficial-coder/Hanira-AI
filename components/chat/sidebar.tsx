@@ -86,11 +86,11 @@ export function Sidebar({ userName }: { userName: string }) {
             onClick={() => void store.newConversation()}
             title="Nova conversa"
             className={cn(
-              "flex h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "group flex h-11 w-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/[0.06] px-3.5 text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               store.sidebarCollapsed && "lg:justify-center lg:px-0",
             )}
           >
-            <Plus className="size-4 shrink-0 text-primary" />
+            <Plus className="size-4 shrink-0 text-primary transition group-hover:rotate-90" />
             <span className={cn(store.sidebarCollapsed && "lg:hidden")}>Nova conversa</span>
           </button>
 
@@ -127,8 +127,8 @@ export function Sidebar({ userName }: { userName: string }) {
                 className={cn(
                   "group flex min-h-10 items-center rounded-xl px-3 text-sm transition",
                   conversation.id === store.activeId
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
+                    ? "bg-primary/[0.08] text-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   store.sidebarCollapsed && "lg:justify-center lg:px-0",
                 )}
               >

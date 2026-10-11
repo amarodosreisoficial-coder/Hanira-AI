@@ -56,6 +56,7 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 18.3.2 | `pacote-18-3-2-mobile-audio-compatibility` | Mobile Audio Compatibility implementado; CODE/UNIT VALIDATED. MIME negotiation por capacidade, extensão pelo container real, validação server-side por assinatura (anti-spoofing); Safari/iOS via MP4/M4A; sem regressão desktop. REAL DEVICE: NÃO testado. Produção desativada. |
 | 18.3.3 | `pacote-18-3-3-real-device-audio-validation` | Real Device Audio Validation Harness PRONTO; CODE/UNIT VALIDATED. Página/endpoint de diagnóstico sem IA com portão dev/preview (produção 404); playback local e relatório sanitizado. REAL DEVICE VALIDATION: PENDING. 0 provider calls; produção fail-closed. |
 | 18.3.3.1 | `pacote-18-3-3-1-automatic-audio-test` | Teste automático de áudio (ADICIONAL ao harness manual): um toque grava ~5s → valida server sem IA → PASS/FAIL + relatório. CODE/UNIT VALIDATED. ANDROID/CHROME REAL DEVICE: PASS. Edge Android / iPhone Safari: PENDING. 0 provider calls; produção fail-closed. |
+| 18.3.5 | `pacote-18-3-5-visual-refresh-unified-composer` | Visual Refresh + Composer Unificado + Sidebar Colapsável: tema escuro premium (grafite near-black, acento violeta + micro-ciano), composer com menu `+` (doc/imagem/camera), microfone inline na mesma barra com waveform simulada e gravação na própria superfície (sem auto-send), sidebar colapsável com modo ícones refinado, logo Hanira em SVG com halo. STT flow preservado. CODE/UNIT VALIDATED. 0 provider calls; produção inalterada. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 

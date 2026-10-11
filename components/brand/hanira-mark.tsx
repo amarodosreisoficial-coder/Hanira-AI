@@ -10,14 +10,14 @@ export function HaniraMark({
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-[11px] border border-violet-300/20 bg-violet-950/30 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_8px_28px_rgba(109,40,217,.18)]">
+      <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_34%_28%,rgba(167,139,250,0.30),rgba(139,92,246,0.08)_55%,transparent_78%)]">
         <Image
-          src="/hanira-symbol.png"
+          src="/hanira-symbol.svg"
           alt=""
           fill
           sizes="32px"
           priority
-          className="object-cover"
+          className="nira-mark object-contain p-[7px]"
         />
       </span>
       {!compact && (

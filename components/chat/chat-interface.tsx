@@ -85,12 +85,12 @@ export function ChatInterface({ userName }: { userName: string }) {
             )}
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
-                <span className="truncate text-sm font-semibold tracking-tight">Hanira</span>
-                <span className="hidden text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground sm:inline">
+                <span className="text-gradient truncate text-[15px] font-semibold tracking-[-0.02em]">Hanira</span>
+                <span className="hidden text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:inline">
                   Nira Intelligence
                 </span>
               </div>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
+              <p className="hidden text-[10px] leading-4 text-muted-foreground/80 sm:block">
                 Sua conversa com a inteligência da Hanira
               </p>
             </div>

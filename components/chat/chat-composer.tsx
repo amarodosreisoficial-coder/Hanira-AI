@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   Mic,
   Paperclip,
+  Plus,
   Sparkles,
   Square,
   TriangleAlert,
@@ -97,6 +98,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     null,
   );
   const [composerMode, setComposerMode] = useState<ComposerMode>("text");
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatioPreset>("1:1");
   const [imageReferences, setImageReferences] = useState<ImageReferenceDraft[]>([]);
   const [imageReferenceInputKey, setImageReferenceInputKey] = useState(0);
@@ -107,6 +109,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   const { ref, resize } = useAutoResize();
   const store = useChatStore();
   useEffect(() => {
@@ -117,6 +120,21 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       .catch(() => undefined);
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (!plusMenuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!plusMenuRef.current?.contains(event.target as Node)) setPlusMenuOpen(false);
+    }
+    const onKeyDown = (event: { key: string }) => {
+      if (event.key === "Escape") setPlusMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [plusMenuOpen]);
   const messageLength = getChatMessageLength(store.draft);
   const remainingCharacters = getRemainingChatMessageCharacters(store.draft);
   const showOperationalIssue = Boolean(
@@ -725,10 +743,12 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             {error}
           </p>
         )}
-        {recorderOpen && (
-          <div className="mb-3">
+        <div
+          className={`compose-surface nira-composer relative rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none${recorderOpen ? " is-recording" : ""}`}
+        >
+          {recorderOpen ? (
             <VoiceRecorder
-              compact
+              inline
               onCancel={() => setRecorderOpen(false)}
               onComplete={({ text }) => {
                 const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();
@@ -741,9 +761,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 setRecorderOpen(false);
               }}
             />
-          </div>
-        )}
-        <div className="compose-surface nira-composer rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none">
+          ) : (
+            <>
           <textarea
             ref={ref}
             value={store.draft}
@@ -872,77 +891,70 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           )}
           <div className="flex items-center justify-between px-1 pb-1">
-            <div className="flex items-center">
-              {!isImageMode && (
-                <button
-                  type="button"
-                  onClick={() => setComposerMode("image")}
-                  aria-label="Criar imagem"
-                  title="Criar imagem"
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground"
-                >
-                  <span className="flex items-center gap-1.5 text-xs font-medium">
-                    <ImagePlus className="size-[18px]" />
-                    Criar imagem
-                  </span>
-                </button>
-              )}
-              {!isImageMode && (
-                <button
-                  type="button"
-                  disabled={!mediaConfig.attachmentsEnabled}
-                  onClick={() => documentInputRef.current?.click()}
-                  aria-label="Adicionar documento"
-                  title="Adicionar documento"
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-                >
-                  <Paperclip className="size-[18px]" />
-                </button>
-              )}
-              {!isImageMode && (
-                <button
-                  type="button"
-                  disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                  onClick={() => imageInputRef.current?.click()}
-                  aria-label="Adicionar imagem"
-                  title="Adicionar imagem"
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-                >
-                  <ImagePlus className="size-[18px]" />
-                </button>
-              )}
-              {!isImageMode && (
-                <button
-                  type="button"
-                  disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                  onClick={() => void requestMediaAccess("camera")}
-                  aria-label="Tirar foto"
-                  title="Tirar foto"
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-                >
-                  <Camera className="size-[18px]" />
-                </button>
-              )}
-              {!isImageMode && (
-                <button
-                  type="button"
-                  disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
-                  onClick={() => void requestMediaAccess("microphone")}
-                  aria-label="Transcrever áudio do microfone"
-                  title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
-                >
-                  <Mic className="size-[18px]" />
-                </button>
+            <div className="relative flex items-center" ref={plusMenuRef}>
+              <button
+                type="button"
+                onClick={() => setPlusMenuOpen((value) => !value)}
+                aria-label="Mais ações"
+                aria-haspopup="menu"
+                aria-expanded={plusMenuOpen}
+                title="Anexos e ações"
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground"
+              >
+                <Plus className="size-[18px]" />
+              </button>
+              {plusMenuOpen && (
+                <div className="hanira-menu" role="menu" aria-label="Anexos">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!mediaConfig.attachmentsEnabled}
+                    onClick={() => { setPlusMenuOpen(false); documentInputRef.current?.click(); }}
+                    className="hanira-menu__item"
+                  >
+                    <Paperclip className="size-4" />
+                    Anexar documento
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                    onClick={() => { setPlusMenuOpen(false); imageInputRef.current?.click(); }}
+                    className="hanira-menu__item"
+                  >
+                    <ImagePlus className="size-4" />
+                    Anexar imagem
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                    onClick={() => { setPlusMenuOpen(false); void requestMediaAccess("camera"); }}
+                    className="hanira-menu__item"
+                  >
+                    <Camera className="size-4" />
+                    Tirar foto
+                  </button>
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <span
                 id="chat-message-length"
-                className={`text-[10px] ${remainingCharacters <= 200 ? "text-warning" : "text-muted-foreground"}`}
+                className={`px-1 text-[10px] ${remainingCharacters <= 200 ? "text-warning" : "text-muted-foreground"}`}
               >
                 {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
               </span>
+              <button
+                type="button"
+                disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                onClick={() => void requestMediaAccess("microphone")}
+                aria-label="Transcrever áudio do microfone"
+                title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
+                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+              >
+                <Mic className="size-[18px]" />
+              </button>
               {store.isThinking ? (
                 <button
                   type="button"
@@ -974,6 +986,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               )}
             </div>
           </div>
+            </>
+          )}
         </div>
         <p className="mt-2.5 text-center text-[10px] text-muted-foreground/75">
           A Nira pode cometer erros. Verifique informações importantes.
