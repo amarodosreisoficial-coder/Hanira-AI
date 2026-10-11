@@ -1,6 +1,6 @@
 # Package 18.3 — Cloudflare STT V1
 
-**Estado:** implementação na branch `pacote-18-3-cloudflare-stt-v1`. STT de produção desligado por padrão. Nenhuma chamada real de STT foi feita no desenvolvimento.
+**Estado:** MERGED via PR #28 no commit `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. STT de produção desligado por padrão. Nenhuma chamada real de STT foi feita no desenvolvimento do Package 18.3.
 
 ## Fluxo e arquitetura
 

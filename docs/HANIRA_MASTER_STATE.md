@@ -1,12 +1,13 @@
 # HANIRA AI — MASTER STATE REPORT
-## Current State — Package 18.3
+## Current State — Package 18.3.1
 
-Atualizado em 2026-10-08. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
+Atualizado em 2026-10-11. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
 
 ## Packages 18.1–18.3 — estado atual
 
 - Package 18.1: MERGED via PR #26 no commit `d16147da6008d7ecae137157aa81009b8b40d096`. Package 18.2: MERGED via PR #27 no commit `f08ae5b0733e074db7120d4f2677013e232fe7ed`.
-- Package 18.3: implementação de STT Cloudflare V1 na branch `pacote-18-3-cloudflare-stt-v1`; desligado por padrão, sem ativação de produção ou teste ao vivo.
+- Package 18.3: **MERGED** via PR #28 no commit `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. STT Cloudflare V1 segue desligado por padrão, sem ativação de produção ou teste ao vivo.
+- Package 18.3.1: preparação do smoke controlado na branch `pacote-18-3-1-stt-controlled-activation`; conta Cloudflare ainda sem classificação financeira comprovada, então nenhuma inferência STT foi autorizada ou executada.
 - Speech é uma capacidade `limited`: leitura manual local pelo Web Speech do navegador e somente quando houver voz exatamente pt-BR.
 - STT/transcrição permanece `disabled` enquanto o gate financeiro e operacional estiver fechado; quando todas as condições seguras forem atendidas, será `limited`. Live voice não foi implementada. A rota OpenAI de STT foi substituída.
 - Não há provider, modelo, cobrança, billing, crédito ou fallback pago novo.
@@ -20,8 +21,8 @@ Hanira AI é o produto e a plataforma. Nira é a inteligência que opera na Hani
 - Projeto: Hanira AI / Nira
 - Path oficial: `C:\Projetos\hanira-app`
 - Remote oficial: `https://github.com/amarodosreisoficial-coder/Hanira-AI.git`
-- Base atual sincronizada: `main` / `f08ae5b0733e074db7120d4f2677013e232fe7ed` (merge do Package 18.2 via PR #27)
-- Branch atual: `pacote-18-3-cloudflare-stt-v1`
+- Base atual sincronizada: `main` / `b737175c7690d0bb653a5dbcf50d2d3aa7771936` (merge do Package 18.3 via PR #28)
+- Branch atual: `pacote-18-3-1-stt-controlled-activation`
 - Commit do Package 17.5: merge `90fd5051534675bcb72a20df7ee60887cc335fc1` via PR #21.
 - Commit do Package 17.6: merge `3c51be7bc4cd63f4522ebe59f16b877ffd7b7877` via PR #22; 17.6 em produção operacional.
 - Package 17.7: MERGED via PR #23. Package 17.8: MERGED via PR #24. Package 18.0: MERGED via PR #25. Package 18.1: MERGED via PR #26.
@@ -47,7 +48,8 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 18.0 | merge `4b3f6bff1b328a6dfcfe39267e65fdb6677c1fe2` via PR #25 | MERGED. Voice Foundation Feasibility; recomendou Browser TTS opt-in antes de qualquer STT. |
 | 18.1 | merge `d16147da6008d7ecae137157aa81009b8b40d096` via PR #26 | MERGED. Browser TTS manual pt-BR; speech `limited`, transcription `disabled`, live voice não implementada. |
 | 18.2 | merge `f08ae5b0733e074db7120d4f2677013e232fe7ed` via PR #27 | MERGED. Viabilidade de STT/microfone e decisão condicional Cloudflare Workers Free. |
-| 18.3 | `pacote-18-3-cloudflare-stt-v1` | Implementação em andamento; gate de produção fechado por padrão. |
+| 18.3 | merge `b737175c7690d0bb653a5dbcf50d2d3aa7771936` via PR #28 | MERGED. STT Cloudflare V1 implementado; gate de produção fechado por padrão. |
+| 18.3.1 | `pacote-18-3-1-stt-controlled-activation` | Preparação de smoke controlado; conta e uso Free ainda não comprovados. Nenhuma chamada STT ao vivo. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -237,15 +239,15 @@ Capability output é allow-listed e descarta os valores de ambiente após conver
 
 ### DONE
 
-Packages 16.4–18.1 concluídos; 18.1 mergeado via PR #26 em `d16147d`; migration 009 ativa e verificada no remoto em snapshot anterior; smoke histórico do guard distribuído passou.
+Packages 16.4–18.3 concluídos; 18.3 mergeado via PR #28 em `b737175c7690d0bb653a5dbcf50d2d3aa7771936`; migration 009 ativa e verificada no remoto em snapshot anterior; smoke histórico do guard distribuído passou.
 
 ### CURRENT
 
-Package 18.2 está MERGED via PR #27 (`f08ae5b0733e074db7120d4f2677013e232fe7ed`). Package 18.3 implementa STT Cloudflare V1 com gate fechado por padrão. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
+Package 18.3 está MERGED via PR #28 (`b737175c7690d0bb653a5dbcf50d2d3aa7771936`). Package 18.3.1 prepara o smoke STT controlado; a classificação financeira da conta permanece `UNKNOWN` porque o token disponível não permite ler plano nem uso. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
 
 ### NEXT
 
-Revisar o PR do Package 18.3. Antes de qualquer ativação de produção, comprovar que a conta é Workers Free sem cobrança, verificar comportamento real do modelo/formatos e estabelecer uma política operacional para a franquia compartilhada com imagens. Teste STT ao vivo exige autorização humana separada.
+Comprovar no painel Cloudflare que a conta usa Workers Free sem cobrança e verificar uso diário disponível antes de qualquer smoke; depois exigir autorização humana explícita. Antes de ativar produção, verificar comportamento real do modelo/formatos e estabelecer política operacional para a franquia compartilhada com imagens.
 
 ### LATER
 
@@ -264,7 +266,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Revisão humana do Package 18.3 e dos gates de conta Workers Free. Não fazer merge automático nem ativar STT agora.
+Verificação humana do plano e uso da conta Workers AI Free. Smoke STT permanece bloqueado enquanto a classificação for `UNKNOWN`; não fazer merge automático nem ativar produção.
 
 ## PACKAGE 17.8 - HISTORICAL RECOVERY ADDENDUM
 
