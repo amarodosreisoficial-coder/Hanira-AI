@@ -2,22 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RecordingStatus } from "@/types/media";
-
-function preferredMimeType() {
-  const types = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/mp4",
-  ];
-  return types.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
-}
-
-function extensionForRecording(mimeType: string) {
-  if (mimeType.includes("ogg")) return "ogg";
-  if (mimeType.includes("mp4")) return "m4a";
-  return "webm";
-}
+import { resolveRecordedAudioFormat, selectRecorderMimeType } from "@/lib/media/audio-format";
 
 export function useMediaRecorder() {
   const [status, setStatus] = useState<RecordingStatus>("idle");
@@ -69,10 +54,17 @@ export function useMediaRecorder() {
         return false;
       }
       streamRef.current = stream;
-      const mimeType = preferredMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
+      const mimeType = selectRecorderMimeType((type) =>
+        MediaRecorder.isTypeSupported(type),
+      );
+      if (!mimeType) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setError("Este navegador não oferece um formato de áudio compatível para gravação.");
+        setStatus("error");
+        return false;
+      }
+      const recorder = new MediaRecorder(stream, { mimeType });
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (!discardRef.current && event.data.size) chunksRef.current.push(event.data);
@@ -85,21 +77,22 @@ export function useMediaRecorder() {
         cleanup();
       };
       recorder.onstop = () => {
-        const type = (recorder.mimeType || mimeType || "audio/webm").split(
-          ";",
-        )[0];
-        const blob = new Blob(chunksRef.current, { type });
-        const file =
-          !discardRef.current && blob.size
-            ? new File(
-                [blob],
-                `hanira-voz-${Date.now()}.${extensionForRecording(type)}`,
-                { type },
-              )
-            : null;
+        const resolved = resolveRecordedAudioFormat(recorder.mimeType, mimeType);
+        const chunks = chunksRef.current;
+        chunksRef.current = [];
+        let file: File | null = null;
+        if (!discardRef.current && resolved) {
+          const blob = new Blob(chunks, { type: resolved.mimeType });
+          if (blob.size) {
+            file = new File(
+              [blob],
+              `hanira-voz-${Date.now()}.${resolved.extension}`,
+              { type: resolved.mimeType },
+            );
+          }
+        }
         finishRef.current?.(file);
         finishRef.current = null;
-        chunksRef.current = [];
         cleanup();
       };
       recorder.start(500);

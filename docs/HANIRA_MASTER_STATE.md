@@ -8,6 +8,7 @@ Atualizado em 2026-10-11. Seções e blocos explicitamente marcados como histór
 - Package 18.1: MERGED via PR #26 no commit `d16147da6008d7ecae137157aa81009b8b40d096`. Package 18.2: MERGED via PR #27 no commit `f08ae5b0733e074db7120d4f2677013e232fe7ed`.
 - Package 18.3: **MERGED** via PR #28 no commit `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. STT Cloudflare V1 segue desligado por padrão, sem ativação de produção ou teste ao vivo.
 - Package 18.3.1: smoke controlado ao vivo **executado** na branch `pacote-18-3-1-stt-controlled-activation` com autorização humana — **INFRASTRUCTURE LIVE SMOKE: PASS** (HTTP 200, exatamente 1 provider call, retry 0, duração 6,36 s, ~4,94 Neurons, transcrição presente). A correspondência textual exata **NÃO** foi confirmada; precisão **NÃO** validada. Produção continua desativada / fail-closed; nenhuma mudança de billing, migration ou produção.
+- Package 18.3.2: Mobile Audio Compatibility **implementado** na branch `pacote-18-3-2-mobile-audio-compatibility`; CODE/UNIT VALIDATED. Negociação de MIME por capacidade real (`MediaRecorder.isTypeSupported`), preservação do container real do Blob, extensão pelo container efetivo (webm/ogg/mp4/m4a) e validação server-side fail-closed por bytes mágicos com família cruzada (anti-spoofing). Safari/iOS tratado como MP4/M4A por feature detection; desktop sem regressão. **NÃO** validado em aparelho físico real. Produção segue desativada / fail-closed; nenhuma inferência STT real, billing, migration ou deploy neste pacote.
 - Speech é uma capacidade `limited`: leitura manual local pelo Web Speech do navegador e somente quando houver voz exatamente pt-BR.
 - STT/transcrição permanece `disabled` enquanto o gate financeiro e operacional estiver fechado; quando todas as condições seguras forem atendidas, será `limited`. Live voice não foi implementada. A rota OpenAI de STT foi substituída.
 - Não há provider, modelo, cobrança, billing, crédito ou fallback pago novo.
@@ -50,6 +51,7 @@ Snapshot histórico do fechamento do 17.7: o Package 17.6 foi mergeado pelo PR #
 | 18.2 | merge `f08ae5b0733e074db7120d4f2677013e232fe7ed` via PR #27 | MERGED. Viabilidade de STT/microfone e decisão condicional Cloudflare Workers Free. |
 | 18.3 | merge `b737175c7690d0bb653a5dbcf50d2d3aa7771936` via PR #28 | MERGED. STT Cloudflare V1 implementado; gate de produção fechado por padrão. |
 | 18.3.1 | `pacote-18-3-1-stt-controlled-activation` | Smoke controlado ao vivo executado com autorização humana: PASS de infraestrutura (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente). Correspondência exata NÃO confirmada; produção desativada / fail-closed. |
+| 18.3.2 | `pacote-18-3-2-mobile-audio-compatibility` | Mobile Audio Compatibility implementado; CODE/UNIT VALIDATED. MIME negotiation por capacidade, extensão pelo container real, validação server-side por assinatura (anti-spoofing); Safari/iOS via MP4/M4A; sem regressão desktop. REAL DEVICE: NÃO testado. Produção desativada. |
 
 ## 5. PACKAGE 17.2 — MERGED STATE
 
@@ -243,11 +245,11 @@ Packages 16.4–18.3 concluídos; 18.3 mergeado via PR #28 em `b737175c7690d0bb6
 
 ### CURRENT
 
-Package 18.3 está MERGED via PR #28 (`b737175c7690d0bb653a5dbcf50d2d3aa7771936`). Package 18.3.1 executou o smoke STT controlado com autorização humana: infraestrutura **PASS** (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente); a correspondência textual exata **NÃO** foi confirmada e a precisão **NÃO** foi validada. Produção permanece `disabled` / fail-closed. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
+Package 18.3 está MERGED via PR #28 (`b737175c7690d0bb653a5dbcf50d2d3aa7771936`). Package 18.3.1 executou o smoke STT controlado com autorização humana: infraestrutura **PASS** (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente); a correspondência textual exata **NÃO** foi confirmada e a precisão **NÃO** foi validada. Package 18.3.2 (Mobile Audio Compatibility) está **implementado** e validado em código/unidade na branch `pacote-18-3-2-mobile-audio-compatibility`, sem validação em aparelho físico real. Produção permanece `disabled` / fail-closed. Speech é `limited`; STT é `disabled` até habilitação segura e `limited` quando elegível. Live voice não foi implementada.
 
 ### NEXT
 
-Workers Free confirmado manualmente e smoke controlado executado (PASS de infraestrutura; correspondência exata não confirmada). Próximo pacote provável: **18.3.2 Mobile Audio Compatibility** (Chrome Android e Safari/iPhone; validação real dos contêineres pela Cloudflare). Ainda pendente, antes de qualquer ativação de produção: verificar comportamento real dos formatos de áudio e estabelecer política operacional para a franquia compartilhada com imagens.
+Package 18.3.2 Mobile Audio Compatibility está implementado e validado em código/unidade (negociação de MIME por capacidade real, extensão pelo container efetivo, validação server-side fail-closed por assinatura). Pendente antes de qualquer ativação de produção: validação em aparelho físico real (Chrome Android, Edge Android, Safari/iPhone), confirmação da aceitação real dos contêineres pelo decoder Cloudflare, e estabelecer política operacional para a franquia compartilhada com imagens. Próximo pacote provável após validação de device: ativação controlada de produção ou Hands-Free (fora do escopo do 18.3.2).
 
 ### LATER
 
@@ -266,7 +268,7 @@ Não fazer fallback paid/promotional/unknown; não expor segredos, prompts, mem�
 
 ## 23. EXACT NEXT RECOMMENDED ACTION
 
-Smoke controlado STT concluído com PASS de infraestrutura (HTTP 200, 1 provider call, retry 0, ~4,94 Neurons, transcrição presente); Workers Free confirmado manualmente. Correspondência exata NÃO confirmada; precisão NÃO validada. Próximo pacote provável: **18.3.2 Mobile Audio Compatibility**. Produção continua desativada / fail-closed; não ativar produção nem fazer merge automático.
+Package 18.3.2 Mobile Audio Compatibility está CODE/UNIT VALIDATED (MIME negotiation por capacidade, extensão pelo container real, validação server-side anti-spoofing), sem validação em aparelho físico real. Próximo passo recomendado: validação manual em devices (Chrome Android, Edge Android, Safari/iPhone). Produção continua desativada / fail-closed; não ativar produção nem fazer merge automático.
 
 ## PACKAGE 17.8 - HISTORICAL RECOVERY ADDENDUM
 
