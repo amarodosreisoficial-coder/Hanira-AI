@@ -2,7 +2,7 @@
 
 **Projeto:** Hanira AI
 **Branch:** `pacote-18-3-5-visual-refresh-unified-composer`
-**Base:** `main` @ `a954693`
+**Base:** `main` @ `a954693` · **Integrado:** `main` @ `93c996c` (Package 18.3.4 Production STT) via Package 18.3.5.1
 **Custo operacional:** R$ 0,00/mês (nenhum billing, serviço pago, API paga ou fallback pago adicionado).
 
 ---
@@ -102,10 +102,37 @@ inline elegante, sidebar colapsável refinada e branding Hanira com o logo exist
 - **Logo:** `hanira-symbol.svg` é o melhor asset existente (vetorial). Não havia
   versão "sem fundo" alternativa a priorizar; o container agora usa glow radial,
   evitando o aspeto de quadrado. Nenhum asset externo foi inventado.
-- Produção permanece **fail-closed / desativada** — este pacote não toca gates de
-  produção.
+- **STT PRODUCTION: ACTIVE AFTER HUMAN ENV CONFIGURATION AND SUCCESSFUL REAL CHAT
+  TEST.** Os gates FREE do 18.3.4 permanecem íntegros; este pacote não altera
+  nenhum gate. Ver §12 (Integration Sync — Package 18.3.5.1).
 
 ## 11. Workflow
 
 - Branch nova criada a partir de `main`; commit nesta branch; push apenas da branch.
 - Sem PR automático, sem merge, sem push em `main`, sem deploy manual.
+
+## 12. Integration Sync — Package 18.3.5.1
+
+- **Objetivo:** integrar a `main` atual (`93c996c`, Package 18.3.4 Production STT
+  Activation, PR #33) na branch 18.3.5 sem regressões, preservando o visual e o STT.
+- **Método:** `git merge --no-ff origin/main` (sem rebase, sem force push, sem
+  alterar `main`).
+
+Registro do estado real (Package 18.3.5.1):
+
+- Package 18.3.4 merged (PR #33).
+- env vars Production configuradas (Vercel).
+- redeploy executado.
+- microfone normal do `/chat` testado.
+- transcrição entrou no composer.
+- no auto-send confirmado.
+
+Fluxo STT validado — sem bypass dos gates do 18.3.4:
+
+```
+mic inline → gravação → stop → POST /api/audio/transcribe (autenticado)
+  → Cloudflare somente se 4 gates FREE válidos → transcript → draft → NO AUTO-SEND
+```
+
+- 18.3.5 (visual refresh) **permanece**; 18.3.4 (production STT) **permanece**;
+  gates FREE preservados; sem fallback pago; sem auto-send.
