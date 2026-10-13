@@ -15,7 +15,7 @@ type ImagePublicError = "authentication_required" | "invalid_request" | "capacit
 function error(code: ImagePublicError, status: number, requestId: string, retryAfter?: string) { return NextResponse.json({ success: false, errorCode: code, requestId }, { status, headers: { "X-Request-ID": requestId, ...(retryAfter ? { "Retry-After": retryAfter } : {}) } }); }
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  const user = await getSessionUser();
+  const user = await getSessionUser({ persistSessionCookies: true });
   if (!user) return error("authentication_required", 401, "anonymous");
   const requestId = createRequestId(request);
   if (!tryAcquireConcurrencyLock(user.id, `image:${requestId}`)) return error("generation_unavailable", 409, requestId, "1");

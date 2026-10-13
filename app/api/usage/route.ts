@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
-  const user = await getSessionUser();
+  const user = await getSessionUser({ persistSessionCookies: true });
   if (!user) {
     logServerEvent({ level: "warn", requestId, route: "/api/usage", event: "unauthenticated", status: 401, durationMs: Date.now() - startedAt });
     return Response.json({ error: "Faca login para ver seu uso.", requestId }, { status: 401, headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" } });
