@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { HANIRA_SYMBOL_SRC } from "@/components/brand/hanira-mark";
 
 export type NiraPresenceStatus =
   | "idle"
@@ -19,7 +20,7 @@ export function NiraPresence({
   return (
     <span
       className={cn(
-        "nira-presence relative inline-grid shrink-0 place-items-center rounded-[35%] border border-primary/25 bg-primary/10",
+        "nira-presence relative inline-grid shrink-0 place-items-center",
         size === "sm" && "size-7",
         size === "md" && "size-9",
         size === "lg" && "size-16",
@@ -27,19 +28,18 @@ export function NiraPresence({
         status === "responding" && "is-responding",
         status === "unavailable" && "is-unavailable",
         className,
-            )}
+      )}
       aria-hidden="true"
     >
-      <span className="nira-presence__halo absolute inset-[14%] rounded-[32%]" />
-      <span className="nira-presence__symbol relative block size-[34%] rounded-[28%]">
-        <Image
-          src="/hanira-symbol.svg"
-          alt=""
-          fill
-          sizes="16px"
-          className="object-contain"
-        />
-      </span>
+      {/* HANIRA NEON (18.3.6): símbolo oficial transparente SEM tile/quadrado/
+          moldura — somente a imagem + halo neon via CSS (.nira-mark). */}
+      <Image
+        src={HANIRA_SYMBOL_SRC}
+        alt=""
+        fill
+        sizes="36px"
+        className="nira-mark object-contain"
+      />
     </span>
   );
 }

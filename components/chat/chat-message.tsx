@@ -43,7 +43,7 @@ export function ChatMessage({
             removable
           />
           {message.content && (
-            <div className="rounded-[1.35rem] rounded-br-md border border-border bg-user-message px-4 py-3 text-[15px] leading-6 text-foreground shadow-sm">
+            <div className="rounded-[1.35rem] rounded-br-md bg-user-message px-4 py-3 text-[15px] leading-6 text-foreground">
               <p className="whitespace-pre-wrap">{message.content}</p>
             </div>
           )}
@@ -62,8 +62,7 @@ export function ChatMessage({
       <NiraPresence status={message.pending ? "responding" : issue ? "unavailable" : "idle"} />
       <div className="min-w-0 pt-1">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs font-semibold text-foreground">Nira</span>
-          <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Inteligência Hanira</span>
+          <span className="text-xs font-medium text-muted-foreground">Nira</span>
         </div>
         <MessageAttachments
           attachments={message.attachments ?? []}

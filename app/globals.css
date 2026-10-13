@@ -1,60 +1,72 @@
 @import "tailwindcss";
 
 :root {
-  /* Core surfaces - near-black graphite, calm and premium */
-  --background: #07060a;
-  --foreground: #f4f1f9;
-  --card: #100d15;
-  --card-foreground: #f4f1f9;
-  --popover: #16121d;
-  --popover-foreground: #f4f1f9;
+  /* HANIRA NEON (18.3.6) — tema padrão aprovado.
+   * Futuro: Configurações → Aparência → Fundo (Hanira Neon / Preto puro /
+   * Aurora / Minimal). Por ora somente Hanira Neon existe; os tokens abaixo
+   * já estão isolados em :root para permitir troca futura sem refatorar
+   * componentes. NÃO criar seletor de tema neste package. */
+  --hanira-theme: "Hanira Neon";
 
-  /* Primary accent - Hanira violet, used selectively */
-  --primary: #a78bfa;
-  --primary-foreground: #120a1e;
-  --primary-glow: rgba(167, 139, 250, 0.18);
+  /* Base — preto / azul-noite profundo. A maior parte da tela permanece
+   * quase preta; azul/violeta são apenas acentos. */
+  --background: #03040a;
+  --foreground: #f7f8fc;
+  --card: #080a14;
+  --card-foreground: #f7f8fc;
+  --popover: rgba(12, 14, 28, 0.92);
+  --popover-foreground: #f7f8fc;
+
+  /* Acentos neon — azul elétrico/ciano primário, violeta secundário. */
+  --primary: #00b7ff;
+  --primary-foreground: #02131f;
+  --primary-glow: rgba(22, 139, 255, 0.22);
+  --neon-blue: #168bff;
+  --neon-cyan: #00b7ff;
+  --neon-violet: #7047ff;
+  --neon-violet-bright: #9b5cff;
 
   /* Secondary surfaces */
-  --secondary: #16121d;
-  --secondary-foreground: #e6e0f0;
+  --secondary: rgba(12, 14, 28, 0.72);
+  --secondary-foreground: #e8eaf2;
 
   /* Muted elements */
-  --muted: #131017;
-  --muted-foreground: #8b8499;
+  --muted: #080a14;
+  --muted-foreground: #9ca3b8;
 
   /* Accent for subtle highlights */
-  --accent: #1c1626;
-  --accent-foreground: #f4f1f9;
+  --accent: rgba(16, 18, 36, 0.65);
+  --accent-foreground: #f7f8fc;
 
   /* Semantic colors */
   --destructive: #fb7185;
   --success: #76d7aa;
   --warning: #eabf7b;
 
-  /* Borders and inputs - subtle */
-  --border: rgba(232, 226, 240, 0.07);
-  --input: rgba(232, 226, 240, 0.09);
-  --ring: #a78bfa;
+  /* Borders and inputs — quase invisíveis; separação vem de espaço/contraste */
+  --border: rgba(148, 163, 196, 0.09);
+  --input: rgba(148, 163, 196, 0.12);
+  --ring: #168bff;
 
-  /* Sidebar and composer - deep graphite, barely lifted from background */
-  --sidebar: #08070c;
-  --composer: #0d0b12;
+  /* Sidebar and composer - quase pretos, translúcidos */
+  --sidebar: #050610;
+  --composer: rgba(10, 12, 24, 0.78);
 
-  /* User message - neutral with subtle violet tint */
-  --user-message: #1b1526;
+  /* User message - bolha discreta escura */
+  --user-message: rgba(16, 20, 38, 0.85);
 
   /* Panel system */
   --panel: var(--card);
   --panel-soft: var(--muted);
 
-  /* Violet accents - reserved for signature moments */
-  --violet: #8b5cf6;
-  --violet-bright: #a78bfa;
-  --violet-soft: rgba(139, 92, 246, 0.15);
+  /* Legacy violet aliases — remapeados para o neon aprovado */
+  --violet: #7047ff;
+  --violet-bright: #9b5cff;
+  --violet-soft: rgba(112, 71, 255, 0.14);
 
-  /* Cyan micro-accent - tiny, sparing highlights only */
-  --cyan: #22d3ee;
-  --cyan-soft: rgba(34, 211, 238, 0.14);
+  /* Cyan micro-accent */
+  --cyan: #00b7ff;
+  --cyan-soft: rgba(0, 183, 255, 0.14);
 
   /* Radius */
   --radius: 0.75rem;
@@ -164,7 +176,7 @@ select:focus-visible {
 }
 
 .text-gradient {
-  background: linear-gradient(112deg, #ffffff 18%, #c4b5fd 58%, #8b5cf6);
+  background: linear-gradient(112deg, #ffffff 18%, #7cc4ff 58%, #9b5cff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -213,6 +225,40 @@ select:focus-visible {
 
 .hanira-shell {
   isolation: isolate;
+  background: #03040a;
+}
+
+/* HANIRA NEON (18.3.6) — fios de luz + vinheta de profundidade. Região de
+ * leitura permanece predominantemente escura. Sem imagem, sem animação. */
+.hanira-ambient::before {
+  content: "";
+  position: absolute;
+  inset: -12% -20%;
+  background:
+    linear-gradient(115deg, transparent 42%, rgba(22, 139, 255, 0.1) 47.5%, rgba(155, 92, 255, 0.08) 52.5%, transparent 58%),
+    linear-gradient(64deg, transparent 55%, rgba(0, 183, 255, 0.06) 62%, transparent 69%);
+  filter: blur(38px);
+  mask-image: radial-gradient(70% 60% at 50% 42%, black 30%, transparent 78%);
+  opacity: 0.85;
+}
+
+.hanira-ambient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(3, 4, 10, 0.55) 100%),
+    radial-gradient(90% 70% at 50% 110%, transparent 60%, rgba(3, 4, 10, 0.5) 100%);
+}
+
+/* Assinatura neon Hanira — linha/glow finíssimo azul → violeta → transparente.
+ * Usar com parcimônia: sidebar OU composer, nunca contornando tudo. */
+.hanira-neon-line {
+  background: linear-gradient(90deg, #168bff, #9b5cff 55%, transparent 100%);
+}
+
+.hanira-neon-line--vertical {
+  background: linear-gradient(180deg, #168bff, #9b5cff 55%, transparent 100%);
 }
 
 .hanira-ambient {
@@ -222,8 +268,10 @@ select:focus-visible {
   pointer-events: none;
   overflow: hidden;
   background:
-    radial-gradient(circle at 72% -12%, rgba(124, 78, 194, 0.07), transparent 38rem),
-    radial-gradient(circle at 34% 108%, rgba(88, 47, 130, 0.04), transparent 34rem);
+    radial-gradient(52rem 30rem at 78% -8%, rgba(22, 139, 255, 0.13), transparent 62%),
+    radial-gradient(46rem 28rem at 12% 108%, rgba(112, 71, 255, 0.11), transparent 64%),
+    radial-gradient(30rem 20rem at 50% 55%, rgba(0, 183, 255, 0.045), transparent 70%),
+    linear-gradient(180deg, #050610 0%, #03040a 46%, #03040a 100%);
 }
 
 .chat-scroll {
@@ -241,31 +289,13 @@ select:focus-visible {
   background: linear-gradient(to bottom, transparent, var(--background) 42%);
 }
 
-.nira-presence {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 6px 20px rgba(75, 34, 122, 0.08);
-}
-
-.nira-presence__halo {
-  background: radial-gradient(circle at 36% 28%, rgba(244, 235, 255, 0.40), rgba(155, 112, 241, 0.08) 46%, transparent 72%);
-}
-
-.nira-presence__symbol {
-  background: linear-gradient(135deg, #efe7ff 0%, #b291ff 42%, #7951ca 100%);
-  box-shadow: 0 0 10px rgba(174, 137, 255, 0.35);
-}
-
-.nira-presence.is-unavailable {
-  filter: saturate(0.35);
-  opacity: 0.78;
-}
-
-.nira-presence.is-thinking .nira-presence__halo {
+/* Nira presence — símbolo oficial SEM tile/fundo/moldura. Halo vem do
+ * .nira-mark (drop-shadow neon). Animações de estado aplicadas à imagem. */
+.nira-presence.is-thinking .nira-mark {
   animation: nira-breathe 1.8s ease-in-out infinite;
 }
 
-.nira-presence.is-responding .nira-presence__symbol {
+.nira-presence.is-responding .nira-mark {
   animation: nira-turn 2.4s ease-in-out infinite;
 }
 
@@ -379,10 +409,27 @@ select:focus-visible {
   background: #0b0910;
 }
 
-/* Nira composer — one unified surface, no double frame */
+/* Nira composer — cápsula única escura translúcida com glow neon inferior.
+ * Uma só superfície: sem borda branca, sem outline grosseiro. O neon aparece
+ * como assinatura na borda inferior / foco (azul → violeta). */
 .nira-composer {
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32);
+  background: var(--composer);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   transition: box-shadow 0.2s ease;
+}
+
+.nira-composer::after {
+  content: "";
+  position: absolute;
+  right: 1.25rem;
+  bottom: 0;
+  left: 1.25rem;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(22, 139, 255, 0.55) 30%, rgba(155, 92, 255, 0.55) 70%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .nira-composer textarea {
@@ -400,7 +447,7 @@ select:focus-visible {
 }
 
 .compose-surface:focus-within {
-  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(167, 139, 250, 0.18);
+  box-shadow: 0 8px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(22, 139, 255, 0.22), 0 6px 24px rgba(22, 139, 255, 0.08);
 }
 
 .chat-code > span {
@@ -455,12 +502,13 @@ select:focus-visible {
   border-bottom: 0;
 }
 
-/* Hanira mark — soft violet halo instead of a hard tile */
+/* Hanira mark — halo neon azul/violeta suave, SEM tile/fundo/moldura. */
 .nira-mark {
-  filter: drop-shadow(0 4px 14px rgba(139, 92, 246, 0.35));
+  filter: drop-shadow(0 0 10px rgba(22, 139, 255, 0.35)) drop-shadow(0 0 22px rgba(112, 71, 255, 0.22));
 }
 
-/* Composer action popover (the "+" menu) */
+/* Composer action popover (the "+" menu) — preto/grafite com blur, sem
+ * contorno pesado, sombra suave, hover discreto. */
 .hanira-menu {
   position: absolute;
   bottom: calc(100% + 0.6rem);
@@ -468,11 +516,11 @@ select:focus-visible {
   z-index: 40;
   min-width: 13rem;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(148, 163, 196, 0.1);
   border-radius: 1rem;
-  background: rgba(16, 13, 21, 0.92);
+  background: rgba(8, 10, 20, 0.94);
   padding: 0.35rem;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(167, 139, 250, 0.06);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(20px);
   animation: hanira-menu-in 0.16s ease-out;
 }
@@ -491,7 +539,7 @@ select:focus-visible {
 }
 
 .hanira-menu__item:hover:not(:disabled) {
-  background: rgba(167, 139, 250, 0.1);
+  background: rgba(22, 139, 255, 0.1);
   color: var(--foreground);
 }
 
@@ -511,9 +559,10 @@ select:focus-visible {
   }
 }
 
-/* Recording surface — subtle violet ring while capturing */
+/* Recording surface — anel neon azul/violeta sutil durante a captura.
+ * A MESMA superfície do composer muda; nenhuma barra extra. */
 .compose-surface.is-recording {
-  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(167, 139, 250, 0.28);
+  box-shadow: 0 8px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(22, 139, 255, 0.3), 0 0 24px rgba(112, 71, 255, 0.12);
 }
 
 /* Simulated audio waveform (bars) — animated lightweight stand-in for a
@@ -525,11 +574,13 @@ select:focus-visible {
   gap: 0.14rem;
 }
 
+/* Waveform inline — barras finas neon azul → violeta, animação elegante.
+ * Simulada neste package (sem AnalyserNode); respeita prefers-reduced-motion. */
 .waveform i {
   width: 0.16rem;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(to top, var(--violet), var(--violet-bright));
+  background: linear-gradient(to top, #168bff, #9b5cff);
   transform-origin: center;
   animation: nira-wave 1.1s ease-in-out infinite;
 }

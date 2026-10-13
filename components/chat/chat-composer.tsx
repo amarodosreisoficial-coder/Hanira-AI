@@ -892,6 +892,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           )}
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="relative flex items-center" ref={plusMenuRef}>
+              {/* HANIRA NEON (18.3.6) — botões do composer são ÍCONES puros:
+                  fundo invisível normalmente; hover revela círculo
+                  translúcido. Enviar ativo usa círculo neon azul/violeta. */}
               <button
                 type="button"
                 onClick={() => setPlusMenuOpen((value) => !value)}
@@ -899,7 +902,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 aria-haspopup="menu"
                 aria-expanded={plusMenuOpen}
                 title="Anexos e ações"
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus className="size-[18px]" />
               </button>
@@ -951,7 +954,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 onClick={() => void requestMediaAccess("microphone")}
                 aria-label="Transcrever áudio do microfone"
                 title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
-                className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground disabled:text-zinc-700"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-zinc-700 disabled:hover:bg-transparent"
               >
                 <Mic className="size-[18px]" />
               </button>
@@ -963,7 +966,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                     imageGenerationAbortRef.current?.abort();
                   }}
                   aria-label="Interromper resposta"
-                  className="grid size-9 place-items-center rounded-xl bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Square className="size-3.5 fill-current" />
                 </button>
