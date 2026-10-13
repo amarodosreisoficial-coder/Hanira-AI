@@ -106,4 +106,3 @@ Nada de `/diagnostics/audio` para uso normal. Provider calls durante o package: 
 - STT CODE: **PRODUCTION READY**.
 - PRODUCTION ACTIVATION: **READY AFTER ENV VERIFICATION** (não declarado ACTIVE sem prova de env de produção).
 - Provider calls durante o package: 0. Persistência de áudio: NENHUMA. Fallback pago: NENHUM.
-

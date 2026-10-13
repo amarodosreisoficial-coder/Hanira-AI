@@ -1,6 +1,16 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+/* HANIRA NEON (18.3.6) — branding sem tile branco.
+ * AUDITORIA: `public/hanira-symbol.svg` contém DOIS <rect fill="#ffffff"> de
+ * fundo + PNG grayscale com feColorMatrix que força branco (filtro a834911308).
+ * Por isso QUALQUER uso direto do SVG renderiza um quadrado branco — o "tile"
+ * rejeitado. NÃO usar o SVG até ser refeito sem fundo.
+ * Asset oficial escolhido: `/icons/hanira-512.png` (RGBA, colorType 6, 512px,
+ * fundo transparente nativo). Halo neon permitido via drop-shadow CSS
+ * (.nira-mark) — nenhum fundo/tile/moldura no markup. */
+const HANIRA_SYMBOL_SRC = "/icons/hanira-512.png";
+
 export function HaniraMark({
   className,
   compact = false,
@@ -10,16 +20,15 @@ export function HaniraMark({
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-[11px] border border-violet-300/20 bg-violet-950/30 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_8px_28px_rgba(109,40,217,.18)]">
-        <Image
-          src="/hanira-symbol.png"
-          alt=""
-          fill
-          sizes="32px"
-          priority
-          className="object-cover"
-        />
-      </span>
+      <Image
+        src={HANIRA_SYMBOL_SRC}
+        alt=""
+        width={32}
+        height={32}
+        sizes="32px"
+        priority
+        className="nira-mark size-8 shrink-0 object-contain"
+      />
       {!compact && (
         <span className="text-[15px] font-semibold tracking-[-0.02em] text-zinc-100">
           Hanira
@@ -28,3 +37,5 @@ export function HaniraMark({
     </div>
   );
 }
+
+export { HANIRA_SYMBOL_SRC };

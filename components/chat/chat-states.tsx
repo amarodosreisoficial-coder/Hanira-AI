@@ -41,14 +41,11 @@ export function HaniraWelcome({
   return (
     <section className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-center px-5 py-12 sm:px-8 lg:py-16">
       <div className="max-w-2xl">
-        <div className="mb-7 flex items-center gap-3">
+        {/* HANIRA NEON (18.3.6) — cabeçalho textual pesado removido (rejeitado:
+            "Hanira / Nira Intelligence / Sua conversa..."). Somente o símbolo
+            + saudação limpa; presença premium sem altura desperdiçada. */}
+        <div className="mb-7">
           <NiraPresence size="lg" />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Nira Intelligence
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">A inteligência da Hanira</p>
-          </div>
         </div>
         <h1 className="text-balance text-4xl font-medium leading-[1.05] tracking-[-0.05em] text-foreground sm:text-5xl lg:text-[3.5rem]">
           Olá{firstName ? `, ${firstName}` : ""}. Em que vamos pensar hoje?

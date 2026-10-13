@@ -297,19 +297,17 @@ export async function runAutomaticAudioTest(
 
   onState("RECORDING");
   const startedAt = deps.now();
-  let countdownHandle: unknown;
-  let stopHandle: unknown;
   let remaining = AUTO_TEST_RECORDING_SECONDS;
   onCountdown(remaining);
   // 8. Inicia a gravação (timeslice de 250ms para coleta incremental).
   if (recorder.state === "inactive") recorder.start(250);
-  countdownHandle = deps.setIntervalFn(() => {
+  const countdownHandle: unknown = deps.setIntervalFn(() => {
     remaining -= 1;
     if (remaining >= 0) onCountdown(remaining);
   }, 1000);
 
   // 10. Parada automática após ~5 s.
-  stopHandle = deps.setTimeoutFn(() => {
+  const stopHandle: unknown = deps.setTimeoutFn(() => {
     if (recorder.state !== "inactive") recorder.stop();
   }, AUTO_TEST_RECORDING_SECONDS * 1000);
 

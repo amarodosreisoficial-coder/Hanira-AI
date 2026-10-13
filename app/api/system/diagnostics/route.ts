@@ -29,7 +29,7 @@ const REQUIRED_TABLES = [
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const requestId = createRequestId(request);
-  const user = await getSessionUser();
+  const user = await getSessionUser({ persistSessionCookies: true });
   if (!user) {
     logServerEvent({
       level: "warn",

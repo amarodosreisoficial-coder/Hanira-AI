@@ -27,8 +27,12 @@ describe("single composer textarea", () => {
     expect(composer).toContain('"text"');
   });
 
-  it("possui botão 'Criar imagem' discreto", () => {
-    expect(composer).toContain("Criar imagem");
+  it("remove botão explícito 'Criar imagem' (geração por intenção de texto)", () => {
+    // Pacote 18.3.5: o botão 'Criar imagem' saiu da barra; a Nira entende o
+    // pedido de imagem pelo texto via resolveComposerIntent (intenção de alto
+    // confiança), sem ação solta na barra.
+    expect(composer).not.toContain("Criar imagem");
+    expect(composer).toContain("resolveComposerIntent");
   });
 
   it("alterna com setComposerMode", () => {

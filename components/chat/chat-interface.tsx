@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Menu, PanelLeftOpen, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Menu, RotateCcw } from "lucide-react";
+import { HaniraMark } from "@/components/brand/hanira-mark";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatMessage } from "@/components/chat/chat-message";
 import {
@@ -63,37 +65,28 @@ export function ChatInterface({ userName }: { userName: string }) {
       <Sidebar userName={userName} />
 
       <section className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-background/80 px-3 backdrop-blur-xl sm:px-5">
-          <div className="flex min-w-0 items-center gap-2.5">
+        {/* HANIRA NEON (18.3.6) — header textual pesado removido (rejeitado na
+            revisão). Somente o símbolo Hanira (link → /) + controles mínimos.
+            Sem border-bottom, sem altura desperdiçada. */}
+        <header className="flex h-12 shrink-0 items-center justify-between bg-transparent px-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-1">
             <IconButton
               label="Abrir menu"
               onClick={() => store.setSidebarOpen(true)}
-              className="lg:hidden"
+              className="rounded-full lg:hidden"
               aria-controls="hanira-sidebar"
               aria-expanded={store.sidebarOpen}
             >
               <Menu className="size-5" />
             </IconButton>
-            {store.sidebarCollapsed && (
-              <IconButton
-                label="Expandir barra lateral"
-                onClick={() => store.setSidebarCollapsed(false)}
-                className="hidden lg:inline-grid"
-              >
-                <PanelLeftOpen className="size-4" />
-              </IconButton>
-            )}
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="truncate text-sm font-semibold tracking-tight">Hanira</span>
-                <span className="hidden text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground sm:inline">
-                  Nira Intelligence
-                </span>
-              </div>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
-                Sua conversa com a inteligência da Hanira
-              </p>
-            </div>
+            <Link
+              href="/"
+              aria-label="Hanira — início"
+              title="Hanira — início"
+              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <HaniraMark compact className="gap-0 [&>span:last-child]:hidden" />
+            </Link>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">

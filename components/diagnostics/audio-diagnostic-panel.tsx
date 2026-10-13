@@ -121,6 +121,10 @@ export function AudioDiagnosticPanel() {
   const startedAtRef = useRef(0);
 
   useEffect(() => {
+    // Snapshot de navegador definido pós-mount de propósito: detectFeatures()
+    // lê window/navigator, e setar pós-mount evita divergência de hidratação (SSR)
+    // que ocorreria com lazy init. Comportamento intencional e preservado.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional post-mount browser snapshot
     setFeatures(detectFeatures());
   }, []);
 

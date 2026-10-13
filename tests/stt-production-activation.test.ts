@@ -158,4 +158,3 @@ describe("production STT activation — contrato do composer (sem auto-send, sem
     expect(recorder).toContain("transcribeAudio");
   });
 });
-

@@ -7,6 +7,7 @@ import {
   LogOut,
   MessageSquare,
   PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Search,
@@ -20,6 +21,52 @@ import { HaniraMark } from "@/components/brand/hanira-mark";
 import { IconButton } from "@/components/ui/icon-button";
 import { useChatStore } from "@/lib/stores/chat-store";
 import { cn } from "@/lib/utils";
+
+/* HANIRA NEON (18.3.6) — sidebar mínima.
+ * Recolhida: faixa fina quase preta, somente ícones puros (sem cards, sem
+ * borda externa, sem divisória vertical forte). Expandida: ícone + texto em
+ * linha, sem botão retangular grande; ativo usa fundo translúcido + barra
+ * neon mínima. O símbolo Hanira no topo é o controle de expansão: hover
+ * revela o affordance, click expande. Mobile usa tap normal. */
+
+function RailButton({
+  label,
+  tooltip,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  tooltip?: string;
+  active?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={tooltip ?? label}
+      onClick={onClick}
+      data-active={active ? "true" : undefined}
+      className={cn(
+        "group/rail relative grid size-10 place-items-center rounded-full text-muted-foreground transition",
+        "hover:bg-white/[0.06] hover:text-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active && "text-foreground",
+      )}
+    >
+      {active && (
+        <span
+          aria-hidden="true"
+          className="hanira-neon-line--vertical absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full opacity-80"
+        />
+      )}
+      {active && <span aria-hidden="true" className="absolute inset-0 rounded-full bg-white/[0.05]" />}
+      <span className="relative">{children}</span>
+    </button>
+  );
+}
 
 export function Sidebar({ userName }: { userName: string }) {
   const [search, setSearch] = useState("");
@@ -43,26 +90,54 @@ export function Sidebar({ userName }: { userName: string }) {
       <aside
         id="hanira-sidebar"
         aria-label="Navegação e conversas"
+        data-sidebar-state={store.sidebarCollapsed ? "collapsed" : "expanded"}
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[18rem] shrink-0 flex-col border-r border-border bg-sidebar/95 shadow-2xl shadow-black/20 backdrop-blur-xl transition-[width,transform] duration-300 lg:static lg:translate-x-0 lg:shadow-none",
+          "fixed inset-y-0 left-0 z-40 flex w-[18rem] shrink-0 flex-col bg-sidebar backdrop-blur-xl transition-[width,transform] duration-300 lg:static lg:translate-x-0",
           store.sidebarOpen
-            ? "visible translate-x-0"
-            : "invisible -translate-x-full lg:visible",
-          store.sidebarCollapsed && "lg:w-[4.75rem]",
+            ? "visible translate-x-0 shadow-2xl shadow-black/40"
+            : "invisible -translate-x-full shadow-none lg:visible",
+          store.sidebarCollapsed && "lg:w-[4.25rem]",
         )}
       >
-        <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
-          <Link
-            href="/"
-            aria-label="Página inicial da Hanira"
-            className={cn("min-w-0", store.sidebarCollapsed && "lg:hidden")}
-          >
-            <HaniraMark />
-          </Link>
-          {store.sidebarCollapsed && (
-            <Link href="/" aria-label="Página inicial da Hanira" className="hidden lg:block">
-              <HaniraMark compact />
-            </Link>
+        {/* Assinatura neon Hanira — fio vertical finíssimo, sem divisória. */}
+        <span
+          aria-hidden="true"
+          className="hanira-neon-line--vertical pointer-events-none absolute bottom-10 right-0 top-10 hidden w-px opacity-30 lg:block"
+        />
+        <div className={cn("flex h-16 shrink-0 items-center gap-2 px-4", store.sidebarCollapsed && "justify-center px-0")}>
+          {store.sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={() => store.setSidebarCollapsed(false)}
+              aria-label="Expandir barra lateral"
+              title="Expandir barra lateral"
+              className="group hidden size-11 place-items-center rounded-full transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid"
+            >
+              <span className="transition group-hover:opacity-0 group-focus-visible:opacity-0">
+                <HaniraMark compact />
+              </span>
+              <span className="absolute inset-0 hidden place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid">
+                <PanelLeftOpen className="size-4" />
+              </span>
+            </button>
+          ) : (
+            <>
+              <Link
+                href="/"
+                aria-label="Página inicial da Hanira"
+                className="min-w-0 flex-1"
+              >
+                <HaniraMark />
+              </Link>
+              <IconButton
+                label="Recolher barra lateral"
+                tooltip="Recolher barra lateral"
+                onClick={() => store.setSidebarCollapsed(true)}
+                className="hidden lg:inline-grid"
+              >
+                <PanelLeftClose className="size-4" />
+              </IconButton>
+            </>
           )}
           <IconButton
             label="Fechar menu"
@@ -71,14 +146,60 @@ export function Sidebar({ userName }: { userName: string }) {
           >
             <X className="size-4" />
           </IconButton>
-          <IconButton
-            label="Recolher barra lateral"
-            onClick={() => store.setSidebarCollapsed(true)}
-            className={cn("hidden lg:inline-grid", store.sidebarCollapsed && "lg:hidden")}
-          >
-            <PanelLeftClose className="size-4" />
-          </IconButton>
         </div>
+
+        {/* Faixa fina de ícones (desktop recolhido): ícones puros, sem cards. */}
+        <nav
+          aria-label="Atalhos"
+          className={cn("hidden flex-1 flex-col items-center gap-1 py-2", store.sidebarCollapsed && "lg:flex")}
+        >
+          <RailButton label="Nova conversa" tooltip="Nova conversa" onClick={() => void store.newConversation()}>
+            <Plus className="size-[18px]" />
+          </RailButton>
+          <RailButton label="Buscar conversas" tooltip="Buscar conversas" onClick={() => store.setSidebarCollapsed(false)}>
+            <Search className="size-[18px]" />
+          </RailButton>
+          <RailButton label="Conversas recentes" tooltip="Conversas recentes" active onClick={() => store.setSidebarCollapsed(false)}>
+            <MessageSquare className="size-[18px]" />
+          </RailButton>
+          <Link
+            href="/settings/memory"
+            aria-label="Memória Hanira"
+            title="Memória Hanira"
+            className="grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Sparkles className="size-[18px]" />
+          </Link>
+          <div className="mt-auto flex flex-col items-center gap-1">
+            <Link
+              href="/settings"
+              aria-label="Configurações"
+              title="Configurações"
+              className="grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Settings className="size-[18px]" />
+            </Link>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                aria-label="Sair"
+                title="Sair"
+                className="grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <LogOut className="size-[18px]" />
+              </button>
+            </form>
+            <span
+              aria-label={userName}
+              title={userName}
+              className="grid size-8 place-items-center rounded-full bg-white/[0.06] text-xs font-semibold text-foreground"
+            >
+              {userName.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        </nav>
+
+        <div className={cn("flex min-h-0 flex-1 flex-col", store.sidebarCollapsed && "lg:hidden")}>
 
         <div className="px-3 pt-2">
           <button
@@ -86,11 +207,11 @@ export function Sidebar({ userName }: { userName: string }) {
             onClick={() => void store.newConversation()}
             title="Nova conversa"
             className={cn(
-              "flex h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "group flex h-11 w-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/[0.06] px-3.5 text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               store.sidebarCollapsed && "lg:justify-center lg:px-0",
             )}
           >
-            <Plus className="size-4 shrink-0 text-primary" />
+            <Plus className="size-4 shrink-0 text-primary transition group-hover:rotate-90" />
             <span className={cn(store.sidebarCollapsed && "lg:hidden")}>Nova conversa</span>
           </button>
 
@@ -127,8 +248,8 @@ export function Sidebar({ userName }: { userName: string }) {
                 className={cn(
                   "group flex min-h-10 items-center rounded-xl px-3 text-sm transition",
                   conversation.id === store.activeId
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
+                    ? "bg-primary/[0.08] text-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   store.sidebarCollapsed && "lg:justify-center lg:px-0",
                 )}
               >
@@ -231,6 +352,7 @@ export function Sidebar({ userName }: { userName: string }) {
               <p className="text-[10px] text-muted-foreground">Conta Hanira</p>
             </div>
           </div>
+        </div>
         </div>
       </aside>
     </>
