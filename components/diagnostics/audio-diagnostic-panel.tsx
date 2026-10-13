@@ -4,12 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   STT_RECORDER_MIME_CANDIDATES,
   resolveRecordedAudioFormat,
-  selectRecorderMimeType,
 } from "@/lib/media/audio-format";
 import {
   buildSanitizedDiagnosticReport,
   type AudioValidationResult,
 } from "@/lib/media/audio-diagnostics";
+import {
+  captureErrorMessage,
+  classifyCaptureError,
+  detectClientRecorderCapabilities,
+  type RecorderCapabilities,
+} from "@/lib/media/audio-capabilities";
 import {
   AUTO_TEST_RECORDING_SECONDS,
   buildAutoTestReport,
@@ -31,14 +36,7 @@ type DiagnosticState =
   | "INVALID"
   | "ERROR";
 
-interface FeatureSnapshot {
-  secureContext: boolean;
-  mediaDevices: boolean;
-  getUserMedia: boolean;
-  mediaRecorder: boolean;
-  supportedFormats: Record<string, boolean>;
-  selectedMime: string;
-}
+type FeatureSnapshot = RecorderCapabilities;
 
 interface RecordedInfo {
   mediaRecorderMime: string;
@@ -51,50 +49,13 @@ interface RecordedInfo {
 }
 
 function detectFeatures(): FeatureSnapshot {
-  const secureContext =
-    typeof window !== "undefined" && Boolean(window.isSecureContext);
-  const hasMediaDevices =
-    typeof navigator !== "undefined" && Boolean(navigator.mediaDevices);
-  const hasGetUserMedia =
-    typeof navigator !== "undefined" &&
-    Boolean(navigator.mediaDevices?.getUserMedia);
-  const hasMediaRecorder =
-    typeof window !== "undefined" && Boolean(window.MediaRecorder);
-  const supportedFormats: Record<string, boolean> = {};
-  for (const mime of STT_RECORDER_MIME_CANDIDATES) {
-    if (hasMediaRecorder) {
-      try {
-        supportedFormats[mime] = window.MediaRecorder.isTypeSupported(mime);
-      } catch {
-        supportedFormats[mime] = false;
-      }
-    } else {
-      supportedFormats[mime] = false;
-    }
-  }
-  const selectedMime = hasMediaRecorder
-    ? selectRecorderMimeType((mime) => window.MediaRecorder.isTypeSupported(mime))
-    : "";
-  return {
-    secureContext,
-    mediaDevices: hasMediaDevices,
-    getUserMedia: hasGetUserMedia,
-    mediaRecorder: hasMediaRecorder,
-    supportedFormats,
-    selectedMime,
-  };
+  // Package 18.3.7 — capability detection centralizada (não user-agent).
+  return detectClientRecorderCapabilities();
 }
 
-function friendlyError(state: FeatureSnapshot, error: unknown): string {
-  const denied =
-    error instanceof DOMException &&
-    ["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name);
-  if (denied) return "Permissão do microfone negada. Libere o acesso nas configurações do navegador.";
-  if (!state.secureContext)
-    return "Contexto não seguro. Use HTTPS (ou localhost) para acessar o microfone.";
-  if (!state.mediaRecorder) return "Este navegador não oferece MediaRecorder.";
-  if (!state.getUserMedia) return "Este navegador não oferece acesso ao microfone (getUserMedia).";
-  return "Não foi possível acessar o microfone.";
+function friendlyError(_state: FeatureSnapshot, error: unknown): string {
+  // Package 18.3.7 — classificação fina de erros de captura.
+  return captureErrorMessage(classifyCaptureError(error));
 }
 
 export function AudioDiagnosticPanel() {
@@ -453,6 +414,7 @@ export function AudioDiagnosticPanel() {
           <li>MEDIA DEVICES: {features ? String(features.mediaDevices) : "..."}</li>
           <li>GET USER MEDIA: {features ? String(features.getUserMedia) : "..."}</li>
           <li>MEDIA RECORDER: {features ? String(features.mediaRecorder) : "..."}</li>
+          <li>PAUSE/RESUME: {features ? String(features.pauseResumeSupported) : "..."}</li>
           <li className="col-span-2">SELECTED MIME: {features?.selectedMime || "(nenhum)"}</li>
         </ul>
         <div className="mt-3">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RecordingStatus } from "@/types/media";
 import { resolveRecordedAudioFormat, selectRecorderMimeType } from "@/lib/media/audio-format";
+import { captureErrorMessage, classifyCaptureError } from "@/lib/media/audio-capabilities";
 
 export function useMediaRecorder() {
   const [status, setStatus] = useState<RecordingStatus>("idle");
@@ -15,6 +16,7 @@ export function useMediaRecorder() {
   const finishRef = useRef<((file: File | null) => void) | null>(null);
   const discardRef = useRef(false);
   const generationRef = useRef(0);
+  const pauseResumeRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -22,6 +24,7 @@ export function useMediaRecorder() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
+    pauseResumeRef.current = false;
   }, []);
 
   useEffect(() => () => {
@@ -66,6 +69,11 @@ export function useMediaRecorder() {
       }
       const recorder = new MediaRecorder(stream, { mimeType });
       recorderRef.current = recorder;
+      // Capability detection real (não user-agent): só habilitamos pause/resume
+      // se AMBOS existirem no recorder. Evita crash em engines com suporte
+      // parcial (ex.: Safari antigo).
+      pauseResumeRef.current =
+        typeof recorder.pause === "function" && typeof recorder.resume === "function";
       recorder.ondataavailable = (event) => {
         if (!discardRef.current && event.data.size) chunksRef.current.push(event.data);
       };
@@ -104,14 +112,7 @@ export function useMediaRecorder() {
       return true;
     } catch (caught) {
       if (generation !== generationRef.current) return false;
-      const denied =
-        caught instanceof DOMException &&
-        ["NotAllowedError", "PermissionDeniedError"].includes(caught.name);
-      setError(
-        denied
-          ? "Permissão do microfone negada. Libere o acesso no navegador."
-          : "Não foi possível acessar o microfone.",
-      );
+      setError(captureErrorMessage(classifyCaptureError(caught)));
       setStatus("error");
       cleanup();
       return false;
@@ -146,7 +147,7 @@ export function useMediaRecorder() {
 
   const pause = useCallback(() => {
     const recorder = recorderRef.current;
-    if (recorder?.state === "recording") {
+    if (recorder?.state === "recording" && pauseResumeRef.current) {
       recorder.pause();
       setStatus("paused");
     }
@@ -154,7 +155,7 @@ export function useMediaRecorder() {
 
   const resume = useCallback(() => {
     const recorder = recorderRef.current;
-    if (recorder?.state === "paused") {
+    if (recorder?.state === "paused" && pauseResumeRef.current) {
       recorder.resume();
       setStatus("recording");
     }
