@@ -10,8 +10,12 @@ describe("Hanira premium chat states", () => {
     );
 
     expect(html).toContain("Olá, Ronne");
-    expect(html).toContain("Nira Intelligence");
-    expect(html).toContain("A inteligência da Hanira");
+    // 18.3.6 (HANIRA NEON): o cabeçalho textual pesado foi removido de propósito
+    // em 1f43178 (PR #34). O teste documenta o comportamento ATUAL e não pode
+    // exigir a string antiga de volta na interface.
+    expect(html).not.toContain("Nira Intelligence");
+    expect(html).not.toContain("A inteligência da Hanira");
+    expect(html).toContain("A Nira ajuda a explorar ideias");
     expect(html).toContain("Organizar uma ideia");
     expect(html).toContain("<button");
   });

@@ -27,17 +27,29 @@ export async function transcribeAudio(
 ) {
   const formData = new FormData();
   formData.set("audio", audio);
-  const response = await fetch("/api/audio/transcribe", {
-    method: "POST",
-    body: formData,
-    signal,
-  });
-  const data = (await response.json()) as {
-    transcript?: string;
-    error?: string;
-  };
+  let response: Response;
+  try {
+    response = await fetch("/api/audio/transcribe", {
+      method: "POST",
+      body: formData,
+      signal,
+    });
+  } catch (caught) {
+    // Cancelamento do usuário é propagado como está (o recorder já trata);
+    // qualquer outra falha de rede vira aviso amigável — a UI nunca mostra
+    // texto técnico cru do browser ("Failed to fetch", DNS, proxy...).
+    if ((caught as { name?: string } | null)?.name === "AbortError") throw caught;
+    throw new Error("Falha de conexão. Verifique sua internet e tente novamente.");
+  }
+  let data: { transcript?: string; error?: string } = {};
+  try {
+    data = (await response.json()) as { transcript?: string; error?: string };
+  } catch {
+    // Resposta sem JSON válido (proxy/erro de infra): cai na mensagem genérica.
+    data = {};
+  }
   if (!response.ok) {
-    throw new Error(data.error ?? "Não foi possível transcrever o áudio.");
+    throw new Error(data.error?.trim() || "Não foi possível transcrever o áudio.");
   }
   if (!data.transcript?.trim()) throw new Error("A transcrição retornou vazia.");
   return data.transcript;
