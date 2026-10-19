@@ -16,7 +16,7 @@ import { HaniraMark } from "@/components/brand/hanira-mark";
 import { Button } from "@/components/ui/button";
 import { UsageDashboard } from "@/components/usage/usage-dashboard";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
-import { BROWSER_TTS_AUTO_PREFERENCE, getBrowserTtsHost, isBrowserTtsPreference, listPtBrBrowserVoices } from "@/lib/voice/browser-tts";
+import { BROWSER_TTS_AUTO_PREFERENCE, getBrowserTtsHost, isBrowserTtsPreference, listBrowserVoicesForLocale, listPtBrBrowserVoices } from "@/lib/voice/browser-tts";
 import type { ResponseStyle, UserSettings } from "@/types/settings";
 
 const styles: ResponseStyle[] = [
@@ -49,11 +49,17 @@ export function SettingsPage() {
   useEffect(() => {
     const host = getBrowserTtsHost();
     if (!host?.speechSynthesis) return;
-    const refreshVoices = () => setBrowserVoices(listPtBrBrowserVoices(host.speechSynthesis!.getVoices()));
+    // Pacote 18.4: lista a voz do idioma primário atual; cai para pt-BR
+    // legado quando o idioma ainda não tem voz instalada.
+    const refreshVoices = () => setBrowserVoices(
+      listBrowserVoicesForLocale(host.speechSynthesis!.getVoices(), settings.language).length > 0
+        ? listBrowserVoicesForLocale(host.speechSynthesis!.getVoices(), settings.language)
+        : listPtBrBrowserVoices(host.speechSynthesis!.getVoices()),
+    );
     refreshVoices();
     host.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
     return () => host.speechSynthesis?.removeEventListener("voiceschanged", refreshVoices);
-  }, []);
+  }, [settings.language]);
 
   useEffect(() => {
     fetch("/api/settings")

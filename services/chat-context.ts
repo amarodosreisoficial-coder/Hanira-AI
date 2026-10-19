@@ -71,6 +71,8 @@ export interface ProjectChatContext {
   relevantMemories: string[];
   conversationMessages: TextChatContextMessage[];
   personalityInstructions?: string;
+  /** Pacote 18.4: idioma primário do perfil (user_settings.language). */
+  preferredLanguage?: string;
   historyMessageCount: number;
   contextBudget: ContextBudgetMetadata & {
     memoryCount: number;
@@ -358,6 +360,10 @@ export async function resolveProjectChatContext(options: {
     relevantMemories: memoryBudget.memories,
     conversationMessages: historyBudget.messages,
     personalityInstructions: personalityInstructions || undefined,
+    preferredLanguage:
+      isRecord(settings) && typeof settings.language === "string" && settings.language.trim()
+        ? settings.language.trim()
+        : undefined,
     historyMessageCount: historyBudget.messages.length,
     contextBudget: {
       ...historyBudget.metadata,

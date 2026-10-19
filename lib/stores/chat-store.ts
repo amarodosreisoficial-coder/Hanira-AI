@@ -30,9 +30,16 @@ interface ChatState {
   // Pacote 16.4: estado de runtime Nira derivado de evidencia real do
   // stream/backend. A UI nunca adivinha o runtime com texto estatico.
   runtimeState: NiraRuntimeState;
+  // Pacote 18.4: override temporario de idioma por conversa (nao persistido;
+  // volta ao idioma do perfil ao recarregar/nova conversa).
+  conversationLanguages: Record<string, "pt-BR" | "en" | "es">;
   initialize: () => Promise<void>;
   setDraft: (draft: string) => void;
   setRuntimeState: (state: NiraRuntimeState) => void;
+  setConversationLanguage: (
+    conversationId: string,
+    language: "pt-BR" | "en" | "es" | null,
+  ) => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   newConversation: () => Promise<void>;
@@ -78,6 +85,7 @@ export const useChatStore = create<ChatState>()(
       sidebarCollapsed: false,
       draft: "",
       runtimeState: "unknown",
+      conversationLanguages: {},
       initialize: async () => {
         if (get().status === "loading") return;
         set({ status: "loading", error: null });
@@ -296,6 +304,22 @@ export const useChatStore = create<ChatState>()(
         })),
       setThinking: (isThinking) => set({ isThinking }),
       setRuntimeState: (runtimeState) => set({ runtimeState }),
+      setConversationLanguage: (conversationId, language) =>
+        set((state) => {
+          if (!language) {
+            if (!(conversationId in state.conversationLanguages)) return state;
+            const next = { ...state.conversationLanguages };
+            delete next[conversationId];
+            return { conversationLanguages: next };
+          }
+          if (state.conversationLanguages[conversationId] === language) return state;
+          return {
+            conversationLanguages: {
+              ...state.conversationLanguages,
+              [conversationId]: language,
+            },
+          };
+        }),
       activeConversation: () =>
         get().conversations.find((item) => item.id === get().activeId) ?? null,
     }),

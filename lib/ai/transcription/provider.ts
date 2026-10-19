@@ -14,7 +14,11 @@ export class TranscriptionError extends Error {
 }
 
 export interface TranscriptionProvider {
-  transcribe(audio: Uint8Array, signal?: AbortSignal): Promise<string>;
+  transcribe(
+    audio: Uint8Array,
+    signal?: AbortSignal,
+    options?: { language?: string | null },
+  ): Promise<string>;
 }
 
 export function publicTranscriptionError(code: TranscriptionErrorCode) {

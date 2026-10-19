@@ -24,9 +24,13 @@ export async function uploadMediaFiles(
 export async function transcribeAudio(
   audio: File,
   signal?: AbortSignal,
+  options?: { language?: string | null },
 ) {
   const formData = new FormData();
   formData.set("audio", audio);
+  // Pacote 18.4: override de idioma da conversa (somente valores suportados;
+  // o servidor valida de novo e ignora o que não for idioma suportado).
+  if (options?.language) formData.set("language", options.language);
   let response: Response;
   try {
     response = await fetch("/api/audio/transcribe", {

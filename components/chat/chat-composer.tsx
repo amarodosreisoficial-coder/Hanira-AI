@@ -56,6 +56,7 @@ import { uploadMediaFiles } from "@/services/media-service";
 import { generateImage, imageGenerationErrorMessage, type ImageReferenceDraft } from "@/services/image-service";
 import { ImageComposerOptions } from "@/components/chat/image-composer-options";
 import { resolveComposerIntent, type ComposerMode } from "@/lib/chat/composer-intent";
+import { detectConversationLanguageSwitch } from "@/lib/i18n/conversation-language-switch";
 import { type ImageAspectRatioPreset } from "@/lib/ai/image/aspect-ratios";
 import { IMAGE_REFERENCE_MAX_COUNT } from "@/lib/validation/image-request";
 import type { ChatMessage } from "@/types/chat";
@@ -422,6 +423,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     const conversation = await ensureConversation();
     if (!conversation) return;
 
+    // Pacote 18.4: troca temporária de idioma da conversa detectada no texto
+    // ("Nira, agora fale comigo em inglês."). Persiste só no store da conversa
+    // (não toca no perfil) e vale para esta conversa até recarregar/nova conversa.
+    const requestedLanguage = detectConversationLanguageSwitch(content);
+    if (requestedLanguage) {
+      store.setConversationLanguage(conversation.id, requestedLanguage);
+    }
+
     setError("");
     setIssue(null);
     setUploading(pendingMedia.length > 0);
@@ -485,6 +494,14 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           message: content,
           requestId: crypto.randomUUID(),
           retry,
+          // Pacote 18.4: override temporário de idioma da conversa quando o
+          // usuário escolheu um idioma diferente do perfil. `getState()` lê o
+          // valor já atualizado (o `store` do hook seria snapshot stale após
+          // setConversationLanguage chamado neste fluxo).
+          conversationLanguage:
+            requestedLanguage ??
+            useChatStore.getState().conversationLanguages[conversation.id] ??
+            undefined,
           attachmentIds:
             store.mode === "supabase"
               ? attachments.map((attachment) => attachment.id)
@@ -749,6 +766,13 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           {recorderOpen ? (
             <VoiceRecorder
               inline
+              // Pacote 18.4: STT usa o idioma da conversa (override) quando
+              // houver; sem override o servidor resolve pelo perfil/auto-detect.
+              language={
+                store.activeId
+                  ? (store.conversationLanguages[store.activeId] ?? null)
+                  : null
+              }
               onCancel={() => setRecorderOpen(false)}
               onComplete={({ text }) => {
                 const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();

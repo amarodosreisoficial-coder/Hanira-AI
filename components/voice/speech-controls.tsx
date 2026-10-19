@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CircleStop, Pause, Play, RotateCcw, Volume2 } from "lucide-react";
-import { browserTtsAvailability, clampSpeechRate, getBrowserTtsHost, selectPtBrVoice } from "@/lib/voice/browser-tts";
+import { browserTtsAvailability, clampSpeechRate, getBrowserTtsHost, selectBrowserVoiceForLanguage } from "@/lib/voice/browser-tts";
 
 type PlaybackStatus = "idle" | "playing" | "paused" | "error";
 
-export function SpeechControls({ text, voice, speed }: { text: string; voice: string; speed: number }) {
+export function SpeechControls({ text, voice, speed, language }: { text: string; voice: string; speed: number; language?: string | null }) {
   const [status, setStatus] = useState<PlaybackStatus>("idle");
+  // Pacote 18.4: idioma de leitura = override da conversa quando presente,
+  // senão o idioma primário do perfil (settings.language). Nunca força pt-BR.
+  const utteranceLanguage = language ?? "pt-BR";
   const [error, setError] = useState("");
   const [hasPlayed, setHasPlayed] = useState(false);
   const playbackIdRef = useRef(crypto.randomUUID());
@@ -26,14 +29,14 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
   const play = useCallback((restart = false) => {
     if (!text) return;
     const host = getBrowserTtsHost();
-    const availability = browserTtsAvailability(host);
+    const availability = browserTtsAvailability(host, utteranceLanguage);
     if (availability === "unsupported") {
       setError("A leitura em voz alta não é suportada neste navegador.");
       setStatus("error");
       return;
     }
-    if (availability === "no-pt-br-voice") {
-      setError("Nenhuma voz pt-BR está disponível neste navegador ou dispositivo.");
+    if (availability === "no-pt-br-voice" || availability === "no-voice") {
+      setError("Nenhuma voz disponível neste navegador ou dispositivo para o idioma atual.");
       setStatus("error");
       return;
     }
@@ -47,9 +50,9 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
     generationRef.current = generation;
     host!.speechSynthesis!.cancel();
     const utterance = new host!.SpeechSynthesisUtterance!(text);
-    utterance.lang = "pt-BR";
+    utterance.lang = utteranceLanguage;
     utterance.rate = clampSpeechRate(speed);
-    utterance.voice = selectPtBrVoice(host!.speechSynthesis!.getVoices(), voice) ?? null;
+    utterance.voice = selectBrowserVoiceForLanguage(host!.speechSynthesis!.getVoices(), utteranceLanguage, voice) ?? null;
     utterance.onstart = () => { if (generationRef.current === generation) setStatus("playing"); };
     utterance.onend = () => {
       if (generationRef.current === generation) {
@@ -69,7 +72,7 @@ export function SpeechControls({ text, voice, speed }: { text: string; voice: st
     setStatus("playing");
     activePlaybackRef.current = true;
     host!.speechSynthesis!.speak(utterance);
-  }, [speed, status, text, voice]);
+  }, [speed, status, text, voice, utteranceLanguage]);
 
   const pause = useCallback(() => {
     getBrowserTtsHost()?.speechSynthesis?.pause();

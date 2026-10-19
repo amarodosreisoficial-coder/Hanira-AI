@@ -28,6 +28,14 @@ export function VoiceConversationModal({
   onClose: () => void;
 }) {
   const mode = useChatStore((state) => state.mode);
+  // Pacote 18.4: idioma efetivo da conversa — override temporário da conversa
+  // ativa quando existir; senão o idioma primário do perfil (nunca fixo em pt-BR).
+  const conversationLanguage = useChatStore((state) =>
+    state.activeId
+      ? (state.conversationLanguages[state.activeId] ?? null)
+      : null,
+  );
+  const effectiveLanguage = conversationLanguage ?? settings.language;
   const [status, setStatus] = useState<VoiceConversationStatus>("idle");
   const [transcript, setTranscript] = useState("");
   const [recorderVisible, setRecorderVisible] = useState(false);
@@ -56,7 +64,8 @@ export function VoiceConversationModal({
       try {
         if (mode === "demo") {
           const utterance = new SpeechSynthesisUtterance(detail.text);
-          utterance.lang = "pt-BR";
+          // Pacote 18.4: idioma da conversa (override) ou perfil — não fixo.
+          utterance.lang = effectiveLanguage;
           utterance.rate = settings.speechRate;
           utterance.onend = () => setStatus("idle");
           window.speechSynthesis.speak(utterance);
