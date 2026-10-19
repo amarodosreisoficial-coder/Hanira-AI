@@ -37,11 +37,14 @@ export function VoiceRecorder({
   onCancel,
   compact = false,
   inline = false,
+  language,
 }: {
   onComplete: (result: { text: string }) => void;
   onCancel: () => void;
   compact?: boolean;
   inline?: boolean;
+  /** Pacote 18.4: idioma da conversa (override). Ausente = idioma do perfil. */
+  language?: string | null;
 }) {
   const recorder = useMediaRecorder();
   const finishingRef = useRef(false);
@@ -86,7 +89,7 @@ export function VoiceRecorder({
     const controller = new AbortController();
     requestRef.current = controller;
     try {
-      const text = await transcribeAudio(file, controller.signal);
+      const text = await transcribeAudio(file, controller.signal, { language });
       if (controller.signal.aborted) return;
       recorder.setStatus("complete");
       onComplete({ text });

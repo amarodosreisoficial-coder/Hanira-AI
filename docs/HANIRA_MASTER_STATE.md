@@ -1,9 +1,9 @@
 # HANIRA AI — MASTER STATE REPORT
-## Current State — Package 18.3.1
+## Current State — Package 18.4
 
-Atualizado em 2026-10-11. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
+Atualizado em 2026-10-18. Seções e blocos explicitamente marcados como históricos preservam snapshots anteriores; os itens de estado corrente abaixo são autoritativos.
 
-## Packages 18.1–18.3 — estado atual
+## Packages 18.1-18.4 — estado atual
 
 - Package 18.1: MERGED via PR #26 no commit `d16147da6008d7ecae137157aa81009b8b40d096`. Package 18.2: MERGED via PR #27 no commit `f08ae5b0733e074db7120d4f2677013e232fe7ed`.
 - Package 18.3: **MERGED** via PR #28 no commit `b737175c7690d0bb653a5dbcf50d2d3aa7771936`. STT Cloudflare V1 segue desligado por padrão, sem ativação de produção ou teste ao vivo.

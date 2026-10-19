@@ -155,6 +155,14 @@ export function ChatInterface({ userName }: { userName: string }) {
                         message={message}
                         previousUser={previousUser}
                         settings={settings}
+                        // Pacote 18.4: override temporário de idioma da conversa
+                        // (TTS lê neste idioma; ausente = idioma primário do perfil).
+                        conversationLanguage={
+                          store.activeId
+                            ? (store.conversationLanguages[store.activeId] ??
+                              null)
+                            : null
+                        }
                       />
                     );
                   })}

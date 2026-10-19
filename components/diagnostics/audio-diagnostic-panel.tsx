@@ -30,6 +30,7 @@ type DiagnosticState =
   | "IDLE"
   | "REQUESTING_PERMISSION"
   | "RECORDING"
+  | "PAUSED"
   | "RECORDED"
   | "VALIDATING"
   | "VALID"
@@ -80,6 +81,8 @@ export function AudioDiagnosticPanel() {
   const chunksRef = useRef<Blob[]>([]);
   const urlRef = useRef("");
   const startedAtRef = useRef(0);
+  // Package 18.3.9 — quando true, o próximo onstop descarta o áudio (cancelar).
+  const discardRef = useRef(false);
 
   useEffect(() => {
     // Snapshot de navegador definido pós-mount de propósito: detectFeatures()
@@ -147,9 +150,20 @@ export function AudioDiagnosticPanel() {
         setState("ERROR");
       };
       recorder.onstop = () => {
-        const resolved = resolveRecordedAudioFormat(recorder.mimeType, mimeType);
         const chunks = chunksRef.current;
         chunksRef.current = [];
+        // Package 18.3.9 — cancelar: descarta o áudio coletado e volta ao IDLE
+        // sem montar Blob, sem playback e sem qualquer chamada externa.
+        if (discardRef.current) {
+          discardRef.current = false;
+          streamRef.current?.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+          recorderRef.current = null;
+          setMessage("Gravação descartada.");
+          setState("IDLE");
+          return;
+        }
+        const resolved = resolveRecordedAudioFormat(recorder.mimeType, mimeType);
         if (!resolved) {
           setMessage("Não foi possível determinar o container do áudio capturado.");
           setState("ERROR");
@@ -190,6 +204,40 @@ export function AudioDiagnosticPanel() {
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
+  }, []);
+
+  // Package 18.3.9 — pausa/retomada protegidas por capability real
+  // (features.pauseResumeSupported), nunca por user-agent. Somente captura
+  // local: nenhuma chamada de provider/transcrição.
+  const pause = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording" && features?.pauseResumeSupported) {
+      recorder.pause();
+      setState("PAUSED");
+    }
+  }, [features]);
+
+  const resume = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (recorder?.state === "paused" && features?.pauseResumeSupported) {
+      recorder.resume();
+      setState("RECORDING");
+    }
+  }, [features]);
+
+  const cancelRecording = useCallback(() => {
+    const recorder = recorderRef.current;
+    setMessage("");
+    discardRef.current = true;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    } else {
+      discardRef.current = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      recorderRef.current = null;
+      setState("IDLE");
+    }
   }, []);
 
   const clear = useCallback(() => {
@@ -389,7 +437,7 @@ export function AudioDiagnosticPanel() {
     autoState === "ANALYZING" ||
     autoState === "SERVER_VALIDATING";
 
-  const active = state === "RECORDING" || state === "REQUESTING_PERMISSION";
+  const active = state === "RECORDING" || state === "REQUESTING_PERMISSION" || state === "PAUSED";
   const busy = state === "VALIDATING";
   const statusClass =
     state === "ERROR" || state === "INVALID"
@@ -569,10 +617,31 @@ export function AudioDiagnosticPanel() {
           </button>
           <button
             onClick={stop}
-            disabled={state !== "RECORDING"}
+            disabled={state !== "RECORDING" && state !== "PAUSED"}
             className="h-12 rounded-xl border border-white/15 text-sm text-zinc-200 disabled:opacity-40"
           >
             PARAR
+          </button>
+          <button
+            onClick={pause}
+            disabled={state !== "RECORDING" || !features?.pauseResumeSupported}
+            className="h-12 rounded-xl border border-white/15 text-sm text-zinc-200 disabled:opacity-40"
+          >
+            PAUSAR
+          </button>
+          <button
+            onClick={resume}
+            disabled={state !== "PAUSED" || !features?.pauseResumeSupported}
+            className="h-12 rounded-xl border border-white/15 text-sm text-zinc-200 disabled:opacity-40"
+          >
+            CONTINUAR
+          </button>
+          <button
+            onClick={cancelRecording}
+            disabled={!active}
+            className="h-12 rounded-xl border border-white/15 text-sm text-zinc-300 disabled:opacity-40"
+          >
+            CANCELAR
           </button>
           <button
             onClick={() => void validateOnServer()}

@@ -17,4 +17,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   transcriptionEnabled: false,
   voiceConversationEnabled: false,
   privacyNoticeDismissed: false,
+  country: null,
+  region: null,
+  additionalLanguages: [],
+  autoDetectLanguage: false,
 };

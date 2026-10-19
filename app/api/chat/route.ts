@@ -388,6 +388,8 @@ async function createChatStream(
     message: string;
     requestId?: string;
     retry?: boolean;
+    /** Pacote 18.4: override temporário de idioma desta conversa (senão, perfil). */
+    conversationLanguage?: "pt-BR" | "en" | "es";
     attachmentIds?: string[];
   },
   requestId: string,
@@ -646,6 +648,8 @@ async function createChatStream(
     projectLabel: chatContext.projectName,
     relevantMemories: chatContext.relevantMemories,
     capabilitySummary: buildCapabilitySummary(productCapabilities),
+    preferredLanguage: chatContext.preferredLanguage ?? null,
+    conversationLanguage: payload.conversationLanguage ?? null,
   });
   const selfKnowledge = resolveSelfKnowledge({
     message: payload.message,

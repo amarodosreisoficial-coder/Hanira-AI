@@ -19,21 +19,39 @@ export class CloudflareWorkersAITranscriptionProvider implements TranscriptionPr
     this.timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
   }
 
-  async transcribe(audio: Uint8Array, signal?: AbortSignal): Promise<string> {
+  /**
+   * `options.language`: código ISO-639-1 ("pt"|"en"|"es"). Quando `null`
+   * explícito, o campo `language` é OMITIDO do corpo e o modelo Whisper
+   * faz a detecção automática do idioma (parâmetro opcional — documentação
+   * Cloudflare whisper-large-v3-turbo). Quando ausente, mantém o legado "pt".
+   */
+  async transcribe(
+    audio: Uint8Array,
+    signal?: AbortSignal,
+    options?: { language?: string | null },
+  ): Promise<string> {
     if (!this.accountId?.trim() || !this.apiToken?.trim()) throw new TranscriptionError("invalid_configuration");
     if (!audio.length) throw new TranscriptionError("invalid_request");
+    const language = options?.language === undefined ? "pt" : options.language;
+    if (language !== null && !/^[a-z]{2,3}$/.test(language)) throw new TranscriptionError("invalid_request");
     const controller = new AbortController();
     const abort = () => controller.abort();
     if (signal?.aborted) abort();
     signal?.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(abort, this.timeoutMs);
     try {
+      const body: Record<string, string> = {
+        audio: Buffer.from(audio).toString("base64"),
+        task: "transcribe",
+      };
+      // Auto-deteccao: omitir a chave `language` (não enviar null/string vazia).
+      if (language !== null) body.language = language;
       const response = await this.fetchFn(
         `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.accountId.trim())}/ai/run/${CLOUDFLARE_STT_MODEL}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${this.apiToken.trim()}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ audio: Buffer.from(audio).toString("base64"), task: "transcribe", language: "pt" }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         },
       );
@@ -46,10 +64,11 @@ export class CloudflareWorkersAITranscriptionProvider implements TranscriptionPr
         if (response.status === 400 || response.status === 422) throw new TranscriptionError("invalid_request");
         throw new TranscriptionError("provider_error");
       }
-      const body: unknown = await response.json().catch(() => null);
-      const result = body && typeof body === "object" ? (body as { success?: unknown; result?: unknown }).result : null;
+      // Pacote 18.4: `payload` (resposta) não pode colidir com `body` (requisição).
+      const payload: unknown = await response.json().catch(() => null);
+      const result = payload && typeof payload === "object" ? (payload as { success?: unknown; result?: unknown }).result : null;
       const text = result && typeof result === "object" ? (result as { text?: unknown }).text : null;
-      if ((body as { success?: unknown } | null)?.success !== true || typeof text !== "string" || !text.trim() || text.length > 4_000) {
+      if ((payload as { success?: unknown } | null)?.success !== true || typeof text !== "string" || !text.trim() || text.length > 4_000) {
         throw new TranscriptionError("malformed_response");
       }
       return text.trim();

@@ -17,10 +17,13 @@ export function ChatMessage({
   message,
   previousUser,
   settings,
+  conversationLanguage,
 }: {
   message: ChatMessageData;
   previousUser?: ChatMessageData;
   settings: UserSettings;
+  /** Pacote 18.4: override temporário de idioma da conversa (TTS). */
+  conversationLanguage?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -131,7 +134,16 @@ export function ChatMessage({
             >
               {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
             </IconButton>
-            {settings.voiceEnabled && <SpeechControls text={message.content} voice={settings.ttsVoice} speed={settings.speechRate} />}
+            {settings.voiceEnabled && (
+              <SpeechControls
+                text={message.content}
+                voice={settings.ttsVoice}
+                speed={settings.speechRate}
+                // Pacote 18.4: idioma da conversa (override) senão o primário
+                // do perfil — nunca fixo em pt-BR quando o perfil muda de idioma.
+                language={conversationLanguage ?? settings.language}
+              />
+            )}
           </div>
         )}
       </div>

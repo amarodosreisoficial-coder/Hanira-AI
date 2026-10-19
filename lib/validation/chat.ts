@@ -9,6 +9,9 @@ export const chatRequestSchema = z.object({
   projectId: z.uuid().optional(),
   requestId: z.uuid().optional(),
   retry: z.boolean().optional(),
+  // Pacote 18.4: override temporário de idioma para a conversa atual.
+  // Ausente = segue o idioma primário do perfil.
+  conversationLanguage: z.enum(["pt-BR", "en", "es"]).optional(),
   attachmentIds: z.array(z.uuid()).max(4).optional(),
   demoAttachments: z
     .array(
@@ -111,4 +114,19 @@ export const settingsSchema = z.object({
   transcriptionEnabled: z.boolean().optional(),
   voiceConversationEnabled: z.boolean().optional(),
   privacyNoticeDismissed: z.boolean().optional(),
+  // Pacote 18.4 — Voice Internationalization (campos da migration 010, local).
+  // country: somente código ISO 3166-1 alpha-2; país nunca deriva idioma.
+  country: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/, "Use o código ISO do país com 2 letras (ex.: BR).")
+    .transform((value) => value.toUpperCase())
+    .nullable()
+    .optional(),
+  region: z.string().trim().max(80).nullable().optional(),
+  additionalLanguages: z
+    .array(z.enum(["pt-BR", "en", "es"]))
+    .max(3, "No máximo 3 idiomas adicionais.")
+    .optional(),
+  autoDetectLanguage: z.boolean().optional(),
 });

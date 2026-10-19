@@ -1,3 +1,5 @@
+import type { VoiceLanguage } from "@/lib/i18n/voice-languages";
+
 export type ResponseStyle =
   | "equilibrado"
   | "conciso"
@@ -22,6 +24,12 @@ export interface UserSettings {
   transcriptionEnabled: boolean;
   voiceConversationEnabled: boolean;
   privacyNoticeDismissed: boolean;
+  // Pacote 18.4 — Voice Internationalization (migration 010, local).
+  // País/região são geografia independente de idioma (país NÃO define idioma).
+  country: string | null;
+  region: string | null;
+  additionalLanguages: VoiceLanguage[];
+  autoDetectLanguage: boolean;
 }
 
 export interface Memory {

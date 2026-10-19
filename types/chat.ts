@@ -51,6 +51,8 @@ export interface ChatRequest {
   message: string;
   requestId?: string;
   retry?: boolean;
+  /** Pacote 18.4: override temporário de idioma desta conversa (senão, idioma do perfil). */
+  conversationLanguage?: "pt-BR" | "en" | "es";
   attachmentIds?: string[];
   demoAttachments?: Array<{
     id: string;

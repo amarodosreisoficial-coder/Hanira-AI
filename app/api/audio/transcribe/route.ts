@@ -6,6 +6,7 @@ import { getSttRuntimeState } from "@/lib/ai/transcription/runtime";
 import { CloudflareWorkersAITranscriptionProvider } from "@/lib/ai/transcription/cloudflare-workers-ai-transcription-provider";
 import { publicTranscriptionError, TranscriptionError } from "@/lib/ai/transcription/provider";
 import { readBoundedSttBody, SttAudioValidationError, validateSttAudio } from "@/lib/validation/stt-audio";
+import { isVoiceLanguage, resolveSttLanguage } from "@/lib/i18n/voice-languages";
 
 export function GET() {
   const { eligible } = getSttRuntimeState();
@@ -34,8 +35,20 @@ export async function POST(request: Request) {
     const form = await upload.formData();
     const audio = form.get("audio");
     if (!(audio instanceof File) || form.getAll("audio").length !== 1 || [...form.values()].filter((value) => value instanceof File).length !== 1) return respond("Envie um único arquivo de áudio.", 400);
+    // Pacote 18.4: override explícito de idioma da conversa (campo opcional do
+    // form). Só existe override quando o cliente envia um idioma suportado;
+    // ausente = segue o perfil (auto-deteccao ou idioma primário).
+    const requestedLanguage = form.get("language");
+    const conversationLanguage = isVoiceLanguage(requestedLanguage) ? requestedLanguage : null;
+    const sttLanguage = resolveSttLanguage({
+      conversationLanguage,
+      profileLanguage: settings.language,
+      autoDetect: settings.autoDetectLanguage,
+    });
     const bytes = await validateSttAudio(audio);
-    const transcript = await new CloudflareWorkersAITranscriptionProvider().transcribe(bytes, request.signal);
+    const transcript = await new CloudflareWorkersAITranscriptionProvider().transcribe(bytes, request.signal, {
+      language: sttLanguage.language,
+    });
     logServerEvent({ level: "info", requestId, route: "/api/audio/transcribe", event: "transcription_completed", status: 200, durationMs: Date.now() - startedAt });
     return Response.json({ transcript, requestId }, { headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" } });
   } catch (error) {
