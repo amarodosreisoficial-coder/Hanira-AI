@@ -3,10 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CircleStop, Pause, Play, RotateCcw, Volume2 } from "lucide-react";
 import { browserTtsAvailability, clampSpeechRate, getBrowserTtsHost, selectBrowserVoiceForLanguage } from "@/lib/voice/browser-tts";
+import { failVoiceAutoRead, finishVoiceAutoSpeech, markVoiceAutoReadStarted } from "@/lib/voice/voice-auto-flow";
 
 type PlaybackStatus = "idle" | "playing" | "paused" | "error";
 
-export function SpeechControls({ text, voice, speed, language }: { text: string; voice: string; speed: number; language?: string | null }) {
+export function SpeechControls({ text, voice, speed, language, autoReadKey }: {
+  text: string;
+  voice: string;
+  speed: number;
+  language?: string | null;
+  /** Pacote 18.4 — AUTO READ: id da mensagem de turno de voz a ler sozinha. */
+  autoReadKey?: string | null;
+}) {
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   // Pacote 18.4: idioma de leitura = override da conversa quando presente,
   // senão o idioma primário do perfil (settings.language). Nunca força pt-BR.
@@ -16,6 +24,10 @@ export function SpeechControls({ text, voice, speed, language }: { text: string;
   const playbackIdRef = useRef(crypto.randomUUID());
   const generationRef = useRef(0);
   const activePlaybackRef = useRef(false);
+  // Pacote 18.4 — AUTO READ: refs do turno atual e do `play` mais recente.
+  // As refs evitam que identidades de callback mudem os deps do efeito de auto-read.
+  const autoReadKeyRef = useRef<string | null>(autoReadKey ?? null);
+  const playRef = useRef<((restart?: boolean) => void)>(() => undefined);
 
   const stopLocalPlayback = useCallback(() => {
     generationRef.current += 1;
@@ -23,6 +35,8 @@ export function SpeechControls({ text, voice, speed, language }: { text: string;
       getBrowserTtsHost()?.speechSynthesis?.cancel();
       activePlaybackRef.current = false;
     }
+    // Parar a leitura de um turno de voz devolve o fluxo a IDLE.
+    if (autoReadKeyRef.current) finishVoiceAutoSpeech();
     setStatus("idle");
   }, []);
 
@@ -31,11 +45,13 @@ export function SpeechControls({ text, voice, speed, language }: { text: string;
     const host = getBrowserTtsHost();
     const availability = browserTtsAvailability(host, utteranceLanguage);
     if (availability === "unsupported") {
+      if (autoReadKeyRef.current) failVoiceAutoRead(autoReadKeyRef.current);
       setError("A leitura em voz alta não é suportada neste navegador.");
       setStatus("error");
       return;
     }
     if (availability === "no-pt-br-voice" || availability === "no-voice") {
+      if (autoReadKeyRef.current) failVoiceAutoRead(autoReadKeyRef.current);
       setError("Nenhuma voz disponível neste navegador ou dispositivo para o idioma atual.");
       setStatus("error");
       return;
@@ -53,15 +69,32 @@ export function SpeechControls({ text, voice, speed, language }: { text: string;
     utterance.lang = utteranceLanguage;
     utterance.rate = clampSpeechRate(speed);
     utterance.voice = selectBrowserVoiceForLanguage(host!.speechSynthesis!.getVoices(), utteranceLanguage, voice) ?? null;
-    utterance.onstart = () => { if (generationRef.current === generation) setStatus("playing"); };
+    utterance.onstart = () => {
+      if (generationRef.current === generation) {
+        // Pacote 18.4: o turno de voz só é consumido quando o áudio REALMENTE
+        // começa — exatamente UMA leitura automática por resposta, mesmo com o
+        // duplo efeito de efeitos do React Strict Mode em desenvolvimento.
+        const autoKey = autoReadKeyRef.current;
+        if (autoKey) markVoiceAutoReadStarted(autoKey);
+        setStatus("playing");
+      }
+    };
     utterance.onend = () => {
       if (generationRef.current === generation) {
+        if (autoReadKeyRef.current) finishVoiceAutoSpeech();
         activePlaybackRef.current = false;
         setStatus("idle");
       }
     };
     utterance.onerror = () => {
       if (generationRef.current === generation) {
+        const autoKey = autoReadKeyRef.current;
+        if (autoKey) {
+          // Erro antes do início da fala descarta o turno pendente; erro após o
+          // início devolve a fase a IDLE. Em ambos, nada fica preso fora de IDLE.
+          failVoiceAutoRead(autoKey);
+          finishVoiceAutoSpeech();
+        }
         activePlaybackRef.current = false;
         setError("Não foi possível concluir a leitura em voz alta.");
         setStatus("error");
@@ -78,6 +111,29 @@ export function SpeechControls({ text, voice, speed, language }: { text: string;
     getBrowserTtsHost()?.speechSynthesis?.pause();
     setStatus("paused");
   }, []);
+
+  // Mantém refs sincronizadas sem participar dos deps do efeito de auto-read
+  // (uma mudança de status não pode reiniciar a fala já em andamento).
+  useEffect(() => {
+    playRef.current = play;
+    autoReadKeyRef.current = autoReadKey ?? null;
+  });
+
+  // Pacote 18.4 — AUTO READ: quando a RESPOSTA de um turno de voz termina de
+  // chegar, o TTS começa sozinho (resposta concluída → fala; sem streaming).
+  // O turno é consumido no `onstart` da utterance, garantindo exatamente UMA
+  // leitura por resposta. Mensagens digitadas têm autoReadKey nulo e passam
+  // exatamente por aqui — comportamento manual preservado.
+  useEffect(() => {
+    if (!autoReadKey || !text) return;
+    // Anti-eco: avisa o composer para encerrar qualquer gravação ativa antes
+    // de a voz da Nira ser capturada como nova entrada.
+    window.dispatchEvent(
+      new CustomEvent("hanira:voice-auto-read-start", { detail: { id: autoReadKey } }),
+    );
+    playRef.current(true);
+    // `play` é lido via ref de propósito: os deps são somente o turno/texto.
+  }, [autoReadKey, text]);
 
   useEffect(() => {
     function stopOtherSpeech(event: Event) {

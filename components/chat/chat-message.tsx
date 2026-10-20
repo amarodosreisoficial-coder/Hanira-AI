@@ -10,6 +10,7 @@ import { MessageAttachments } from "@/components/media/message-attachments";
 import { IconButton } from "@/components/ui/icon-button";
 import { SpeechControls } from "@/components/voice/speech-controls";
 import { chatIssueForCode } from "@/lib/chat/chat-errors";
+import { shouldAutoReadVoiceResponse } from "@/lib/voice/voice-auto-flow";
 import type { ChatMessage as ChatMessageData } from "@/types/chat";
 import type { UserSettings } from "@/types/settings";
 
@@ -30,6 +31,20 @@ export function ChatMessage({
   const issue = message.failed
     ? chatIssueForCode(message.errorCode ?? "unknown")
     : null;
+
+  // Pacote 18.4 — AUTO READ: somente a RESPOSTA de um turno de voz (mensagem
+  // originada do microfone) é lida automaticamente, e somente depois de
+  // concluída (não durante o streaming). Mensagens digitadas nunca recebem
+  // autoReadKey — o comportamento manual é preservado.
+  const autoReadKey =
+    message.role === "assistant" &&
+    !message.pending &&
+    !message.failed &&
+    Boolean(message.content) &&
+    settings.voiceEnabled &&
+    shouldAutoReadVoiceResponse(message.id)
+      ? message.id
+      : null;
 
   if (message.role === "user") {
     return (
@@ -142,6 +157,8 @@ export function ChatMessage({
                 // Pacote 18.4: idioma da conversa (override) senão o primário
                 // do perfil — nunca fixo em pt-BR quando o perfil muda de idioma.
                 language={conversationLanguage ?? settings.language}
+                // Pacote 18.4: responde a um turno de voz → leitura automática.
+                autoReadKey={autoReadKey}
               />
             )}
           </div>

@@ -28,6 +28,15 @@ import {
 } from "lucide-react";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
+import {
+  beginVoiceTurn,
+  cancelVoiceTurn,
+  getVoiceTurnAssistantId,
+  isVoiceAutoReadEnabled,
+  resolveVoiceTranscript,
+  setVoiceFlowPhase,
+  setVoiceFlowPhaseToIdleIf,
+} from "@/lib/voice/voice-auto-flow";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
   CHAT_MESSAGE_LENGTH_ERROR,
@@ -105,6 +114,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [imageReferenceInputKey, setImageReferenceInputKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const imageGenerationAbortRef = useRef<AbortController | null>(null);
+  // Pacote 18.4 — AUTO SEND: 1 gravação = 1 envio. A guarda fica em ref para
+  // valer também com callbacks duplicados/Strict Mode/duplo toque.
+  const voiceSendGuardRef = useRef(false);
+  const recorderOpenRef = useRef(false);
   const handleImageGenerationRef = useRef<ImageGenerationHandler>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +133,30 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       .then((data) => { if (data) setSttAvailable(data.available === true); })
       .catch(() => undefined);
     return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    recorderOpenRef.current = recorderOpen;
+  }, [recorderOpen]);
+  // Pacote 18.4 — anti-eco: se o gravador estiver ativo por condição
+  // inesperada quando o AUTO READ começar, encerra a gravação para que a voz
+  // da Nira não seja capturada como nova entrada. O unmount do VoiceRecorder
+  // aborta a requisição e para as tracks do microfone.
+  useEffect(() => {
+    function onVoiceAutoReadStart() {
+      if (!recorderOpenRef.current) return;
+      setRecorderOpen(false);
+    }
+    window.addEventListener("hanira:voice-auto-read-start", onVoiceAutoReadStart);
+    return () => {
+      window.removeEventListener("hanira:voice-auto-read-start", onVoiceAutoReadStart);
+    };
+  }, []);
+  // Desmontagem do composer (troca de rota/conta): nunca deixar o fluxo de voz
+  // preso fora de IDLE (recorder/TTS/listeners são limpos pelos filhos).
+  useEffect(() => {
+    return () => {
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing", "sending", "thinking");
+    };
   }, []);
   useEffect(() => {
     if (!plusMenuOpen) return;
@@ -389,25 +426,89 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     setPendingMedia((value) => [...value, ...accepted]);
   }
 
+  function openRecorder() {
+    setVoiceFlowPhase("listening");
+    setRecorderOpen(true);
+  }
+
+  // Pacote 18.4 — VOICE BETA AUTO SEND: a transcrição válida NÃO fica esperando
+  // confirmação no composer; ela entra no MESMO pipeline de envio de mensagens
+  // (mensagem aparece no histórico → Nira responde → auto-read no fim da
+  // resposta). Decisão centralizada em `resolveVoiceTranscript` (proteções de
+  // transcript vazio/limite/Nira ocupada) + guarda anti-duplicidade local.
+  function handleVoiceTranscript(text: string) {
+    // 1 gravação = 1 envio: eventos duplicados (Strict Mode, duplo toque,
+    // MediaRecorder repetido) são ignorados enquanto um auto-send roda.
+    if (voiceSendGuardRef.current) return;
+    const decision = resolveVoiceTranscript({
+      transcript: text,
+      draft: useChatStore.getState().draft,
+      isThinking: useChatStore.getState().isThinking,
+    });
+    setRecorderOpen(false);
+    if (decision.action === "reject") {
+      // Transcript vazio/inválido ou acima do limite: NÃO envia, NÃO inventa
+      // texto — só mostra erro amigável e libera nova tentativa.
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
+      setError(decision.message);
+      return;
+    }
+    if (decision.action === "draft") {
+      // Caminhos sem auto-send (Nira pensando / flag desligada): preserva o
+      // texto no composer, concatenado ao draft existente.
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
+      store.setDraft(decision.content);
+      if (decision.notice) setError(decision.notice);
+      return;
+    }
+    setError("");
+    setIssue(null);
+    voiceSendGuardRef.current = true;
+    setVoiceFlowPhase("sending");
+    void submit(decision.content, false, undefined, { voiceOrigin: true }).finally(
+      () => {
+        voiceSendGuardRef.current = false;
+      },
+    );
+  }
+
   async function submit(
     contentOverride?: string,
     retry = false,
     attachmentOverride?: Attachment[],
+    options?: { voiceOrigin?: boolean },
   ) {
+    // Pacote 18.4: true quando este envio veio do microfone (auto-send).
+    const voiceOrigin = options?.voiceOrigin === true;
     const rawContent = contentOverride ?? store.draft;
     if (isChatMessageTooLong(rawContent)) {
       showMessageLengthError();
+      if (voiceOrigin) setVoiceFlowPhaseToIdleIf("sending", "thinking");
       return;
     }
     const content = rawContent.trim();
     const hasMedia = pendingMedia.length > 0 || Boolean(attachmentOverride?.length);
-    if ((!content && !hasMedia) || store.isThinking || uploading) return;
+    if ((!content && !hasMedia) || store.isThinking || uploading) {
+      if (voiceOrigin) {
+        // Corrida rara (Nira ocupada entre a decisão e o envio): preserva a
+        // transcrição no composer em vez de descartar, e volta a IDLE.
+        if (content) store.setDraft(content);
+        setVoiceFlowPhaseToIdleIf("sending", "thinking");
+        setError("A Nira ainda está respondendo. A transcrição ficou no campo de texto.");
+      }
+      return;
+    }
 
     // Pacote 17.4: roteamento determinístico de intent de imagem.
     // Se o modo imagem estiver ativo ou o texto for um pedido claro de imagem,
     // roteamos para o gerador de imagens em vez do chat de texto.
     const intent = resolveComposerIntent({ mode: composerMode, draft: content });
     if (intent === "image" && !retry) {
+      if (voiceOrigin) {
+        // Geração de imagem não produz texto de resposta para ler.
+        cancelVoiceTurn();
+        setVoiceFlowPhaseToIdleIf("sending", "thinking");
+      }
       void handleImageGeneration({
         prompt: content,
         aspectRatio: imageAspectRatio,
@@ -421,7 +522,13 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     }
 
     const conversation = await ensureConversation();
-    if (!conversation) return;
+    if (!conversation) {
+      if (voiceOrigin) {
+        setVoiceFlowPhaseToIdleIf("sending");
+        setError("Não foi possível iniciar uma conversa. Tente novamente.");
+      }
+      return;
+    }
 
     // Pacote 18.4: troca temporária de idioma da conversa detectada no texto
     // ("Nira, agora fale comigo em inglês."). Persiste só no store da conversa
@@ -475,6 +582,11 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         attachments,
       };
       assistantId = crypto.randomUUID();
+      // Pacote 18.4: resposta de turno de voz será lida automaticamente
+      // (auto-read) quando concluir. Mensagens digitadas não criam turno.
+      if (voiceOrigin && settings.voiceEnabled && isVoiceAutoReadEnabled()) {
+        beginVoiceTurn(assistantId);
+      }
       if (!retry) store.addMessage(userMessage);
       store.addMessage({
         id: assistantId,
@@ -487,6 +599,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       store.setDraft("");
       if (ref.current) ref.current.style.height = "0px";
       store.setThinking(true);
+      if (voiceOrigin) setVoiceFlowPhase("thinking");
       setUploading(false);
       await streamChatMessage(
         {
@@ -562,6 +675,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
+        // Interrompido pelo usuário: descarta o turno de voz (não lê resposta
+        // parcial) — o finally devolve a fase a IDLE.
+        if (voiceOrigin) cancelVoiceTurn();
         if (assistantId) {
           if (fullText) store.updateMessage(assistantId, fullText, false);
           else store.removeMessage(assistantId);
@@ -571,6 +687,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       const nextIssue = toChatIssue(caught, {
         online: navigator.onLine,
       });
+      // Falha terminal do envio de voz: descarta o turno (não há resposta
+      // concluída para ler) e o finally devolve a fase a IDLE.
+      if (voiceOrigin) cancelVoiceTurn();
       setIssue(nextIssue);
       setError("");
       store.setDraft(content);
@@ -580,6 +699,17 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       abortRef.current = null;
       setUploading(false);
       store.setThinking(false);
+      // Pacote 18.4 — fim do turno de voz:
+      // - sucesso com turno ativo → mantém THINKING até o auto-read começar;
+      // - erro/aborto/resposta vazia/sem turno (leitura desligada) → IDLE.
+      if (voiceOrigin) {
+        const turn = getVoiceTurnAssistantId();
+        const turnIsOurs = turn === assistantId;
+        if (turnIsOurs && (!fullText || terminalError)) cancelVoiceTurn();
+        if (!turnIsOurs || !fullText || terminalError) {
+          setVoiceFlowPhaseToIdleIf("sending", "thinking");
+        }
+      }
     }
   }
 
@@ -713,7 +843,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       return;
     }
     if (kind === "camera") cameraInputRef.current?.click();
-    else setRecorderOpen(true);
+    else openRecorder();
   }
 
   async function removePending(item: PendingMedia) {
@@ -774,16 +904,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   : null
               }
               onCancel={() => setRecorderOpen(false)}
-              onComplete={({ text }) => {
-                const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();
-                if (isChatMessageTooLong(nextDraft)) {
-                  showMessageLengthError();
-                } else {
-                  clearMessageLengthError();
-                  store.setDraft(nextDraft);
-                }
-                setRecorderOpen(false);
-              }}
+              onComplete={({ text }) => handleVoiceTranscript(text)}
             />
           ) : (
             <>
@@ -1029,7 +1150,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           setPrivacyKind(null);
           if (kind) void dismissPrivacy(dismiss, kind);
           if (kind === "camera") cameraInputRef.current?.click();
-          if (kind === "microphone") setRecorderOpen(true);
+          if (kind === "microphone") openRecorder();
         }}
       />
     </>

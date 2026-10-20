@@ -12,6 +12,10 @@ import {
 } from "lucide-react";
 import { useMediaRecorder } from "@/hooks/use-media-recorder";
 import { STT_MAX_AUDIO_BYTES, STT_MAX_RECORDING_SECONDS } from "@/lib/validation/stt-audio";
+import {
+  setVoiceFlowPhase,
+  setVoiceFlowPhaseToIdleIf,
+} from "@/lib/voice/voice-auto-flow";
 import { transcribeAudio } from "@/services/media-service";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +67,7 @@ export function VoiceRecorder({
   useEffect(() => {
     if (inline && !autoStartedRef.current && recorder.status === "idle") {
       autoStartedRef.current = true;
+      setVoiceFlowPhase("listening");
       void recorder.start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,31 +81,44 @@ export function VoiceRecorder({
     if (!file) {
       recorder.setError("A gravação ficou vazia.");
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
       finishingRef.current = false;
       return;
     }
     if (file.size > STT_MAX_AUDIO_BYTES) {
       recorder.setError("O áudio excede o limite de 4 MiB. Grave um trecho menor.");
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
       finishingRef.current = false;
       return;
     }
     recorder.setStatus("transcribing");
+    setVoiceFlowPhase("transcribing");
     const controller = new AbortController();
     requestRef.current = controller;
     try {
       const text = await transcribeAudio(file, controller.signal, { language });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        // Cancelamento do usuário/desmontagem: nada é enviado ao chat.
+        setVoiceFlowPhaseToIdleIf("transcribing");
+        return;
+      }
       recorder.setStatus("complete");
       onComplete({ text });
     } catch (caught) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        setVoiceFlowPhaseToIdleIf("transcribing");
+        return;
+      }
+      // Erro do STT: NÃO chama onComplete — o auto-send nunca acontece e o
+      // usuário pode tentar de novo pelo próprio gravador.
       recorder.setError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível transcrever o áudio.",
       );
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("transcribing");
     } finally {
       requestRef.current = null;
       finishingRef.current = false;
@@ -159,7 +177,10 @@ export function VoiceRecorder({
             {idleOrError && (
               <button
                 type="button"
-                onClick={() => void recorder.start()}
+                onClick={() => {
+                  setVoiceFlowPhase("listening");
+                  void recorder.start();
+                }}
                 aria-label="Iniciar gravação"
                 className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -202,6 +223,7 @@ export function VoiceRecorder({
                 cancelledRef.current = true;
                 requestRef.current?.abort();
                 recorder.cancel();
+                setVoiceFlowPhaseToIdleIf("listening", "transcribing");
                 onCancel();
               }}
               aria-label="Cancelar gravação"
@@ -262,7 +284,10 @@ export function VoiceRecorder({
         <div className="flex items-center gap-2">
           {recorder.status === "idle" || recorder.status === "error" ? (
             <button
-              onClick={() => void recorder.start()}
+              onClick={() => {
+                setVoiceFlowPhase("listening");
+                void recorder.start();
+              }}
               className="grid size-11 place-items-center rounded-xl bg-white text-black"
               aria-label="Iniciar gravação"
             >
@@ -303,6 +328,7 @@ export function VoiceRecorder({
               cancelledRef.current = true;
               requestRef.current?.abort();
               recorder.cancel();
+              setVoiceFlowPhaseToIdleIf("listening", "transcribing");
               onCancel();
             }}
             className="grid size-11 place-items-center rounded-xl text-zinc-600 hover:text-rose-300"
