@@ -113,7 +113,10 @@ export function Sidebar({ userName }: { userName: string }) {
               title="Expandir barra lateral"
               className="group hidden size-11 place-items-center rounded-full transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid"
             >
-              <span className="transition group-hover:opacity-0 group-focus-visible:opacity-0">
+              <span
+                className="transition group-hover:opacity-100 group-focus-visible:opacity-100 hover:bg-white/[0.06]"
+                onMouseEnter={() => store.setSidebarCollapsed(false)}
+              >
                 <HaniraMark compact />
               </span>
               <span className="absolute inset-0 hidden place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid">
@@ -125,18 +128,18 @@ export function Sidebar({ userName }: { userName: string }) {
               <Link
                 href="/"
                 aria-label="Página inicial da Hanira"
-                className="min-w-0 flex-1"
+                className="group relative min-w-0 flex-1"
+                onClick={() => store.setSidebarCollapsed(false)}
               >
+                <span className="sr-only">Recolher barra lateral</span>
                 <HaniraMark />
+                <span
+                  className="absolute inset-0 place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid"
+                  aria-hidden="true"
+                >
+                  <PanelLeftClose className="size-4" />
+                </span>
               </Link>
-              <IconButton
-                label="Recolher barra lateral"
-                tooltip="Recolher barra lateral"
-                onClick={() => store.setSidebarCollapsed(true)}
-                className="hidden lg:inline-grid"
-              >
-                <PanelLeftClose className="size-4" />
-              </IconButton>
             </>
           )}
           <IconButton
