@@ -12,6 +12,9 @@ export const chatRequestSchema = z.object({
   // Pacote 18.4: override temporário de idioma para a conversa atual.
   // Ausente = segue o idioma primário do perfil.
   conversationLanguage: z.enum(["pt-BR", "en", "es"]).optional(),
+  // Pacote 18.4.2: true quando o envio originou do microfone (auto-send/voz).
+  // Chega ao contexto real da Nira para diferenciar turno de voz de texto.
+  voiceOrigin: z.boolean().optional(),
   attachmentIds: z.array(z.uuid()).max(4).optional(),
   demoAttachments: z
     .array(

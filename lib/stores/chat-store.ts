@@ -102,15 +102,15 @@ export const useChatStore = create<ChatState>()(
               status: "ready",
             });
           } else {
+            // Pacote 18.4.2: /chat SEMPRE abre com activeId = null.
+            // O ChatInterface cria uma nova conversa ao montar quando nao houver activeId.
+            // Nao preseleciona a conversa mais recente do servidor.
             set({
               mode: "supabase",
               conversations: result.conversations,
-              activeId: result.conversations[0]?.id ?? null,
+              activeId: null,
               status: "ready",
             });
-            if (result.conversations[0]) {
-              await get().selectConversation(result.conversations[0].id);
-            }
           }
         } catch (error) {
           set({
