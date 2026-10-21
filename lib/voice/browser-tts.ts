@@ -115,3 +115,21 @@ export function getBrowserTtsHost(): BrowserTtsHost | null {
   if (typeof window === "undefined") return null;
   return { speechSynthesis: window.speechSynthesis, SpeechSynthesisUtterance: window.SpeechSynthesisUtterance };
 }
+
+/**
+ * Pacote 18.4 — BARGE-IN: interrompe qualquer fala da Nira (TTS local) para
+ * liberar o microfone e capturar a próxima entrada do usuário.
+ *
+ * Cancela a sintese em andamento e avisa os SpeechControls para descartar o
+ * turno de auto-read ativo, através do evento `hanira:stop-speech` (contrato
+ * já usado por barge-in de STOP e por troca de mensagem). É idempotente e
+ * seguro chamar sem áudio em reprodução.
+ */
+export function interruptSpeech(
+  host: BrowserTtsHost | null | undefined = getBrowserTtsHost(),
+): void {
+  host?.speechSynthesis?.cancel();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("hanira:stop-speech"));
+  }
+}

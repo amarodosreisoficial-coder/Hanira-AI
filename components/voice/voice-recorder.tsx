@@ -16,6 +16,7 @@ import {
   setVoiceFlowPhase,
   setVoiceFlowPhaseToIdleIf,
 } from "@/lib/voice/voice-auto-flow";
+import { interruptSpeech } from "@/lib/voice/browser-tts";
 import { transcribeAudio } from "@/services/media-service";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,8 @@ export function VoiceRecorder({
     if (inline && !autoStartedRef.current && recorder.status === "idle") {
       autoStartedRef.current = true;
       setVoiceFlowPhase("listening");
+      // Pacote 18.4 — BARGE-IN: início da gravação interrompe fala da Nira.
+      interruptSpeech();
       void recorder.start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -285,6 +288,8 @@ export function VoiceRecorder({
           {recorder.status === "idle" || recorder.status === "error" ? (
             <button
               onClick={() => {
+                // Pacote 18.4 — BARGE-IN: iniciar gravação interrompe fala da Nira.
+                interruptSpeech();
                 setVoiceFlowPhase("listening");
                 void recorder.start();
               }}

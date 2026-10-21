@@ -37,6 +37,7 @@ import {
   setVoiceFlowPhase,
   setVoiceFlowPhaseToIdleIf,
 } from "@/lib/voice/voice-auto-flow";
+import { interruptSpeech } from "@/lib/voice/browser-tts";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
   CHAT_MESSAGE_LENGTH_ERROR,
@@ -427,6 +428,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   }
 
   function openRecorder() {
+    // Pacote 18.4 — BARGE-IN: ao abrir o gravador interrompo qualquer fala da
+    // Nira em andamento para que o microfone capture a nova entrada em voz.
+    interruptSpeech();
     setVoiceFlowPhase("listening");
     setRecorderOpen(true);
   }

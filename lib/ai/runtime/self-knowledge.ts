@@ -1,4 +1,4 @@
-import { buildCapabilitySummary, getCapability } from "@/lib/ai/public-capabilities";
+﻿import { buildCapabilitySummary, getCapability } from "@/lib/ai/public-capabilities";
 import type { NiraProductCapability } from "@/types/capabilities";
 import { buildUsagePolicySummary } from "./usage-policy";
 import { createDeterministicTextResponse } from "./deterministic-response";
@@ -29,7 +29,7 @@ function detectIntent(value: string): SelfKnowledgeIntent | null {
   if (/^(voce (?:trabalha|consegue trabalhar) com documentos|voce (?:le|entende) (?:pdfs?|documentos)|can you (?:read|work with) documents?)\??$/.test(value)) return "documents";
   if (/^(voce tem memoria|voce lembra das conversas|do you (?:have memory|remember conversations))\??$/.test(value)) return "memory";
   if (/^(voce (?:entende|analisa|enxerga) imagens?|do you (?:understand|analyze|see) images?)\??$/.test(value)) return "vision";
-  if (/^(voce tem voz|voce fala|can you speak|do you have a voice)\??$/.test(value)) return "voice";
+  if (/^(voce (?:pode )?(?:tem voz|fala|conversa por voz|para a fala|interrompe a fala|interromper a fala)|can you speak|do you have a voice|can you interrupt your speech)\??$/.test(value)) return "voice";
   if (/^(voce (?:entende|transcreve|pode transcrever) audio|voce entende audio|can you transcribe audio)\??$/.test(value)) return "transcription";
   if (/^(voce (?:e|eh) ilimitad[ao]|(?:existe|ha|tem) limite de uso|is (?:usage|it) unlimited|are you unlimited)\??$/.test(value)) return "usage_limits";
   if (/^(voce tem creditos|quantos creditos (?:eu tenho|tenho)|qual (?:e|eh) (?:o )?meu saldo|do i have credits|how many credits do i have)\??$/.test(value)) return "credits";
@@ -65,7 +65,7 @@ export function resolveSelfKnowledge(options: {
     documents: () => answerCapability(cap("documents"), "Posso trabalhar com documentos compatíveis.", "O trabalho com documentos não está disponível agora."),
     memory: () => answerCapability(cap("memory"), "Tenho memória contextual controlada pela Hanira.", "A memória não está disponível nesta experiência."),
     vision: () => answerCapability(cap("vision"), "Posso analisar imagens.", "A análise de imagens não está disponível agora."),
-    voice: () => answerCapability(cap("speech"), "Posso ler minhas respostas em voz alta em navegadores compatíveis que tenham uma voz pt-BR disponível.", "A leitura em voz alta não está disponível agora."),
+    voice: () => answerCapability(cap("speech"), "Posso conversar por voz: gravo do microfone, transcrevo, envio e leio minhas respostas em voz alto automaticamente, em voz natural, em pt-BR, inglês ou espanhol. Você pode interromper a fala a qualquer momento com STOP.", "A conversa por voz não está disponível agora."),
     transcription: () => answerCapability(cap("transcription"), "Posso transcrever uma gravação curta do microfone em texto quando esse recurso está disponível. Você pode revisar e editar o texto antes de enviar.", "A transcrição por microfone não está disponível agora."),
     usage_limits: () => buildUsagePolicySummary("pt-BR"),
     credits: () => `A Hanira ainda não utiliza uma carteira de créditos exibida como saldo. ${buildUsagePolicySummary("pt-BR")}`,
@@ -80,7 +80,7 @@ export function resolveSelfKnowledge(options: {
     documents: () => answerCapability(cap("documents"), "I can work with supported documents.", "Document support is not available right now."),
     memory: () => answerCapability(cap("memory"), "I have contextual memory controlled by Hanira.", "Memory is not available in this experience."),
     vision: () => answerCapability(cap("vision"), "I can analyze images.", "Image analysis is not available right now."),
-    voice: () => answerCapability(cap("speech"), "I can read my responses aloud in compatible browsers with an available pt-BR voice.", "Read-aloud is not available right now."),
+    voice: () => answerCapability(cap("speech"), "I can converse by voice: I record from the microphone, transcribe, send the text and read my replies aloud automatically in a natural voice, in pt-BR, English or Spanish. You can interrupt speech at any time with STOP.", "Voice conversation is not available right now."),
     transcription: () => answerCapability(cap("transcription"), "I can transcribe a short microphone recording when this feature is available. You can review and edit the text before sending.", "Microphone transcription is not available right now."),
     usage_limits: () => buildUsagePolicySummary("en"),
     credits: () => `Hanira does not currently use a displayed credit wallet or balance. ${buildUsagePolicySummary("en")}`,

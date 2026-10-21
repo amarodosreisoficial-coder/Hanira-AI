@@ -170,3 +170,32 @@ export async function logoutAction() {
   }
   redirect("/login");
 }
+
+// Pacote 18.4 — Login com Google (OAuth). O callback genérico
+// `app/auth/callback/route.ts` troca o authorization code por sessão.
+export async function signInWithGoogleAction(
+  _state: AuthActionState,
+  _formData: FormData,
+): Promise<AuthActionState> {
+  if (isDemoMode()) return { status: "success", redirectTo: "/chat" };
+
+  const env = getServerEnv();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return authError();
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/chat`,
+      },
+    });
+    if (error) return authError(error.message);
+    // signInWithOAuth devolve a URL de autorização do provedor; o cliente faz
+    // full-page redirect para esta URL e volta ao callback após o consentimento.
+    if (data?.url) return { status: "success", redirectTo: data.url };
+    return authError("Não foi possível iniciar o login com Google.");
+  } catch (error) {
+    return unknownAuthError(error);
+  }
+}
