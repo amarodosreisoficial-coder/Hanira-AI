@@ -569,8 +569,10 @@ select:focus-visible {
    live AnalyserNode visualization. Responds to recording/paused state. */
 .waveform {
   display: inline-flex;
+  flex: 1;
   height: 1.5rem;
   align-items: center;
+  justify-content: space-between;
   gap: 0.14rem;
 }
 
