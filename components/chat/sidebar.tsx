@@ -132,7 +132,7 @@ export function Sidebar({ userName }: { userName: string }) {
                 onClick={() => store.setSidebarCollapsed(false)}
               >
                 <span className="sr-only">Recolher barra lateral</span>
-                <HaniraMark />
+                
                 <span
                   className="absolute inset-0 place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid"
                   aria-hidden="true"
