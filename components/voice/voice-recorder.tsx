@@ -139,11 +139,13 @@ export function VoiceRecorder({
       source.connect(analyser);
       sourceRef.current = source;
       analyserRef.current = analyser;
-      setAnalyserActive(true);
+      // Defer setState para evitar cascading renders dentro do effect.
+      requestAnimationFrame(() => setAnalyserActive(true));
     } catch {
       // AnalyserNode indisponível: mantém a animação CSS simulada.
     }
-  }, [recorder.status, analyserActive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.status]);
 
   // Loop de leitura da amplitude real (AnalyserNode) com fallback CSS.
   useEffect(() => {
@@ -168,7 +170,7 @@ export function VoiceRecorder({
     return () => {
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [analyserRef.current]);
+  }, []);
 
   async function finishAndTranscribe() {
     if (finishingRef.current) return;

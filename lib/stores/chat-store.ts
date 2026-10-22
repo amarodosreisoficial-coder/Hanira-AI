@@ -82,7 +82,7 @@ export const useChatStore = create<ChatState>()(
       error: null,
       isThinking: false,
       sidebarOpen: false,
-      sidebarCollapsed: false,
+      sidebarCollapsed: true,
       draft: "",
       runtimeState: "unknown",
       conversationLanguages: {},
@@ -343,7 +343,6 @@ export const useChatStore = create<ChatState>()(
               }))
             : [],
         activeId: state.mode === "demo" ? state.activeId : null,
-        sidebarCollapsed: state.sidebarCollapsed,
       }),
     },
   ),
