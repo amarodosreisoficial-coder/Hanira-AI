@@ -161,6 +161,8 @@ export function useMediaRecorder() {
     }
   }, []);
 
+  const getStream = useCallback(() => streamRef.current, []);
+
   return {
     status,
     setStatus,
@@ -172,5 +174,6 @@ export function useMediaRecorder() {
     cancel,
     pause,
     resume,
+    getStream,
   };
 }
