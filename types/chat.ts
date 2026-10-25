@@ -29,6 +29,8 @@ export interface ChatMessage {
   attachments?: Attachment[];
   /** Client-only image state. The chat store removes it before persistence. */
   imageGeneration?: ImageGenerationState;
+  /** Pacote 19.2: fontes de pesquisa web associadas a esta resposta da Nira. */
+  webSearchSources?: Array<{ title: string; url: string; domain: string }>;
 }
 
 export interface Conversation {

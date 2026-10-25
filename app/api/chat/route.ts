@@ -67,6 +67,7 @@ import { saveExplicitMemory } from "@/services/memory";
 import { routeTool } from "@/lib/tools/router";
 import { formatWeatherCurrent } from "@/lib/tools/weather-current";
 import { formatTimeCurrent } from "@/lib/tools/time-current";
+import { integrateWebSearch, type WebSearchIntegrationResult } from "@/lib/web-search/integrate";
 
 const SYSTEM_PROMPT =
   "Voce e Nira, a camada de inteligencia da Hanira. Converse em portugues do Brasil por padrao. Seja clara, acolhedora e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
@@ -891,6 +892,41 @@ async function createChatStream(
     return currentWeatherFallback;
   }
 
+  // === PACOTE 19.2 — Pesquisa Web integrada ao chat ===
+  // Decide se deve buscar e executa a busca (somente quando necessário).
+  // O resultado é injetado no system prompt como contexto externo não confiável.
+  let webSearchResult: WebSearchIntegrationResult | undefined;
+  let webSearchSources: Array<{ title: string; url: string; domain: string }> | undefined;
+
+  try {
+    webSearchResult = await integrateWebSearch(payload.message, false);
+    if (webSearchResult.shouldSearch && webSearchResult.context) {
+      webSearchSources = webSearchResult.sources;
+    }
+  } catch {
+    // Falha silenciosa: o chat continua sem pesquisa web
+    webSearchResult = undefined;
+  }
+
+  // Injeta contexto de pesquisa web no system prompt quando disponível
+  let systemPromptForRouting = systemPrompt;
+  if (webSearchResult?.shouldSearch && webSearchResult.context) {
+    systemPromptForRouting = `${systemPrompt}
+
+## Informações de pesquisa web disponíveis (contexto externo, não confiável)
+Use as fontes abaixo para fundamentar sua resposta quando relevante para a pergunta do usuário.
+Distinga claramente: (1) informações fundamentadas nas fontes da pesquisa,
+(2) conhecimento geral e (3) informações não verificadas.
+
+${webSearchResult.context}
+
+Regras:
+- Nunca invente fontes, URLs, citações ou datas.
+- Não afirme que realizou pesquisa quando a busca falhou ou não retornou resultados.
+- Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
+`;
+  }
+
   // Pacote 16.6: routing trace — inicio da avaliacao de roteamento Nira.
   logRoutingTrace({
     requestId,
@@ -900,7 +936,7 @@ async function createChatStream(
   });
 
   const routed = await routeChatCapability({
-    systemPrompt,
+    systemPrompt: systemPromptForRouting,
     context: chatContext.conversationMessages,
     userMessage: payload.message,
     attachments,
@@ -1094,6 +1130,7 @@ async function createChatStream(
     requestId,
     mode: routed.mode,
     profile: routed.niraProfileId,
+    webSearchSources,
     onComplete: async ({ assistantContent }) => {
       releaseLock();
       // Pacote 16.5 (Nira Capacity Engine): sucesso real limpa cooldown do

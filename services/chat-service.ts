@@ -65,6 +65,7 @@ export function deleteConversationRequest(id: string) {
 export interface StreamStartMeta {
   mode?: string;
   profile?: string;
+  webSearchSources?: Array<{ title: string; url: string; domain: string }>;
 }
 
 export interface StreamHandlers {
@@ -126,11 +127,13 @@ export async function streamChatMessage(
         code?: ChatErrorCode;
         mode?: string;
         profile?: string;
+        webSearchSources?: Array<{ title: string; url: string; domain: string }>;
       };
       if (event.type === "start" && event.conversationId) {
         handlers.onStart?.(event.conversationId, {
           mode: event.mode,
           profile: event.profile,
+          webSearchSources: event.webSearchSources,
         });
       } else if (event.type === "delta" && event.delta) {
         handlers.onDelta(event.delta);

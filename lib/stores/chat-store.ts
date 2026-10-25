@@ -48,7 +48,12 @@ interface ChatState {
   archiveConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
-  updateMessage: (id: string, content: string, pending?: boolean) => void;
+  updateMessage: (
+    id: string,
+    content: string,
+    pending?: boolean,
+    webSearchSources?: Array<{ title: string; url: string; domain: string }>,
+  ) => void;
   updateImageGeneration: (
     id: string,
     imageGeneration: ChatMessage["imageGeneration"],
@@ -227,14 +232,22 @@ export const useChatStore = create<ChatState>()(
             };
           }),
         })),
-      updateMessage: (id, content, pending = true) =>
+      updateMessage: (id, content, pending = true, webSearchSources) =>
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
             messages: conversation.messages
                   .map((message) =>
               message.id === id
-                ? { ...message, content, pending, failed: false }
+                ? {
+                      ...message,
+                      content,
+                      pending,
+                      failed: false,
+                      ...(webSearchSources !== undefined
+                        ? { webSearchSources }
+                        : {}),
+                    }
                 : message,
             ),
           })),

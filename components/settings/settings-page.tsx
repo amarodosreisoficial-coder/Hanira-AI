@@ -317,6 +317,119 @@ export function SettingsPage() {
           </SettingRow>
         </section>
 
+        {/* Pacote 18.5 - Localização e Idioma */}
+        <section className="mt-8 pt-8 border-t border-white/[0.06]">
+          <h2 className="text-sm font-medium">Localização</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <SettingRow
+              title="País"
+              description="Código ISO de 2 letras (ex.: BR, US, ES). País não define idioma."
+            >
+              <input
+                type="text"
+                value={settings.country || ""}
+                onChange={(e) => setSettings((s) => ({ ...s, country: e.target.value.trim() || null }))}
+                maxLength={2}
+                className="w-full rounded border border-white/[0.1] px-3 py-2"
+                placeholder="BR"
+                disabled={status === "saving"}
+              />
+            </SettingRow>
+
+            <SettingRow
+              title="Região"
+              description="Estado ou região (opcional, ex.: Rondônia)"
+            >
+              <input
+                type="text"
+                value={settings.region || ""}
+                onChange={(e) =>
+                  setSettings((s) => ({
+                    ...s,
+                    region: e.target.value.trim().length > 0 ? e.target.value.trim() : null,
+                  }))
+                }
+                maxLength={80}
+                className="w-full rounded border border-white/[0.1] px-3 py-2"
+                placeholder="Rondônia"
+                disabled={status === "saving"}
+              />
+            </SettingRow>
+          </div>
+        </section>
+
+        <section className="mt-8 pt-8 border-t border-white/[0.06]">
+          <h2 className="text-sm font-medium">Idioma</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <SettingRow
+              title="Idioma principal"
+              description="Ajuda a Nira a escolher como responder e transcrever sua voz."
+            >
+              <select
+                value={settings.language || "pt-BR"}
+                onChange={(e) =>
+                  setSettings((s) => ({
+                    ...s,
+                    language: e.target.value as "pt-BR" | "en" | "es",
+                  }))
+                }
+                className="w-full rounded border border-white/[0.1] px-3 py-2"
+                disabled={status === "saving"
+              }
+              >
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </SettingRow>
+
+            <SettingRow
+              title="Idiomas adicionais"
+              description="Seleione zero ou mais idiomas. Não pode duplicar o idioma principal."
+            >
+              <select
+                multiple
+                value={settings.additionalLanguages || []}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions).map(
+                    (opt) => opt.value as "pt-BR" | "en" | "es"
+                  );
+                  // Filter out the primary language
+                  const primary = settings.language || "pt-BR";
+                  const filtered = selected.filter((l) => l !== primary);
+                  setSettings((s) => ({
+                    ...s,
+                    additionalLanguages: filtered.length > 0 ? filtered : [],
+                  }));
+                }}
+                className="w-full rounded border border-white/[0.1] px-3 py-2"
+                disabled={status === "saving"
+              }
+              >
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </SettingRow>
+          </div>
+        </section>
+
+        <section className="mt-8 pt-8 border-t border-white/[0.06]">
+          <h2 className="text-sm font-medium">Detecção automática</h2>
+          <div className="mt-4">
+            <Toggle
+              checked={settings.autoDetectLanguage}
+              onChange={(checked) =>
+                setSettings((s) => ({ ...s, autoDetectLanguage: checked }))
+              }
+              label="Detectar idioma automaticamente"
+            />
+            <p className="mt-2 text-xs text-zinc-500">
+              Quando ativado, a Nira tentará detectar o idioma da conversa automaticamente.
+            </p>
+          </div>
+        </section>
+
         <UsageDashboard />
 
         <div className="mt-5 flex flex-wrap items-center gap-3">

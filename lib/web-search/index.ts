@@ -15,8 +15,7 @@ export type { WebSearchProvider, WebSearchProviderResult } from "./provider";
 export { fallbackProvider } from "./provider";
 
 /* Tavily Provider (Pacote 19.1) */
-export { TavilySearchProvider, tavilyProvider } from "./providers/tavily";
-export type { TavilySearchPayload, TavilySearchResponse, TavilyResult } from "./providers/tavily";
+export { TavilySearchProvider } from "./providers/tavily";
 
 export type { sanitizeWebUrl } from "./normalize";
 export type { extractDomain } from "./normalize";

@@ -551,6 +551,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     let assistantId = "";
     let fullText = "";
     let terminalError = false;
+    // Pacote 19.2: fontes de pesquisa web capturadas no evento `start` do stream.
+    let assistantWebSearchSources: Array<{ title: string; url: string; domain: string }> | undefined;
     try {
       if (pendingMedia.length) {
         if (store.mode === "supabase") {
@@ -647,13 +649,20 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 niraProfileId: meta?.profile,
               }),
             );
+            // Pacote 19.2: captura fontes de pesquisa web para exibição na mensagem.
+            assistantWebSearchSources = meta?.webSearchSources;
           },
           onDelta: (delta) => {
             fullText += delta;
             store.updateMessage(assistantId, fullText, true);
           },
           onDone: () => {
-            store.updateMessage(assistantId, fullText, false);
+            store.updateMessage(
+              assistantId,
+              fullText,
+              false,
+              assistantWebSearchSources,
+            );
             window.dispatchEvent(
               new CustomEvent("hanira:response-complete", {
                 detail: { text: fullText },

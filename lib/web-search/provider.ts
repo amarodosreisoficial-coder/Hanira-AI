@@ -19,6 +19,7 @@ import type {
 } from "./types";
 
 import type { WebSearchLimits } from "./limits";
+import { TavilySearchProvider } from "./providers/tavily";
 
 /**
  * Resposta segura do provider — nunca lança exceção para o chat.

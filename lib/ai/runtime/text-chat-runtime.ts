@@ -59,6 +59,9 @@ export interface CreateTextChatProviderResponseOptions {
   // Pacote 16.4: identidade Nira segura (profileId) exposta no evento `start`
   // para que a UI derive o badge de runtime de evidencia real, sem segredos.
   profile?: string;
+  // Pacote 19.2: fontes de pesquisa web retornadas ao cliente via evento `start`.
+  // Somente preenchido quando busca web foi executada com sucesso.
+  webSearchSources?: Array<{ title: string; url: string; domain: string }>;
   onComplete?: (result: {
     assistantContent: string;
     finishEvent: Extract<AIStreamEvent, { type: "finish" }>;
@@ -276,6 +279,9 @@ export function createTextChatProviderResponse(
             conversationId: options.conversationId,
             mode: options.mode,
             ...(options.profile ? { profile: options.profile } : {}),
+            ...(options.webSearchSources
+              ? { webSearchSources: options.webSearchSources }
+              : {}),
             requestId: options.requestId,
           }),
         ),

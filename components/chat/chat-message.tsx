@@ -14,6 +14,20 @@ import { shouldAutoReadVoiceResponse } from "@/lib/voice/voice-auto-flow";
 import type { ChatMessage as ChatMessageData } from "@/types/chat";
 import type { UserSettings } from "@/types/settings";
 
+/**
+ * Valida se uma URL usa esquema http/https seguro.
+ * Substitui o sanitizeWebUrl do lib/web-search (exportado apenas como type
+ * no barrel) para evitar dependência de export conflitante.
+ */
+function isSafeWebUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function ChatMessage({
   message,
   previousUser,
@@ -93,7 +107,45 @@ export function ChatMessage({
             generation={message.imageGeneration}
           />
         ) : (
-          message.content && <MessageContent content={message.content} />
+          <>
+            {message.content && <MessageContent content={message.content} />}
+            {message.webSearchSources && message.webSearchSources.length > 0 && (
+              <div className="mt-4 rounded-xl border border-muted/20 bg-muted/5 p-3">
+                <h4 className="text-xs font-semibold text-muted-foreground mb-2">
+                  Fontes consultadas
+                </h4>
+                <ul className="space-y-1.5 text-sm">
+                  {message.webSearchSources.map((source, index) => {
+                    const safeUrl = isSafeWebUrl(source.url) ? source.url : "";
+                    return (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {index + 1}.
+                        </span>
+                        {safeUrl ? (
+                          <a
+                            href={safeUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-xs font-medium text-primary hover:text-primary/80 underline-offset-4 break-all"
+                          >
+                            {source.title}
+                          </a>
+                        ) : (
+                          <span className="text-xs font-medium text-foreground truncate">
+                            {source.title}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground ml-1">
+                          ({source.domain})
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </>
         )}
 
         {message.pending && message.content && (

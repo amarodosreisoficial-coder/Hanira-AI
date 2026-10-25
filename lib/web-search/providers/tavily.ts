@@ -1,7 +1,7 @@
 /**
  * Payload enviado ao Tavily Search API V1
  */
-interface TavilySearchPayload {
+export interface TavilySearchPayload {
   query: string;
   search_depth?: "basic" | "advanced";
   auto_parameters?: boolean;
@@ -14,6 +14,38 @@ interface TavilySearchPayload {
   topic?: "general" | "news" | "finance" | "sports";
   max_results?: number;
 }
+
+/**
+ * Resposta bruta da API Tavily (campos relevantes).
+ */
+export interface TavilyResult {
+  title: string;
+  url: string;
+  content: string;
+  score?: number;
+  published_date?: string | null;
+}
+
+/**
+ * Resposta bruta da API Tavily (estrutura completa).
+ */
+export interface TavilySearchResponse {
+  query: string;
+  results: TavilyResult[];
+  answer?: string;
+  response_time?: number;
+}
+
+import type {
+  WebSearchProvider,
+  WebSearchProviderResult,
+} from "../provider";
+import type { WebSearchLimits } from "../limits";
+import { WEB_SEARCH_LIMITS } from "../limits";
+import type { WebSearchResult } from "../types";
+import { extractDomain, formatResultContext } from "../normalize";
+import { isWithinLimits } from "../limits";
+import { fallbackProvider } from "../provider";
 
 /**
  * Mapeia um resultado bruto do Tavily para o contrato WebSearchResult interno.
@@ -38,6 +70,31 @@ function mapTavilyResultToWebSearchResult(raw: TavilyResult): WebSearchResult {
     snippet,
     publishedAt,
     score,
+  };
+}
+
+/**
+ * Normaliza a resposta bruta da API Tavily para WebSearchResponse.
+ */
+function mapTavilyResponseToWebSearchResponse(data: unknown): {
+  query: string;
+  results: WebSearchResult[];
+  totalResults: number | null;
+} {
+  const raw = data as {
+    query?: string;
+    results?: TavilyResult[];
+    total_results?: number;
+  } | null;
+
+  if (!raw || !Array.isArray(raw.results)) {
+    return { query: "", results: [], totalResults: null };
+  }
+
+  return {
+    query: raw.query ?? "",
+    results: raw.results.map(mapTavilyResultToWebSearchResult),
+    totalResults: raw.total_results ?? null,
   };
 }
 
@@ -102,7 +159,7 @@ export class TavilySearchProvider implements WebSearchProvider {
       return {
         success: false,
         error: {
-          type: "provider_error",
+          type: "unavailable",
           message: "Web search provider not configured (no Tavily API key)",
           safeLog: true,
         },
@@ -133,16 +190,16 @@ export class TavilySearchProvider implements WebSearchProvider {
       const formData = new URLSearchParams();
       formData.append("api_key", this.apiKey);
       formData.append("query", payload.query);
-      formData.append("search_depth", payload.search_depth);
-      formData.append("auto_parameters", String(payload.auto_parameters));
-      formData.append("include_answer", String(payload.include_answer));
-      formData.append("include_raw_content", String(payload.include_raw_content));
+      formData.append("search_depth", payload.search_depth ?? "basic");
+      formData.append("auto_parameters", String(payload.auto_parameters ?? false));
+      formData.append("include_answer", String(payload.include_answer ?? false));
+      formData.append("include_raw_content", String(payload.include_raw_content ?? false));
       formData.append("include_images", String(payload.include_images));
       formData.append("include_image_descriptions", String(payload.include_image_descriptions));
       formData.append("include_usage", String(payload.include_usage));
       formData.append("safe_search", String(payload.safe_search));
-      formData.append("topic", payload.topic);
-      formData.append("max_results", String(payload.max_results));
+      if (payload.topic) formData.append("topic", payload.topic);
+      formData.append("max_results", String(payload.max_results ?? this.maxResults));
 
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -239,6 +296,7 @@ export class TavilySearchProvider implements WebSearchProvider {
 
       return {
         success: true,
+        provider: "tavily",
         response: {
           query: normalized.query,
           results: withinLimits ? resultsWithContext : normalized.results.slice(0, this.maxResults),
@@ -275,3 +333,15 @@ export class TavilySearchProvider implements WebSearchProvider {
     }
   }
 }
+
+/**
+ * Singleton do provedor Tavily, criado com a chave do ambiente.
+ * Retorna o fallback se a chave não estiver disponível.
+ */
+export const tavilyProvider = (() => {
+  const apiKey = typeof process !== "undefined" && process.env.TAVILY_API_KEY;
+  if (!apiKey) {
+    return fallbackProvider;
+  }
+  return new TavilySearchProvider(apiKey);
+})();
