@@ -122,7 +122,7 @@ export class TavilySearchProvider implements WebSearchProvider {
   constructor(apiKey: string, opts: { timeoutMs?: number; maxResults?: number } = {}) {
     this.apiKey = apiKey;
     this.timeoutMs = opts.timeoutMs ?? 10_000; // 10s timeout, coerente com o projeto
-    this.maxResults = opts.maxResults ?? 5; // respecta o limite do pacote 19.0
+    this.maxResults = opts.maxResults ?? 5; // respecta o limite do pacote 19.2
   }
 
   /** Retorna o identificador do provider. */
@@ -179,7 +179,7 @@ export class TavilySearchProvider implements WebSearchProvider {
       include_usage: true, // Para monitoramento de créditos
       safe_search: true,
       topic: "general",
-      max_results: this.maxResults, // 5 (limite do pacote 19.0)
+      max_results: this.maxResults, // 5 (limite do pacote 19.2)
     };
 
     // 3. Executar requisição com timeout via AbortController

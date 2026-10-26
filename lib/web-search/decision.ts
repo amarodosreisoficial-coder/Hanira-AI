@@ -35,7 +35,8 @@ export function decideWebSearch(
   const normalized = userQuery.trim().toLowerCase();
 
   // --- Caso 1: Usuário explicitamente pediu busca ---
-  if (explicitSearch) {
+  const explicitPattern = /^(pesquise|busque|procure|search|find|research)+/i;
+  if (explicitSearch || explicitPattern.test(normalized)) {
     const cleanQuery = normalized.replace(
       /^(pesquise|busque|procure|search|find|research)\s+/i,
       ""
