@@ -926,6 +926,11 @@ Regras:
 - Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
 `;
   }
+// systemPromptForProvider: usado pela geração do modelo — inclui contexto web quando disponível
+  let systemPromptForProvider = systemPrompt;
+  if (webSearchResult?.shouldSearch && webSearchResult.context) {
+    systemPromptForProvider = `${systemPrompt}\n\n## Informações de pesquisa web disponíveis (contexto externo, não confiável)\nUse as fontes abaixo para fundamentar sua resposta quando relevante para a pergunta do usuário.\nDistinga claramente: (1) informações fundamentadas nas fontes da pesquisa,\n(2) conhecimento geral e (3) informações não verificadas.\n\n${webSearchResult.context}\n\nRegras:\n- Nunca invente fontes, URLs, citações ou datas.\n- Não afirme que realizou pesquisa quando a busca falhou ou não retornou resultados.\n- Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.\n`;
+  }
 
   // Pacote 16.6: routing trace — inicio da avaliacao de roteamento Nira.
   logRoutingTrace({
@@ -1006,7 +1011,7 @@ Regras:
   const providerRequest =
     routed.capability === "text"
       ? buildTextChatProviderRequest({
-          systemPrompt,
+          systemPrompt: systemPromptForProvider,
           context: [
             ...chatContext.conversationMessages,
             { role: "user", content: payload.message },
