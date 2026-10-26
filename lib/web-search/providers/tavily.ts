@@ -99,7 +99,7 @@ function mapTavilyResponseToWebSearchResponse(data: unknown): {
 }
 
 /**
- * PACOTE 19.1 — Implementação do provedor Tavily Free Tier.
+ * PACOTE 19.2 — Implementação do provedor Tavily JSON/Bearer.
  *
  * - Endpoint: POST https://api.tavily.com/search
  * - Autenticação via Authorization: Bearer TAVILY_API_KEY (variável de ambiente)

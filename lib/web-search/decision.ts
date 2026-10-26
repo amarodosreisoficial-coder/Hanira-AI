@@ -38,7 +38,7 @@ export function decideWebSearch(
   const explicitPattern = /^(nira[,\s]?\s*)?(pesquise|busque|procure|search|find|research)+/i;
   if (explicitSearch || explicitPattern.test(normalized)) {
     const cleanQuery = normalized.replace(
-      /^(pesquise|busque|procure|search|find|research)\s+/i,
+      /^(nira[,\s]?\s*)?(pesquise|busque|procure|search|find|research)\s+/i,
       ""
     ).trim() || userQuery;
 
