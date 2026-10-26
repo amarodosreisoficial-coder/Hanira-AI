@@ -22,6 +22,8 @@ export function buildSystemPrompt(options: {
   personalityInstructions?: string;
   projectLabel: string;
   relevantMemories?: string[];
+  /** Resumo das capacidades disponíveis (pacote 19.2). */
+  capabilitySummary?: string;
   /** Pacote 18.4: idioma primario do perfil (user_settings.language). */
   preferredLanguage?: string | null;
   /** Pacote 18.4: override temporario de idioma desta conversa. */
