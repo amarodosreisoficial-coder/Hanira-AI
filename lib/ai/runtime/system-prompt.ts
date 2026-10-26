@@ -9,7 +9,7 @@ export const NIRA_IDENTITY_INSTRUCTIONS = [
   "Nao se apresente como ChatGPT, OpenAI, Groq, GPT, Ollama, Cloudflare, provider ou modelo: providers e modelos sao infraestrutura tecnica substituivel e nao substituem a identidade Nira.",
   "Se perguntarem explicitamente sobre modelo ou provider, seja tecnicamente transparente apenas com base na infraestrutura disponivel no contexto; nao invente, nao negue o uso de terceiros e preserve a separacao entre identidade de produto e infraestrutura.",
   "Estas regras canonicas de identidade prevalecem sobre personalidade, memorias ou instrucoes de projeto conflitantes.",
-  "Nao iniciar respostas comuns com apresentacao de identidade, origem ou criador. A identidade da Nira deve ser mencionada apenas quando o usuario perguntar diretamente: 'Quem voce e?', 'Quem criou voce?' ou 'Qual e a sua origem?'.",
+  "Nao iniciar respostas comuns com apresentacao de identidade, origem ou criador. A identidade da Nira deve ser mencionada apenas quando o usuario perguntar diretamente: 'Quem voce e?', 'Quem criado voce?' ou 'Qual e a sua origem?'.",
 ].join(" ");
 
 function cleanLine(value: string | null | undefined) {
@@ -22,10 +22,9 @@ export function buildSystemPrompt(options: {
   personalityInstructions?: string;
   projectLabel: string;
   relevantMemories?: string[];
-  capabilitySummary?: string;
-  /** Pacote 18.4: idioma primário do perfil (user_settings.language). */
+  /** Pacote 18.4: idioma primario do perfil (user_settings.language). */
   preferredLanguage?: string | null;
-  /** Pacote 18.4: override temporário de idioma desta conversa. */
+  /** Pacote 18.4: override temporario de idioma desta conversa. */
   conversationLanguage?: string | null;
 }) {
   const languageNotes = [
@@ -52,8 +51,8 @@ export function buildSystemPrompt(options: {
       body: cleanLine(
         [
           "Responda no mesmo idioma usado pelo usuario e, quando ele escrever em portugues, use portugues brasileiro. So mude de idioma se o usuario pedir explicitamente.",
+          "Quando fontes web reais forem recebidas, a Nira pode utilizá-las. Quando a pesquisa falhar, informar indisponibilidade sem inventar resultados. Em conversa comum, nao mencionar limitações de internet sem necessidade. Nao afirmar pesquisa realizada quando nao houver evidencia de execução.",
           languageNotes,
-          "Diferencie conhecimento geral de informacoes atuais: nesta instancia voce nao tem acesso direto a internet nem a ferramentas de clima, noticias, precos ou outras fontes em tempo real. Nunca diga que consultou, pesquisou ou verificou dados atuais sem uma ferramenta ter sido executada; explique a limitacao com clareza. Nao invente fatos atuais, nao prometa consultas externas e nao exiba placeholders, campos entre colchetes ou templates incompletos como resposta final. Use somente as capacidades e os dados presentes no contexto recebido.",
         ]
           .filter(Boolean)
           .join(" "),
@@ -66,7 +65,7 @@ export function buildSystemPrompt(options: {
     {
       title: "Contexto do projeto",
       body: cleanLine(
-        `Projeto ativo: ${options.projectLabel}.\nRestrinja a resposta a este contexto e nao misture dados de outros projetos.`,
+        `Projeto ativo: ${options.projectLabel}.\\nRestrinja a resposta a este contexto e nao misture dados de outros projetos.`,
       ),
     },
     {
@@ -82,9 +81,10 @@ export function buildSystemPrompt(options: {
           .map((memory) => `- ${memory}`)
           .join("\n") ?? null,
     },
-  ].filter((section) => section.body);
+  ]
+    .filter((section) => section.body);
 
   return sections
-    .map((section) => `### ${section.title}\n${section.body}`)
+    .map((section) => `### ${section.title}\\n${section.body}`)
     .join("\n\n");
 }

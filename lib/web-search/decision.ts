@@ -2,7 +2,8 @@
  * PACOTE 19.0 — Fundação da Pesquisa Web da Nira
  *
  * Lógica de decisão de intenção de busca.
- * Heurística determinística inicial — NÃO faz chamadas externas.
+ *
+ * Heurística determinística inicia — NÃO faz chamadas externas.
  * Política: fail-closed, R$ 0 / mês.
  */
 
@@ -69,7 +70,7 @@ export function decideWebSearch(
     /preço|price|cotação|tax[jio]/i,
     /presidente|presidente(atual)?/i,
     /data|hoje|agora|atual|última|versão|release|lançamento/i,
-    /[\$€£]\s*\d+|\d+\s*[\$€£]/,
+    /[€$£]\s*\d+|\d+\s*[€$£]/,
     /inscrição|edital|vaga|concurso/i,
     /compar(ar|ativo|ativo).*preço|preço.*compar/i,
   ];
