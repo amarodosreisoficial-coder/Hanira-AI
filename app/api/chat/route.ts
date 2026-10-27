@@ -900,12 +900,37 @@ async function createChatStream(
 
   try {
     webSearchResult = await integrateWebSearch(payload.message, false);
-    if (webSearchResult.shouldSearch && webSearchResult.context) {
+    // Quando há erro de busca ou fontes vazias, ainda assim registramos o resultado
+    // mas não injetamos contexto falso no prompt
+    if (webSearchResult?.error) {
+      // Erro de pesquisa - não injetar contexto, mas capturar fontes vazias
+      // para o UI exibir estado adequado
+      webSearchSources = [];
+      logServerEvent({
+        level: "warn",
+        requestId,
+        projectId: chatContext.projectId,
+        conversationId,
+        providerId: "web-search",
+        modelId: "N/A",
+        route: "/api/chat",
+        event: "web_search_error",
+        status: 500,
+        durationMs: Date.now() - startedAt,
+        error: webSearchResult.error,
+        diagnostics: {
+          decisionReason: webSearchResult.decision?.reason,
+          query: webSearchResult.decision?.query,
+          sourceCount: 0,
+        },
+      });
+    } else if (webSearchResult?.shouldSearch && webSearchResult.context) {
       webSearchSources = webSearchResult.sources;
     }
   } catch {
     // Falha silenciosa: o chat continua sem pesquisa web
     webSearchResult = undefined;
+    webSearchSources = [];
   }
 
   // Injeta contexto de pesquisa web no system prompt quando disponível
@@ -925,7 +950,9 @@ Regras:
 - Não afirme que realizou pesquisa quando a busca falhou ou não retornou resultados.
 - Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
 `;
-  }
+  if (webSearchResult?.error) {
+    systemPromptForRouting = `${systemPrompt}\n\n## Aviso: Pesquisa web indisponível\nA pesquisa solicitada não pôde ser concluída. As informações abaixo são baseadas apenas no conhecimento geral.\n- Não afirme que realizou pesquisa quando a mesma não foi possível\n- Use conhecimento geral quando relevante\nSeja transparente com o usuário sobre a limitação`;
+  } else if (webSearchResult?.shouldSearch && webSearchResult.context) {
 // systemPromptForProvider: usado pela geração do modelo — inclui contexto web quando disponível
   let systemPromptForProvider = systemPrompt;
   if (webSearchResult?.shouldSearch && webSearchResult.context) {
@@ -1270,15 +1297,7 @@ Regras:
         stage: "provider_stream",
       });
     },
-  });
-  } catch (error) {
-    // Concurrency lock must be released on any synchronous throw
-    // (e.g. resolveProjectChatContext, routeChatCapability, provider
-    // response construction). Streaming callbacks release the lock in
-    // their own onComplete/onFailed/onCancelled paths.
-    releaseLock();
-    throw error;
-  }
+  }`);
 }
 
 async function persistAssistantResponse(options: {

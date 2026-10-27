@@ -74,28 +74,32 @@ export async function integrateWebSearch(
       limits: WEB_SEARCH_LIMITS,
     });
   } catch (err) {
+    const errorMsg =
+      err instanceof Error
+        ? `Erro inesperado na busca web: ${err.message}`
+        : "Erro inesperado na busca web";
+    // Retorna erro para o route.ts registrar diagnóstico e reportar honestamente ao usuário
     return {
       shouldSearch: true,
       decision,
       results: [],
       context: "",
       sources: [],
-      error:
-        err instanceof Error
-          ? `Erro inesperado na busca web: ${err.message}`
-          : "Erro inesperado na busca web",
+      error: errorMsg,
     };
   }
 
   // 4. Falha fechada — não quebra o chat, apenas retorna sem fontes
   if (!searchResult.success || !searchResult.response) {
+    const errorMessage = searchResult.error?.message || "Web search unavailable";
+    // Retorna erro para o route.ts registrar diagnóstico e reportar honestamente ao usuário
     return {
       shouldSearch: true,
       decision,
       results: [],
       context: "",
       sources: [],
-      error: searchResult.error?.message || "Web search unavailable",
+      error: errorMessage,
     };
   }
 

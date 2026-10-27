@@ -284,16 +284,66 @@ describe("Pacote 19.2 — Preservação de fluxos existentes", () => {
     expect(texto.shouldSearch).toBe(voz.shouldSearch);
   });
 
-  it("20. Histórico e mensagens preservados quando busca falha", async () => {
+  it("21. Diagnóstico de erro inclui categoria e provider", async () => {
     mockSearch.mockResolvedValue(
       createFailedProviderResult("unavailable", "Provedor indisponível")
     );
 
     const result = await integrateWebSearch("preço do dólar hoje");
 
+    // Verifica que erro está presente e não é vazio
+    expect(result.error).toBeDefined();
+    expect(typeof result.error).toBe("string");
+    expect(result.error.length).toBeGreaterThan(0);
+
+    // Verifica que sources estão vazias
+    expect(result.sources).toEqual([]);
+
+    // Verifica que shouldSearch é true (busca foi tentativa)
+    expect(result.shouldSearch).toBe(true);
+
+    // Verifica que decision está presente (reason vem de decideWebSearch, não do provider)
+    expect(result.decision).toBeDefined();
+  });
+
+  it("22. Fontes vazias quando busca retorna resultado mal formatado", async () => {
+    // Mock de resultado com sucesso mas sem resultados
+    mockSearch.mockResolvedValue({
+      success: true,
+      provider: "tavily",
+      error: null,
+      response: {
+        provider: "tavily",
+        query: "teste",
+        results: [],
+        freshness: "general",
+      },
+    });
+
+    const result = await integrateWebSearch("qual o preço do bitcoin hoje?");
+
     expect(result.shouldSearch).toBe(true);
     expect(result.results).toEqual([]);
     expect(result.sources).toEqual([]);
-    // O chat continua normalmente sem as fontes
+    expect(result.context).toBe("");
+    // Quando busca tem sucesso mas não há resultados, não há erro - é o comportamento fail-closed
+    expect(result.error).toBeUndefined();
+  });
+
+  it("23. Nenhuma notícia é inventada após falha de pesquisa no route", async () => {
+    // Simula uma falha de pesquisa - o route.ts deve reportar honestamente
+    mockSearch.mockResolvedValue(
+      createFailedProviderResult("blocked", "Busca bloqueada por política")
+    );
+
+    const result = await integrateWebSearch("pesquise notícias sobre IA");
+
+    // Mesmo com falha, shouldSearch é true (decision tentou buscar)
+    // mas sources e context estão vazios
+    expect(result.shouldSearch).toBe(true);
+    expect(result.sources).toEqual([]);
+    expect(result.context).toBe("");
+    // Error message deve ser preenchido
+    expect(result.error).toBe("Busca bloqueada por política");
   });
 });
