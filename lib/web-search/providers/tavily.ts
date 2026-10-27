@@ -182,31 +182,28 @@ export class TavilySearchProvider implements WebSearchProvider {
       max_results: this.maxResults, // 5 (limite do pacote 19.2)
     };
 
-    // 3. Executar requisição com timeout via AbortController
+    // 3. Executar requisição JSON/Bearer com timeout via AbortController
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-      const formData = new URLSearchParams();
-      formData.append("api_key", this.apiKey);
-      formData.append("query", payload.query);
-      formData.append("search_depth", payload.search_depth ?? "basic");
-      formData.append("auto_parameters", String(payload.auto_parameters ?? false));
-      formData.append("include_answer", String(payload.include_answer ?? false));
-      formData.append("include_raw_content", String(payload.include_raw_content ?? false));
-      formData.append("include_images", String(payload.include_images));
-      formData.append("include_image_descriptions", String(payload.include_image_descriptions));
-      formData.append("include_usage", String(payload.include_usage));
-      formData.append("safe_search", String(payload.safe_search));
-      if (payload.topic) formData.append("topic", payload.topic);
-      formData.append("max_results", String(payload.max_results ?? this.maxResults));
+      const fetchPayload = {
+        query: payload.query,
+        search_depth: "basic",
+        auto_parameters: false,
+        include_answer: false,
+        include_raw_content: false,
+        include_images: false,
+        max_results: payload.max_results ?? this.maxResults,
+      };
 
       const response = await fetch(this.baseUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
         },
-        body: formData,
+        body: JSON.stringify(fetchPayload),
         signal: controller.signal,
       });
 
