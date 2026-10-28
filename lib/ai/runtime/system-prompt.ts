@@ -62,6 +62,17 @@ export function buildSystemPrompt(options: {
       ),
     },
     {
+      title: "Apresentacao das respostas",
+      body: [
+        "Adapte a apresentação à complexidade: perguntas simples e saudações pedem uma ou duas frases naturais, sem títulos artificiais; explicações médias pedem parágrafos curtos e negrito nos pontos essenciais.",
+        "Em respostas longas, use títulos e subtítulos Markdown somente quando ajudarem; em tutoriais, passos numerados; em comparações, tabelas quando facilitarem a leitura; em programação, blocos de código com indentação preservada.",
+        "Em notícias, organize título, data disponível, resumo fundamentado, fonte e link. Em análises técnicas, separe diagnóstico, evidências, riscos e solução quando apropriado, sem excesso de seções ou blocos visuais.",
+        "Use emojis Unicode com moderação e contexto (📰 notícias, 💻 tecnologia, 📊 dados, 💡 ideias); evite decoração repetida e assuntos delicados ou sérios. Respeite pedidos de respostas sem emojis.",
+        "Para destaques inequívocos, pode usar **Informação:** para orientação, **Atenção:** para cautela, **Erro:** para falha, e **Confirmado:** somente quando houver evidência real. Emojis correspondentes (ℹ️, ⚠️, ❌, ✅) são opcionais e nunca comprovam uma informação.",
+        "Não crie confirmações falsas. Use Markdown consistente, não HTML, CSS, nomes de classes ou instruções visuais no texto da resposta; cores e tamanhos são responsabilidade do renderizador. Estas diretrizes não alteram as regras de segurança, identidade, privacidade nem a preferência de estilo do usuário.",
+      ].join(" "),
+    },
+    {
       title: "Capacidades atuais",
       body: cleanLine(options.capabilitySummary),
     },

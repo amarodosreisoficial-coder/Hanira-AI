@@ -323,35 +323,47 @@ select:focus-visible {
 }
 
 .chat-prose {
-  color: #d9d3e1;
-  font-size: 0.9375rem;
-  line-height: 1.78;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--secondary-foreground);
+  font-size: 1rem;
+  line-height: 1.75;
   overflow-wrap: anywhere;
 }
 
 .chat-prose > * + * {
-  margin-top: 1rem;
+  margin-top: 1.125rem;
 }
 
 .chat-prose h2,
 .chat-prose h3,
-.chat-prose h4 {
+.chat-prose h4,
+.chat-prose h5,
+.chat-prose h6 {
   color: var(--foreground);
   font-weight: 600;
   letter-spacing: -0.018em;
+  line-height: 1.35;
+  text-wrap: balance;
+  margin-block: 1.75rem 0.75rem;
 }
 
+.chat-prose > :first-child { margin-top: 0; }
+
 .chat-prose h2 {
-  font-size: 1.25rem;
+  font-size: clamp(1.3rem, 1.1rem + 0.7vw, 1.5rem);
 }
 
 .chat-prose h3 {
-  font-size: 1.1rem;
+  font-size: clamp(1.15rem, 1.05rem + 0.4vw, 1.25rem);
 }
 
 .chat-prose h4 {
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
+
+.chat-prose h5,
+.chat-prose h6 { font-size: 1.0625rem; }
 
 .chat-prose p {
   white-space: pre-wrap;
@@ -371,15 +383,38 @@ select:focus-visible {
 }
 
 .chat-prose li + li {
-  margin-top: 0.35rem;
+  margin-top: 0.5rem;
 }
 
 .chat-prose a {
   color: var(--primary);
   text-decoration: underline;
-  text-decoration-color: rgba(169, 139, 248, 0.38);
+  text-decoration-color: color-mix(in srgb, var(--primary) 55%, transparent);
   text-underline-offset: 0.2em;
 }
+
+.chat-prose a:hover { text-decoration-color: currentColor; }
+
+.chat-prose em { font-style: italic; }
+
+.chat-prose hr {
+  margin-block: 1.75rem;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Explicit labels carry meaning even without color; body text stays neutral. */
+.chat-prose .chat-callout {
+  --callout-color: var(--primary);
+  border-inline-start: 2px solid var(--callout-color);
+  padding: 0.35rem 0 0.35rem 0.9rem;
+}
+
+.chat-prose .chat-callout--success { --callout-color: var(--success); }
+.chat-prose .chat-callout--warning { --callout-color: var(--warning); }
+.chat-prose .chat-callout--error { --callout-color: var(--destructive); }
+
+.chat-prose .chat-callout > strong:first-of-type { color: var(--callout-color); }
 
 .chat-prose strong {
   color: var(--foreground);
@@ -403,10 +438,12 @@ select:focus-visible {
 }
 
 .chat-code {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.9rem;
-  background: #0b0910;
+  background: var(--muted);
 }
 
 /* Nira composer — cápsula única escura translúcida com glow neon inferior.
@@ -456,7 +493,7 @@ select:focus-visible {
   padding: 0.45rem 0.8rem;
   color: var(--muted-foreground);
   font-family: "Geist Mono", "Cascadia Code", Consolas, monospace;
-  font-size: 0.65rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -464,15 +501,20 @@ select:focus-visible {
 .chat-code pre {
   overflow-x: auto;
   padding: 1rem;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 2;
 }
 
 .chat-code code {
   font-family: "Geist Mono", "Cascadia Code", Consolas, monospace;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.65;
 }
 
 .chat-table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 0.85rem;
@@ -482,7 +524,7 @@ select:focus-visible {
   width: 100%;
   min-width: 28rem;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.9375rem;
 }
 
 .chat-table-wrap th,
@@ -501,6 +543,27 @@ select:focus-visible {
 .chat-table-wrap tr:last-child td {
   border-bottom: 0;
 }
+
+.chat-table-wrap:focus-visible,
+.chat-code pre:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.chat-sources {
+  margin-top: 1.25rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.chat-sources h4 { margin-bottom: 0.5rem; color: var(--muted-foreground); font-size: 0.875rem; font-weight: 600; }
+.chat-sources li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.chat-sources li + li { margin-top: 0.5rem; }
+.chat-sources a { min-width: 0; color: var(--primary); text-decoration: underline; text-underline-offset: 0.2em; }
+.chat-source-domain { color: var(--muted-foreground); }
 
 /* Hanira mark — halo neon azul/violeta suave, SEM tile/fundo/moldura. */
 .nira-mark {

@@ -6,6 +6,14 @@ import {
 } from "../lib/ai/runtime/system-prompt";
 
 describe("system prompt seguro", () => {
+  it("orienta apresentação proporcional sem impor estilos ao conteúdo ou criar confirmações", () => {
+    const prompt = buildSystemPrompt({ baseInstructions: "Base fixa", projectLabel: "Hanira" });
+    expect(prompt).toContain("sem títulos artificiais");
+    expect(prompt).toContain("Respeite pedidos de respostas sem emojis");
+    expect(prompt).toContain("**Confirmado:** somente quando houver evidência real");
+    expect(prompt).toContain("cores e tamanhos são responsabilidade do renderizador");
+    expect(prompt).toContain("não HTML, CSS, nomes de classes ou instruções visuais no texto da resposta");
+  });
   it("monta blocos em ordem deterministica sem duplicacao", () => {
     const prompt = buildSystemPrompt({
       baseInstructions: "Base fixa",

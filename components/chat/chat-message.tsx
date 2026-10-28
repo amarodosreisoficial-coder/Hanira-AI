@@ -94,7 +94,7 @@ export function ChatMessage({
       <NiraPresence status={message.pending ? "responding" : issue ? "unavailable" : "idle"} />
       <div className="min-w-0 pt-1">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Nira</span>
+          <span className="text-[0.8125rem] font-medium text-muted-foreground">Nira</span>
         </div>
         <MessageAttachments
           attachments={message.attachments ?? []}
@@ -110,16 +110,16 @@ export function ChatMessage({
           <>
             {message.content && <MessageContent content={message.content} />}
             {message.webSearchSources && message.webSearchSources.length > 0 && (
-              <div className="mt-4 rounded-xl border border-muted/20 bg-muted/5 p-3">
-                <h4 className="text-xs font-semibold text-muted-foreground mb-2">
+              <section className="chat-sources" aria-label="Fontes consultadas">
+                <h4>
                   Fontes consultadas
                 </h4>
-                <ul className="space-y-1.5 text-sm">
+                <ul>
                   {message.webSearchSources.map((source, index) => {
                     const safeUrl = isSafeWebUrl(source.url) ? source.url : "";
                     return (
-                      <li key={index} className="flex items-start gap-2">
-                        <span className="text-xs text-muted-foreground">
+                      <li key={index}>
+                        <span className="text-muted-foreground" aria-hidden="true">
                           {index + 1}.
                         </span>
                         {safeUrl ? (
@@ -127,23 +127,22 @@ export function ChatMessage({
                             href={safeUrl}
                             target="_blank"
                             rel="noreferrer noopener"
-                            className="text-xs font-medium text-primary hover:text-primary/80 underline-offset-4 break-all"
                           >
                             {source.title}
                           </a>
                         ) : (
-                          <span className="text-xs font-medium text-foreground truncate">
+                          <span>
                             {source.title}
                           </span>
                         )}
-                        <span className="text-[10px] text-muted-foreground ml-1">
+                        <span className="chat-source-domain">
                           ({source.domain})
                         </span>
                       </li>
                     );
                   })}
                 </ul>
-              </div>
+              </section>
             )}
           </>
         )}
