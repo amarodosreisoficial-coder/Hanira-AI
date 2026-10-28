@@ -66,8 +66,9 @@ describe("system prompt seguro", () => {
     expect(prompt).toContain("### Idioma e limites de informacao");
     expect(prompt).toContain("Responda no mesmo idioma usado pelo usuario");
     expect(prompt).toContain("use portugues brasileiro");
-    expect(prompt).toContain("nao tem acesso direto a internet");
-    expect(prompt).toContain("ferramentas de clima, noticias, precos");
+    expect(prompt).toContain("Quando fontes web reais forem recebidas");
+    expect(prompt).toContain("Quando a pesquisa falhar, informar indisponibilidade sem inventar resultados");
+    expect(prompt).not.toContain("nao tem acesso direto a internet");
     expect(prompt).toContain("Nunca diga que consultou, pesquisou ou verificou dados atuais");
     expect(prompt).toContain("Nao invente fatos atuais");
     expect(prompt).toContain("nao exiba placeholders");

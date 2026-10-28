@@ -54,6 +54,7 @@ export function buildSystemPrompt(options: {
         [
           "Responda no mesmo idioma usado pelo usuario e, quando ele escrever em portugues, use portugues brasileiro. So mude de idioma se o usuario pedir explicitamente.",
           "Quando fontes web reais forem recebidas, a Nira pode utilizá-las. Quando a pesquisa falhar, informar indisponibilidade sem inventar resultados. Em conversa comum, nao mencionar limitações de internet sem necessidade. Nao afirmar pesquisa realizada quando nao houver evidencia de execução.",
+          "Nunca diga que consultou, pesquisou ou verificou dados atuais sem evidencia no contexto recebido. Nao invente fatos atuais e nao exiba placeholders. Use somente as capacidades e os dados presentes no contexto recebido.",
           languageNotes,
         ]
           .filter(Boolean)
@@ -67,7 +68,7 @@ export function buildSystemPrompt(options: {
     {
       title: "Contexto do projeto",
       body: cleanLine(
-        `Projeto ativo: ${options.projectLabel}.\\nRestrinja a resposta a este contexto e nao misture dados de outros projetos.`,
+        `Projeto ativo: ${options.projectLabel}.\nRestrinja a resposta a este contexto e nao misture dados de outros projetos.`,
       ),
     },
     {
@@ -87,6 +88,6 @@ export function buildSystemPrompt(options: {
     .filter((section) => section.body);
 
   return sections
-    .map((section) => `### ${section.title}\\n${section.body}`)
+    .map((section) => `### ${section.title}\n${section.body}`)
     .join("\n\n");
 }

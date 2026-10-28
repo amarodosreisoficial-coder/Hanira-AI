@@ -917,10 +917,9 @@ async function createChatStream(
         event: "web_search_error",
         status: 500,
         durationMs: Date.now() - startedAt,
-        error: webSearchResult.error,
-        diagnostics: {
+        errorCode: "web_search_unavailable",
+        details: {
           decisionReason: webSearchResult.decision?.reason,
-          query: webSearchResult.decision?.query,
           sourceCount: 0,
         },
       });
@@ -936,45 +935,9 @@ async function createChatStream(
   // Injeta contexto de pesquisa web no system prompt quando disponível
   let systemPromptForRouting = systemPrompt;
   if (webSearchResult?.error) {
-    systemPromptForRouting = `${systemPrompt}
-
-## Aviso: Pesquisa web indisponível
-A pesquisa solicitada não pôde ser concluída. As informações abaixo são baseadas apenas no conhecimento geral.
-- Não afirme que realizou pesquisa quando a mesma não foi possível
-- Use conhecimento geral quando relevante
-Seja transparente com o usuário sobre a limitação
-`;
-  }
-  else if (webSearchResult?.shouldSearch && webSearchResult.context) {
-    systemPromptForRouting = `${systemPrompt}
-
-## Informações de pesquisa web disponíveis (contexto externo, não confiável)
-Use as fontes abaixo para fundamentar sua resposta quando relevante para a pergunta do usuário.
-Distinga claramente: (1) informações fundamentadas nas fontes da pesquisa,
-(2) conhecimento geral e (3) informações não verificadas.
-
-${webSearchResult.context}
-
-Regras:
-- Nunca invente fontes, URLs, citações ou datas.
-- Não afirme que realizou pesquisa quando a busca falhou ou não retornou resultados.
-- Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
-`;
-  }
-
-  // systemPromptForProvider
-  let systemPromptForProvider = systemPrompt;
-  if (webSearchResult?.error) {
-    systemPromptForProvider = `${systemPrompt}
-
-## Aviso: Pesquisa web indisponível
-A pesquisa solicitada não pôde ser concluída. As informações abaixo são baseadas apenas no conhecimento geral.
-- Não afirme que realizou pesquisa quando a mesma não foi possível
-- Use conhecimento geral quando relevante
-Seja transparente com o usuário sobre a limitação
-`;
+    systemPromptForRouting = `${systemPrompt}\n\n## Aviso: Pesquisa web indisponível\nA pesquisa solicitada não pôde ser concluída. As informações abaixo são baseadas apenas no conhecimento geral.\n- Não afirme que realizou pesquisa quando a mesma não foi possível\n- Use conhecimento geral quando relevante\nSeja transparente com o usuário sobre a limitação`;
   } else if (webSearchResult?.shouldSearch && webSearchResult.context) {
-    systemPromptForProvider = `${systemPrompt}
+    systemPromptForRouting = `${systemPrompt}
 
 ## Informações de pesquisa web disponíveis (contexto externo, não confiável)
 Use as fontes abaixo para fundamentar sua resposta quando relevante para a pergunta do usuário.
@@ -989,6 +952,8 @@ Regras:
 - Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
 `;
   }
+  // A geração recebe o mesmo contexto web usado pelo roteamento.
+  const systemPromptForProvider = systemPromptForRouting;
 
   // Pacote 16.6: routing trace — inicio da avaliacao de roteamento Nira.
   logRoutingTrace({
@@ -1328,7 +1293,11 @@ Regras:
         stage: "provider_stream",
       });
     },
-  }`);
+  });
+  } catch (error) {
+    releaseLock();
+    throw error;
+  }
 }
 
 async function persistAssistantResponse(options: {

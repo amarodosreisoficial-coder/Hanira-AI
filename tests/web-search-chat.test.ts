@@ -294,7 +294,7 @@ describe("Pacote 19.2 — Preservação de fluxos existentes", () => {
     // Verifica que erro está presente e não é vazio
     expect(result.error).toBeDefined();
     expect(typeof result.error).toBe("string");
-    expect(result.error.length).toBeGreaterThan(0);
+    expect(result.error?.length).toBeGreaterThan(0);
 
     // Verifica que sources estão vazias
     expect(result.sources).toEqual([]);
