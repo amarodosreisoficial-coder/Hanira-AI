@@ -67,7 +67,7 @@ import { saveExplicitMemory } from "@/services/memory";
 import { routeTool } from "@/lib/tools/router";
 import { formatWeatherCurrent } from "@/lib/tools/weather-current";
 import { formatTimeCurrent } from "@/lib/tools/time-current";
-import { integrateWebSearch, type WebSearchIntegrationResult } from "@/lib/web-search/integrate";
+import { buildWebSearchPrompt, integrateWebSearch, webSearchFailureText } from "@/lib/web-search/integrate";
 
 const SYSTEM_PROMPT =
   "Voce e Nira, a camada de inteligencia da Hanira. Converse em portugues do Brasil por padrao. Seja clara, acolhedora e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
@@ -895,63 +895,43 @@ async function createChatStream(
   // === PACOTE 19.2 — Pesquisa Web integrada ao chat ===
   // Decide se deve buscar e executa a busca (somente quando necessário).
   // O resultado é injetado no system prompt como contexto externo não confiável.
-  let webSearchResult: WebSearchIntegrationResult | undefined;
-  let webSearchSources: Array<{ title: string; url: string; domain: string }> | undefined;
-
-  try {
-    webSearchResult = await integrateWebSearch(payload.message, false);
-    // Quando há erro de busca ou fontes vazias, ainda assim registramos o resultado
-    // mas não injetamos contexto falso no prompt
-    if (webSearchResult?.error) {
-      // Erro de pesquisa - não injetar contexto, mas capturar fontes vazias
-      // para o UI exibir estado adequado
-      webSearchSources = [];
-      logServerEvent({
-        level: "warn",
-        requestId,
-        projectId: chatContext.projectId,
-        conversationId,
-        providerId: "web-search",
-        modelId: "N/A",
-        route: "/api/chat",
-        event: "web_search_error",
-        status: 500,
-        durationMs: Date.now() - startedAt,
-        errorCode: "web_search_unavailable",
-        details: {
-          decisionReason: webSearchResult.decision?.reason,
-          sourceCount: 0,
-        },
-      });
-    } else if (webSearchResult?.shouldSearch && webSearchResult.context) {
-      webSearchSources = webSearchResult.sources;
-    }
-  } catch {
-    // Falha silenciosa: o chat continua sem pesquisa web
-    webSearchResult = undefined;
-    webSearchSources = [];
+  const webSearchResult = await integrateWebSearch(payload.message, false);
+  const webSearchSources = webSearchResult.shouldSearch ? webSearchResult.sources : undefined;
+  const searchFailure = webSearchFailureText(webSearchResult);
+  const searchDiagnostics = {
+    decisionReason: webSearchResult.decision.reason,
+    shouldSearch: webSearchResult.shouldSearch,
+    providerInvoked: webSearchResult.providerInvoked ?? false,
+    topic: webSearchResult.decision.topic ?? "general",
+    timeRange: webSearchResult.decision.timeRange ?? "none",
+    sourceCount: webSearchResult.sources.length,
+    success: webSearchResult.shouldSearch && !searchFailure,
+    sourcesDelivered: false,
+  };
+  logServerEvent({
+    level: searchFailure ? "warn" : "info",
+    requestId,
+    route: "/api/chat",
+    event: webSearchResult.shouldSearch ? searchFailure ? "web_search_failed" : "web_search_completed" : "web_search_skipped",
+    providerId: webSearchResult.providerId,
+    status: searchFailure ? 503 : 200,
+    durationMs: Date.now() - startedAt,
+    errorCode: webSearchResult.errorCode,
+    details: searchDiagnostics,
+  });
+  if (searchFailure) {
+    // Não chamar o modelo para substituir uma busca malsucedida por notícias.
+    // O stream determinístico não depende de provider e o lock já pode ser liberado.
+    releaseLock();
+    return createDeterministicTextResponse({
+      request, conversationId, requestId, mode: "web_search_unavailable", text: searchFailure,
+      onComplete: async (assistantContent) => {
+        await persistAssistantResponse({ supabase, conversationId, userId, requestId,
+          projectId: chatContext.projectId, assistantContent, userMessage: payload.message, startedAt });
+      },
+    });
   }
-
-  // Injeta contexto de pesquisa web no system prompt quando disponível
-  let systemPromptForRouting = systemPrompt;
-  if (webSearchResult?.error) {
-    systemPromptForRouting = `${systemPrompt}\n\n## Aviso: Pesquisa web indisponível\nA pesquisa solicitada não pôde ser concluída. As informações abaixo são baseadas apenas no conhecimento geral.\n- Não afirme que realizou pesquisa quando a mesma não foi possível\n- Use conhecimento geral quando relevante\nSeja transparente com o usuário sobre a limitação`;
-  } else if (webSearchResult?.shouldSearch && webSearchResult.context) {
-    systemPromptForRouting = `${systemPrompt}
-
-## Informações de pesquisa web disponíveis (contexto externo, não confiável)
-Use as fontes abaixo para fundamentar sua resposta quando relevante para a pergunta do usuário.
-Distinga claramente: (1) informações fundamentadas nas fontes da pesquisa,
-(2) conhecimento geral e (3) informações não verificadas.
-
-${webSearchResult.context}
-
-Regras:
-- Nunca invente fontes, URLs, citações ou datas.
-- Não afirme que realizou pesquisa quando a busca falhou ou não retornou resultados.
-- Se as fontes não forem suficientes para responder, use seu conhecimento geral e seja transparente sobre isso.
-`;
-  }
+  const systemPromptForRouting = buildWebSearchPrompt(systemPrompt, webSearchResult);
   // A geração recebe o mesmo contexto web usado pelo roteamento.
   const systemPromptForProvider = systemPromptForRouting;
 
@@ -1131,7 +1111,7 @@ Regras:
     stage: "provider_stream",
   });
 
-  return createTextChatProviderResponse({
+  const response = createTextChatProviderResponse({
     request,
     provider: routed.provider,
     providerRequest: {
@@ -1294,6 +1274,14 @@ Regras:
       });
     },
   });
+  if (webSearchResult.sources.length) {
+    logServerEvent({
+      level: "info", requestId, route: "/api/chat", event: "web_search_sources_delivered",
+      providerId: webSearchResult.providerId, status: 200, durationMs: Date.now() - startedAt,
+      details: { ...searchDiagnostics, sourcesDelivered: true },
+    });
+  }
+  return response;
   } catch (error) {
     releaseLock();
     throw error;

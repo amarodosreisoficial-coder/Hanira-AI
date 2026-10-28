@@ -9,7 +9,7 @@
 
 // === ROTEADOR DE INTENÇÃO ===
 
-import { WebSearchDecision, WebSearchIntentReason, WebSearchLimits } from "./types";
+import type { WebSearchDecision } from "./types";
 
 /**
  * Heurística determinística para decidir se a Nira deve pesquisar.
@@ -33,6 +33,17 @@ export function decideWebSearch(
   explicitSearch: boolean = false
 ): WebSearchDecision {
   const normalized = userQuery.trim().toLowerCase();
+  const plain = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const news = /\b(noticias?|news|acontecimentos?|novidades|manchetes?)\b/.test(plain);
+  const recent = /\b(hoje|today|agora|recentes?|ultim[ao]s?|latest|semana|week|mes|month)\b/.test(plain);
+  const countMatch = plain.match(/\b(\d+|uma|duas|tres|quatro|cinco|one|two|three|four|five)\s+(?:(?:ultimas?|recentes?|latest)\s+)?(?:noticias?|news|acontecimentos?|novidades|fontes?|resultados?|links?)\b/);
+  const counts: Record<string, number> = { uma: 1, duas: 2, tres: 3, quatro: 4, cinco: 5, one: 1, two: 2, three: 3, four: 4, five: 5 };
+  const requestedCount = countMatch ? Number(countMatch[1]) || counts[countMatch[1]] : undefined;
+  const newsOptions: Partial<WebSearchDecision> = news ? {
+    topic: "news",
+    ...(recent ? { timeRange: /\b(hoje|today|agora)\b/.test(plain) ? "day" : /\b(mes|month)\b/.test(plain) ? "month" : "week" } : {}),
+    ...(requestedCount && requestedCount > 0 ? { requestedCount } : {}),
+  } : {};
 
   // --- Caso 1: Usuário explicitamente pediu busca ---
   const explicitPattern = /^(nira[,\s]?\s*)?(pesquise|busque|procure|search|find|research)+/i;
@@ -47,6 +58,7 @@ export function decideWebSearch(
       reason: "explicit",
       query: cleanQuery,
       freshness: "general",
+      ...newsOptions,
     };
   }
 
@@ -64,6 +76,10 @@ export function decideWebSearch(
     if (pattern.test(normalized)) {
       return { shouldSearch: false, reason: "static" };
     }
+  }
+
+  if (news && recent) {
+    return { shouldSearch: true, reason: "freshness", query: userQuery.trim(), freshness: "recent", ...newsOptions };
   }
 
   // --- Caso 3: Padrões que MEREM busca (dados temporais) ---
@@ -98,6 +114,7 @@ export function decideWebSearch(
       reason: "freshness",
       query: cleanQuery,
       freshness: "realtime",
+      ...newsOptions,
     };
   }
 

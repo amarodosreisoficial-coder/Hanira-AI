@@ -13,6 +13,7 @@ export interface TavilySearchPayload {
   safe_search?: boolean;
   topic?: "general" | "news" | "finance" | "sports";
   max_results?: number;
+  time_range?: "day" | "week" | "month";
 }
 
 /**
@@ -43,8 +44,7 @@ import type {
 import type { WebSearchLimits } from "../limits";
 import { WEB_SEARCH_LIMITS } from "../limits";
 import type { WebSearchResult } from "../types";
-import { extractDomain, formatResultContext } from "../normalize";
-import { isWithinLimits } from "../limits";
+import { extractDomain } from "../normalize";
 import { fallbackProvider } from "../provider";
 
 /**
@@ -93,7 +93,7 @@ function mapTavilyResponseToWebSearchResponse(data: unknown): {
 
   return {
     query: raw.query ?? "",
-    results: raw.results.map(mapTavilyResultToWebSearchResult),
+    results: raw.results.filter((result) => result && typeof result.title === "string" && typeof result.url === "string" && typeof result.content === "string").map(mapTavilyResultToWebSearchResult),
     totalResults: raw.total_results ?? null,
   };
 }
@@ -150,6 +150,8 @@ export class TavilySearchProvider implements WebSearchProvider {
     request: {
       query: string;
       freshness?: "realtime" | "recent" | "general";
+      topic?: "news";
+      timeRange?: "day" | "week" | "month";
       limits?: WebSearchLimits;
     },
     _abortSignal?: AbortSignal
@@ -160,6 +162,7 @@ export class TavilySearchProvider implements WebSearchProvider {
         success: false,
         error: {
           type: "unavailable",
+          code: "not_configured",
           message: "Web search provider not configured (no Tavily API key)",
           safeLog: true,
         },
@@ -178,24 +181,15 @@ export class TavilySearchProvider implements WebSearchProvider {
       include_image_descriptions: false,
       include_usage: true, // Para monitoramento de créditos
       safe_search: true,
-      topic: "general",
-      max_results: this.maxResults, // 5 (limite do pacote 19.2)
+      topic: request.topic ?? "general",
+      ...(request.timeRange ? { time_range: request.timeRange } : {}),
+      max_results: Math.min(this.maxResults, request.limits?.maxResults ?? WEB_SEARCH_LIMITS.maxResults),
     };
 
     // 3. Executar requisição JSON/Bearer com timeout via AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-      const fetchPayload = {
-        query: payload.query,
-        search_depth: "basic",
-        auto_parameters: false,
-        include_answer: false,
-        include_raw_content: false,
-        include_images: false,
-        max_results: payload.max_results ?? this.maxResults,
-      };
 
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -203,11 +197,9 @@ export class TavilySearchProvider implements WebSearchProvider {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(fetchPayload),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       // 4. Tratar erros HTTP
       if (!response.ok) {
@@ -255,6 +247,7 @@ export class TavilySearchProvider implements WebSearchProvider {
           success: false,
           error: {
             type: errorType,
+            code: response.status === 432 || response.status === 433 ? "quota_exhausted" : response.status === 429 ? "rate_limited" : errorType,
             message: errorMessage,
             safeLog: true,
           },
@@ -266,11 +259,13 @@ export class TavilySearchProvider implements WebSearchProvider {
       let data: unknown;
       try {
         data = await response.json();
-      } catch {
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
         return {
           success: false,
           error: {
             type: "malformed",
+            code: "malformed",
             message: "Resposta malformada do provedor de busca web",
             safeLog: true,
           },
@@ -283,12 +278,10 @@ export class TavilySearchProvider implements WebSearchProvider {
 
       // 7. Aplicar limites de contexto da Nira
       const limits: WebSearchLimits = request.limits ?? (WEB_SEARCH_LIMITS as WebSearchLimits);
-      const withinLimits = isWithinLimits(normalized.results, limits);
-
-      // 8. Formatar contexto para o modelo (respeta maxSnippetChars e maxTotalContextChars)
-      const resultsWithContext = normalized.results.map((r) => ({
+      // O contexto com metadados e limites totais é montado na integração.
+      const resultsWithContext = normalized.results.slice(0, payload.max_results).map((r) => ({
         ...r,
-        snippet: formatResultContext(r, limits.maxSnippetChars),
+        snippet: r.snippet.slice(0, limits.maxSnippetChars),
       }));
 
       return {
@@ -296,9 +289,9 @@ export class TavilySearchProvider implements WebSearchProvider {
         provider: "tavily",
         response: {
           query: normalized.query,
-          results: withinLimits ? resultsWithContext : normalized.results.slice(0, this.maxResults),
+          results: resultsWithContext,
           provider: "tavily",
-          freshness: "general",
+          freshness: request.freshness ?? "general",
           totalResults: normalized.totalResults,
         },
         error: undefined,
@@ -310,6 +303,7 @@ export class TavilySearchProvider implements WebSearchProvider {
           success: false,
           error: {
             type: "unavailable",
+            code: "timeout",
             message: "Tempo limite excedido na busca web (Tavily)",
             safeLog: true,
           },
@@ -322,11 +316,14 @@ export class TavilySearchProvider implements WebSearchProvider {
         success: false,
         error: {
           type: "unavailable",
+          code: "unavailable",
           message: "Provedor de busca web indisponível",
           safeLog: true,
         },
         provider: "tavily",
       };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 }

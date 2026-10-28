@@ -37,12 +37,16 @@ export type WebSearchDecision = {
   reason: WebSearchIntentReason;
   query?: string;
   freshness?: "realtime" | "recent" | "general";
+  topic?: "news";
+  timeRange?: "day" | "week" | "month";
+  requestedCount?: number;
 };
 
 export interface WebSearchError {
   type: "unavailable" | "blocked" | "malformed";
   message: string;
   safeLog: boolean;
+  code?: "not_configured" | "timeout" | "quota_exhausted" | "rate_limited" | "blocked" | "malformed" | "unavailable";
 }
 
 /** Limites configuráveis de busca (fail-closed, R$ 0/mês) */

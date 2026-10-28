@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",
+    // Local diagnostic artifacts, outside the application source.
+    "check_backticks.js",
+    "check_backticks2.js",
+    "check_backticks3.js",
   ]),
 ]);
 

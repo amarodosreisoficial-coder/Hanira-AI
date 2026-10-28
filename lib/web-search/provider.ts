@@ -54,6 +54,8 @@ export interface WebSearchProvider {
     request: {
       query: string;
       freshness?: "realtime" | "recent" | "general";
+      topic?: "news";
+      timeRange?: "day" | "week" | "month";
       limits?: WebSearchLimits;
     },
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -127,6 +129,7 @@ export const fallbackProvider = new FallbackWebSearchProvider();
  */
 export function getWebSearchProvider(): {
   provider: WebSearchProvider;
+  providerId: "tavily" | "fallback";
   isAvailable: () => Promise<boolean>;
 } {
   const providerName = (typeof process !== "undefined" && process.env.WEB_SEARCH_PROVIDER) || "disabled";
@@ -134,6 +137,7 @@ export function getWebSearchProvider(): {
   if (providerName === "disabled") {
     return {
       provider: fallbackProvider,
+      providerId: "fallback",
       isAvailable: () => Promise.resolve(false),
     };
   }
@@ -144,6 +148,7 @@ export function getWebSearchProvider(): {
     const tavilyProvider = new TavilySearchProvider(apiKey);
     return {
       provider: tavilyProvider,
+      providerId: "tavily",
       isAvailable: () => Promise.resolve(true),
     };
   }
@@ -151,6 +156,7 @@ export function getWebSearchProvider(): {
   // Fallback for any other case (unknown provider, missing key, etc.)
   return {
     provider: fallbackProvider,
+    providerId: "fallback",
     isAvailable: () => Promise.resolve(false),
   };
 }
