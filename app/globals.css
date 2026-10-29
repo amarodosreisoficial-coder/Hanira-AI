@@ -417,6 +417,93 @@ select:focus-visible {
 
 .chat-prose .chat-callout > strong:first-of-type { color: var(--callout-color); }
 
+/* Nira Writing Block — superfície própria (grafite #22232a), claramente
+ * separada do fundo do chat (#03040a). Sem imitar a identidade alheia. */
+:root {
+  --writing-bg: #22232a;
+}
+.nira-writing-block {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--writing-bg);
+  color: var(--foreground);
+  overflow: hidden;
+  margin: 1.25rem 0;
+}
+.nira-writing-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+}
+.nira-writing-block__category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.nira-writing-block__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--foreground);
+  min-width: 0;
+}
+.nira-writing-block__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.85rem;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+}
+.nira-writing-block__body {
+  padding: 0.85rem 0.95rem;
+  line-height: 1.65;
+  color: var(--foreground);
+  outline: none;
+}
+.nira-writing-block__body > *:first-child {
+  margin-top: 0;
+}
+.nira-writing-block__body > *:last-child {
+  margin-bottom: 0;
+}
+.nira-writing-block__body p {
+  margin: 0 0 0.75rem 0;
+}
+.nira-writing-block__body pre {
+  margin: 0.75rem 0 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+.nira-writing-block__body pre code {
+  color: var(--foreground);
+}
+.nira-writing-block__status {
+  margin: 0;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.8rem;
+  color: var(--destructive);
+  border-top: 1px solid var(--border);
+  background: rgba(251, 113, 133, 0.08);
+}
+
 .chat-prose strong {
   color: var(--foreground);
   font-weight: 600;

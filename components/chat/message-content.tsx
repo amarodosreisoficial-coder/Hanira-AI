@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { NiraWritingBlock } from "@/components/chat/nira-writing-block";
 
 export type ChatMarkdownBlock =
   | { type: "paragraph"; text: string }
@@ -8,6 +9,7 @@ export type ChatMarkdownBlock =
   | { type: "list"; ordered: boolean; items: string[]; start?: number }
   | { type: "separator" }
   | { type: "callout"; tone: "info" | "success" | "warning" | "error"; text: string }
+  | { type: "writing"; writingType: string; title: string; text: string }
   | { type: "table"; header: string[]; rows: string[][] };
 
 function tableCells(line: string) {
@@ -47,6 +49,32 @@ function calloutTone(text: string) {
   return variant.tone;
 }
 
+function isWritingOpen(line: string): boolean {
+  return /^:::\s*hanira-writing\b/.test(line.trim());
+}
+
+function isWritingClose(line: string): boolean {
+  return line.trim() === ":::";
+}
+
+function extractAttr(attrs: string, name: string): string | null {
+  const match = attrs.match(new RegExp(`\\b${name}="([^"]*)"`));
+  return match ? match[1] : null;
+}
+
+function writingLabel(type: string): string {
+  const labels: Record<string, string> = {
+    prompt: "Prompt",
+    whatsapp: "WhatsApp",
+    email: "E-mail",
+    documento: "Documento",
+    "rede-social": "Redes sociais",
+    comunicado: "Comunicado",
+    codigo: "Código",
+  };
+  return labels[type] ?? "Texto";
+}
+
 function isSpecialLine(lines: string[], index: number) {
   const line = lines[index] ?? "";
   return (
@@ -55,6 +83,8 @@ function isSpecialLine(lines: string[], index: number) {
     /^#{1,6}\s+/.test(line) ||
     isSeparator(line) ||
     Boolean(calloutTone(line)) ||
+    isWritingOpen(line) ||
+    isWritingClose(line) ||
     /^>\s?/.test(line) ||
     /^[-*+]\s+/.test(line) ||
     /^\d+\.\s+/.test(line) ||
@@ -84,6 +114,32 @@ export function parseChatMarkdown(content: string): ChatMarkdownBlock[] {
       }
       if (index < lines.length) index += 1;
       blocks.push({ type: "code", language: fence[1] ?? "", text: code.join("\n") });
+      continue;
+    }
+
+    if (isWritingOpen(line)) {
+      const rest = line.trim().replace(/^:::\s*hanira-writing\b/, "").trim();
+      const writingType = extractAttr(rest, "type") ?? "prompt";
+      const title = extractAttr(rest, "title") ?? writingLabel(writingType);
+      const body: string[] = [];
+      index += 1;
+      let closed = false;
+      while (index < lines.length) {
+        if (isWritingClose(lines[index])) {
+          closed = true;
+          index += 1;
+          break;
+        }
+        body.push(lines[index]);
+        index += 1;
+      }
+      const text = body.join("\n");
+      // Delimitador incompleto durante streaming: nunca esconde o conteúdo.
+      if (!closed) {
+        blocks.push({ type: "paragraph", text });
+      } else {
+        blocks.push({ type: "writing", writingType, title, text });
+      }
       continue;
     }
 
@@ -165,7 +221,7 @@ function safeLink(url: string) {
   }
 }
 
-function inlineContent(text: string, depth = 0): ReactNode[] {
+export function inlineContent(text: string, depth = 0): ReactNode[] {
   if (depth > 8) return [text];
   const tokens = text.split(/(\\[\\`*_\[\]()#!|>.-]|`[^`\n]+`|\*\*[^\n]+?\*\*|(?<![\p{L}\p{N}])__[^\n]+?__(?![\p{L}\p{N}])|\*[^*\n]+\*|(?<![\p{L}\p{N}])_[^_\n]+_(?![\p{L}\p{N}])|\[[^\]\n]+\]\(https?:\/\/(?:[^()\s]|\([^()\s]*\))+\))/giu);
   return tokens.filter(Boolean).map((token, index) => {
@@ -191,6 +247,43 @@ function inlineContent(text: string, depth = 0): ReactNode[] {
   });
 }
 
+export function renderWritingBody(text: string, isCode: boolean): ReactNode {
+  if (isCode) {
+    return (
+      <pre tabIndex={0} aria-label="Bloco de código">
+        <code>{text}</code>
+      </pre>
+    );
+  }
+  const segments = text.split(/```/);
+  if (segments.length === 1) {
+    return <p>{inlineContent(text)}</p>;
+  }
+  return (
+    <>
+      {segments.map((segment, index) => {
+        if (index % 2 === 0) {
+          return segment ? (
+            <p key={`writing-text-${index}`}>{inlineContent(segment)}</p>
+          ) : null;
+        }
+        const newline = segment.indexOf("\n");
+        const language = newline === -1 ? "" : segment.slice(0, newline);
+        const code = newline === -1 ? segment : segment.slice(newline + 1);
+        return (
+          <pre
+            key={`writing-code-${index}`}
+            tabIndex={0}
+            aria-label={language ? `Código ${language}` : "Bloco de código"}
+          >
+            <code>{code}</code>
+          </pre>
+        );
+      })}
+    </>
+  );
+}
+
 export function MessageContent({ content }: { content: string }) {
   const blocks = parseChatMarkdown(content);
 
@@ -204,6 +297,18 @@ export function MessageContent({ content }: { content: string }) {
         if (block.type === "separator") return <hr key={index} />;
         if (block.type === "callout") {
           return <p className={`chat-callout chat-callout--${block.tone}`} key={index}>{inlineContent(block.text)}</p>;
+        }
+        if (block.type === "writing") {
+          return (
+            <NiraWritingBlock
+              key={index}
+              writingType={block.writingType}
+              title={block.title}
+              text={block.text}
+            >
+              {renderWritingBody(block.text, block.writingType === "codigo")}
+            </NiraWritingBlock>
+          );
         }
         if (block.type === "code") {
           return (
