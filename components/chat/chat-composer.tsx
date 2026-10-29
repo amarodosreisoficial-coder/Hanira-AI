@@ -904,7 +904,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           </p>
         )}
         <div
-          className={`compose-surface nira-composer relative rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none${recorderOpen ? " is-recording" : ""}`}
+          className={`compose-surface nira-composer relative rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none flex flex-col gap-2${recorderOpen ? " is-recording" : ""}`}
         >
           {recorderOpen ? (
             <VoiceRecorder
@@ -921,35 +921,85 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           ) : (
             <>
-          <textarea
-            ref={ref}
-            value={store.draft}
-            rows={1}
-            maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            aria-label="Mensagem para a Nira"
-            aria-describedby={
-              showOperationalIssue
-                ? "chat-message-length chat-operational-error"
-                : "chat-message-length"
-            }
-            placeholder={
-              pendingMedia.length
-                ? "Pergunte sobre o arquivo..."
-                : isImageMode
-                  ? "Descreva a imagem que você quer criar..."
-                  : "Converse com a Nira..."
-            }
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              store.setDraft(nextValue);
-              if (isChatMessageTooLong(nextValue)) showMessageLengthError();
-              else clearMessageLengthError();
-              resize();
-            }}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-                        className="block h-10 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
-          />
+              {/* Linha do texto: botão "+" à esquerda, textarea começa à direita dele */}
+              <div className="flex items-start gap-3">
+                <div className="relative flex items-center shrink-0" ref={plusMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setPlusMenuOpen((value) => !value)}
+                    aria-label="Mais ações"
+                    aria-haspopup="menu"
+                    aria-expanded={plusMenuOpen}
+                    title="Anexos e ações"
+                    className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Plus className="size-[18px]" />
+                  </button>
+                  {plusMenuOpen && (
+                    <div className="hanira-menu" role="menu" aria-label="Anexos">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); documentInputRef.current?.click(); }}
+                        className="hanira-menu__item"
+                      >
+                        <Paperclip className="size-4" />
+                        Anexar documento
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); imageInputRef.current?.click(); }}
+                        className="hanira-menu__item"
+                      >
+                        <ImagePlus className="size-4" />
+                        Anexar imagem
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); void requestMediaAccess("camera"); }}
+                        className="hanira-menu__item"
+                      >
+                        <Camera className="size-4" />
+                        Tirar foto
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <textarea
+                  ref={ref}
+                  value={store.draft}
+                  rows={1}
+                  maxLength={CHAT_MESSAGE_MAX_LENGTH}
+                  aria-label="Mensagem para a Nira"
+                  aria-describedby={
+                    showOperationalIssue
+                      ? "chat-message-length chat-operational-error"
+                      : "chat-message-length"
+                  }
+                  placeholder={
+                    pendingMedia.length
+                      ? "Pergunte sobre o arquivo..."
+                      : isImageMode
+                        ? "Descreva a imagem que você quer criar..."
+                        : "Converse com a Nira..."
+                  }
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    store.setDraft(nextValue);
+                    if (isChatMessageTooLong(nextValue)) showMessageLengthError();
+                    else clearMessageLengthError();
+                    resize();
+                  }}
+                  onPaste={handlePaste}
+                  onKeyDown={handleKeyDown}
+                  className="block h-10 flex-1 min-w-0 resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                />
+              </div>
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
               {pendingMedia.map((item) => (
@@ -1049,56 +1099,6 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             />
           )}
           <div className="flex items-center justify-between px-3 pt-3 pb-1">
-            <div className="relative flex items-center" ref={plusMenuRef}>
-              {/* HANIRA NEON (18.3.6) — botões do composer são ÍCONES puros:
-                  fundo invisível normalmente; hover revela círculo
-                  translúcido. Enviar ativo usa círculo neon azul/violeta. */}
-              <button
-                type="button"
-                onClick={() => setPlusMenuOpen((value) => !value)}
-                aria-label="Mais ações"
-                aria-haspopup="menu"
-                aria-expanded={plusMenuOpen}
-                title="Anexos e ações"
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Plus className="size-[18px]" />
-              </button>
-              {plusMenuOpen && (
-                <div className="hanira-menu" role="menu" aria-label="Anexos">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); documentInputRef.current?.click(); }}
-                    className="hanira-menu__item"
-                  >
-                    <Paperclip className="size-4" />
-                    Anexar documento
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); imageInputRef.current?.click(); }}
-                    className="hanira-menu__item"
-                  >
-                    <ImagePlus className="size-4" />
-                    Anexar imagem
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); void requestMediaAccess("camera"); }}
-                    className="hanira-menu__item"
-                  >
-                    <Camera className="size-4" />
-                    Tirar foto
-                  </button>
-                </div>
-              )}
-            </div>
             <div className="flex items-center gap-2">
               <span
                 id="chat-message-length"
