@@ -330,29 +330,32 @@ select:focus-visible {
 .chat-prose h5,
 .chat-prose h6 {
   color: var(--foreground);
-  font-weight: 600;
-  letter-spacing: -0.018em;
-  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   text-wrap: balance;
   margin-block: 1.75rem 0.75rem;
 }
 
-.chat-prose > :first-child { margin-top: 0; }
-
 .chat-prose h2 {
-  font-size: clamp(1.3rem, 1.1rem + 0.7vw, 1.5rem);
+  font-size: clamp(1.35rem, 1.15rem + 0.8vw, 1.6rem);
+  color: var(--primary);
 }
 
 .chat-prose h3 {
-  font-size: clamp(1.15rem, 1.05rem + 0.4vw, 1.25rem);
+  font-size: clamp(1.2rem, 1.1rem + 0.5vw, 1.35rem);
+  color: var(--foreground);
 }
 
 .chat-prose h4 {
   font-size: 1.125rem;
+  color: var(--foreground);
 }
 
 .chat-prose h5,
 .chat-prose h6 { font-size: 1.0625rem; }
+
+.chat-prose > :first-child { margin-top: 0; }
 
 .chat-prose p {
   white-space: pre-wrap;
@@ -395,16 +398,32 @@ select:focus-visible {
 /* Explicit labels carry meaning even without color; body text stays neutral. */
 .chat-prose .chat-callout {
   --callout-color: var(--primary);
-  border-inline-start: 2px solid var(--callout-color);
-  padding: 0.35rem 0 0.35rem 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-inline-start: 3px solid var(--callout-color);
+  background: color-mix(in srgb, var(--callout-color) 8%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  margin-block: 1rem;
 }
 
-.chat-prose .chat-callout--success { --callout-color: var(--success); background: rgba(118, 215, 170, 0.07); }
-.chat-prose .chat-callout--info { --callout-color: var(--primary); background: rgba(0, 183, 255, 0.07); }
-.chat-prose .chat-callout--warning { --callout-color: var(--warning); background: rgba(234, 191, 123, 0.07); }
-.chat-prose .chat-callout--error { --callout-color: var(--destructive); background: rgba(251, 113, 133, 0.07); }
+.chat-prose .chat-callout--success { --callout-color: var(--success); }
+.chat-prose .chat-callout--info { --callout-color: var(--primary); }
+.chat-prose .chat-callout--warning { --callout-color: var(--warning); }
+.chat-prose .chat-callout--error { --callout-color: var(--destructive); }
 
-.chat-prose .chat-callout > strong:first-of-type { color: var(--callout-color); }
+.chat-prose .chat-callout > strong:first-of-type {
+  color: var(--callout-color);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.chat-prose .chat-callout > :not(strong:first-of-type) {
+  color: var(--secondary-foreground);
+  flex: 1;
+  min-width: 0;
+}
 
 /* Nira Writing Block — superfície própria (grafite #22232a), claramente
  * separada do fundo do chat (#03040a). Sem imitar a identidade alheia. */
