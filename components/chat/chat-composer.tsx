@@ -948,7 +948,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
             }}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                        className="block h-10 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
           />
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
@@ -1048,7 +1048,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               onRemoveReference={handleRemoveImageReference}
             />
           )}
-          <div className="flex items-center justify-between px-1 pb-1">
+          <div className="flex items-center justify-between px-3 pt-3 pb-1">
             <div className="relative flex items-center" ref={plusMenuRef}>
               {/* HANIRA NEON (18.3.6) — botões do composer são ÍCONES puros:
                   fundo invisível normalmente; hover revela círculo

@@ -410,9 +410,10 @@ select:focus-visible {
   padding: 0.35rem 0 0.35rem 0.9rem;
 }
 
-.chat-prose .chat-callout--success { --callout-color: var(--success); }
-.chat-prose .chat-callout--warning { --callout-color: var(--warning); }
-.chat-prose .chat-callout--error { --callout-color: var(--destructive); }
+.chat-prose .chat-callout--success { --callout-color: var(--success); background: rgba(118, 215, 170, 0.07); }
+.chat-prose .chat-callout--info { --callout-color: var(--primary); background: rgba(0, 183, 255, 0.07); }
+.chat-prose .chat-callout--warning { --callout-color: var(--warning); background: rgba(234, 191, 123, 0.07); }
+.chat-prose .chat-callout--error { --callout-color: var(--destructive); background: rgba(251, 113, 133, 0.07); }
 
 .chat-prose .chat-callout > strong:first-of-type { color: var(--callout-color); }
 
