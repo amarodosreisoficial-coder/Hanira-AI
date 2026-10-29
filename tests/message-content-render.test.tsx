@@ -89,4 +89,39 @@ describe("19.2-J: Markdown legível e seguro", () => {
     expect(html).toContain('href="https://example.com/noticia"');
     expect(render("Bom dia!")).toBe('<div class="chat-prose"><p>Bom dia!</p></div>');
   });
+
+  it("renderiza os quatro marcadores semânticos com emojis contextuais", () => {
+    expect(render("✅ **Confirmado:** Operação concluída.")).toContain(
+      "chat-callout--success"
+    );
+    expect(render("ℹ️ **Informação:** Contexto relevante.")).toContain(
+      "chat-callout--info"
+    );
+    expect(render("⚠️ **Atenção:** Verifique antes de prosseguir.")).toContain(
+      "chat-callout--warning"
+    );
+    expect(render("❌ **Erro:** A operação falhou.")).toContain(
+      "chat-callout--error"
+    );
+  });
+
+  it("não colore palavras avulsas; cor só vem do marcador semântico", () => {
+    const html = render(
+      "✅ Confirmação genérica. ⚠️ Aviso isolado. 📌 Destaque solto."
+    );
+    expect(html).not.toContain('class="chat-callout ');
+  });
+
+  it("renderiza resposta organizada com títulos, listas e marcadores semânticos", () => {
+    const html = render(
+      "## Resumo da operação\n\n✅ **Confirmado:** A tarefa foi concluída com sucesso.\n\nℹ️ **Informação:** O resultado está disponível para consulta.\n\n⚠️ **Atenção:** Revise os dados antes de compartilhar.\n\n- Item um\n- Item dois\n\n❌ **Erro:** Não foi possível salvar o anexo."
+    );
+    expect(html).toContain("<h3>");
+    expect(html).toContain("chat-callout--success");
+    expect(html).toContain("chat-callout--info");
+    expect(html).toContain("chat-callout--warning");
+    expect(html).toContain("chat-callout--error");
+    expect(html).toContain("<ul>");
+    expect(html).not.toContain('role="alert"');
+  });
 });

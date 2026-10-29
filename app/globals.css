@@ -278,17 +278,6 @@ select:focus-visible {
   scrollbar-gutter: stable;
 }
 
-.chat-composer-shell::before {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: -1;
-  height: 8rem;
-  content: "";
-  background: linear-gradient(to bottom, transparent, var(--background) 42%);
-}
-
 /* Nira presence — símbolo oficial SEM tile/fundo/moldura. Halo vem do
  * .nira-mark (drop-shadow neon). Animações de estado aplicadas à imagem. */
 .nira-presence.is-thinking .nira-mark {
