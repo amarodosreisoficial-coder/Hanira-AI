@@ -124,4 +124,24 @@ describe("19.2-J: Markdown legível e seguro", () => {
     expect(html).toContain("<ul>");
     expect(html).not.toContain('role="alert"');
   });
+
+  it("reconhece marcadores sem emoji (apenas rótulo textual)", () => {
+    const html = render("**Informação:** Orientação sem emoji.");
+    expect(html).toContain("chat-callout--info");
+    expect(html).toContain("<strong>Informação:</strong>");
+  });
+
+  it("não aplica chat-callout a texto comum sem marcador de rótulo", () => {
+    const html = render("Apenas uma frase normal sem nenhum marcador.");
+    expect(html).not.toContain("chat-callout");
+    expect(html).toContain("<p>");
+  });
+
+
+
+  it("não colore palavras arbitrárias fora de marcadores semânticos", () => {
+    const html = render("Esta frase tem palavras comuns sem **nenhum** marcador especial.");
+    expect(html).not.toContain("chat-callout");
+    expect(html).toContain("<strong>nenhum</strong>");
+  });
 });

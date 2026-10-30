@@ -115,7 +115,7 @@ export function Sidebar({ userName }: { userName: string }) {
             >
               <span
                 className="transition group-hover:opacity-100 group-focus-visible:opacity-100 hover:bg-white/[0.06]"
-                onMouseEnter={() => store.setSidebarCollapsed(false)}
+
               >
                 <HaniraMark compact />
               </span>
@@ -125,21 +125,17 @@ export function Sidebar({ userName }: { userName: string }) {
             </button>
           ) : (
             <>
-              <Link
-                href="/"
-                aria-label="Página inicial da Hanira"
-                className="group relative min-w-0 flex-1"
-                onClick={() => store.setSidebarCollapsed(false)}
+              <button
+                type="button"
+                aria-label="Recolher barra lateral"
+                title="Recolher barra lateral"
+                aria-controls="hanira-sidebar"
+                aria-expanded={!store.sidebarCollapsed}
+                onClick={() => store.setSidebarCollapsed(true)}
+                className="group relative grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="sr-only">Recolher barra lateral</span>
-                
-                <span
-                  className="absolute inset-0 place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid"
-                  aria-hidden="true"
-                >
-                  <PanelLeftClose className="size-4" />
-                </span>
-              </Link>
+                <PanelLeftClose className="size-4" />
+              </button>
             </>
           )}
           <IconButton

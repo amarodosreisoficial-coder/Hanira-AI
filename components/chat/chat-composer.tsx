@@ -997,8 +997,54 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   }}
                   onPaste={handlePaste}
                   onKeyDown={handleKeyDown}
-                  className="block h-10 flex-1 min-w-0 resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                  className="block h-10 flex-1 min-w-0 resize-none bg-transparent px-3 py-2 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
                 />
+                <span
+                  id="chat-message-length"
+                  className="sr-only"
+                  aria-live="polite"
+                >
+                  {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
+                </span>
+                <button
+                  type="button"
+                  disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                  onClick={() => void requestMediaAccess("microphone")}
+                  aria-label="Transcrever áudio do microfone"
+                  title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
+                  className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-zinc-700 disabled:hover:bg-transparent"
+                >
+                  <Mic className="size-[18px]" />
+                </button>
+                {store.isThinking ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      abortRef.current?.abort();
+                      imageGenerationAbortRef.current?.abort();
+                    }}
+                    aria-label="Interromper resposta"
+                    className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                    aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
+                    className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                  >
+                    {uploading ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : isImageMode ? (
+                      <Sparkles className="size-4" />
+                    ) : (
+                      <ArrowUp className="size-4" />
+                    )}
+                  </button>
+                )}
               </div>
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
@@ -1098,55 +1144,6 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               onRemoveReference={handleRemoveImageReference}
             />
           )}
-          <div className="flex items-center justify-between px-3 pt-3 pb-1">
-            <div className="flex items-center gap-2">
-              <span
-                id="chat-message-length"
-                className={`px-1 text-[10px] ${remainingCharacters <= 200 ? "text-warning" : "text-muted-foreground"}`}
-              >
-                {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
-              </span>
-              <button
-                type="button"
-                disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
-                onClick={() => void requestMediaAccess("microphone")}
-                aria-label="Transcrever áudio do microfone"
-                title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-zinc-700 disabled:hover:bg-transparent"
-              >
-                <Mic className="size-[18px]" />
-              </button>
-              {store.isThinking ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    abortRef.current?.abort();
-                    imageGenerationAbortRef.current?.abort();
-                  }}
-                  aria-label="Interromper resposta"
-                  className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Square className="size-3.5 fill-current" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  disabled={isImageMode ? !canSendImage : !canSend}
-                  aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
-                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-                >
-                  {uploading ? (
-                    <LoaderCircle className="size-4 animate-spin" />
-                  ) : isImageMode ? (
-                    <Sparkles className="size-4" />
-                  ) : (
-                    <ArrowUp className="size-4" />
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
             </>
           )}
         </div>
