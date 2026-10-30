@@ -33,4 +33,15 @@ describe("composer sem sobreposição (hotfix 19.2-M)", () => {
     expect(composer).toContain('placeholder=');
     expect(composer).toContain("Converse com a Nira...");
   });
+
+  it("botão Enviar usa condição canSend (não bloqueado por transcrição desligada)", () => {
+    const composer = readFileSync(
+      new URL("../components/chat/chat-composer.tsx", import.meta.url),
+      "utf8"
+    );
+    // O botão Enviar deve usar isImageMode ? !canSendImage : !canSend
+    expect(composer).toContain("disabled={isImageMode ? !canSendImage : !canSend}");
+    // O botão do microfone deve usar a condição de transcrição
+    expect(composer).toContain("disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === \"demo\"}");
+  });
 });

@@ -1032,7 +1032,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   <button
                     type="button"
                     onClick={() => void submit()}
-                    disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                    disabled={isImageMode ? !canSendImage : !canSend}
                     aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
                     className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                   >
