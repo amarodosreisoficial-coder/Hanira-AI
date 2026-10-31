@@ -16,7 +16,8 @@ describe("Ikigai: fundação local", () => {
     expect(html).toContain('aria-label="Etapas do Ikigai"');
     expect(html).toContain('aria-current="step"');
     expect(html).toContain("Ao sair ou recarregar");
-    expect(html).toContain("sem envio para análise, banco de dados ou memória da Nira");
+    expect(html).toContain("sem gravação no banco de dados, histórico ou memória da Nira");
+    expect(html).toContain("Somente ao consentir e solicitar perguntas inteligentes");
   });
 
   it("rota exige sessão com retorno para /ikigai", async () => {

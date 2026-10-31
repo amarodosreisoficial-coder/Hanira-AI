@@ -1,5 +1,7 @@
 # Ikigai — pacote 20.0-A
 
+Este documento registra a fundação original. O pacote 20.0-B acrescenta entrevista opcional por IA com consentimento; o comportamento atual e os limites estão em [ikigai-interview.md](./ikigai-interview.md).
+
 ## Escopo e execução
 
 `/ikigai` usa a mesma autenticação das páginas existentes e o mesmo proxy de renovação de sessão. O item na sidebar existe nas versões expandida, recolhida e móvel. A página dedicada permite voltar ao chat.

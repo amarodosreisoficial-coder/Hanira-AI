@@ -20,6 +20,13 @@ export function IkigaiPreview({ profile }: { profile: IkigaiProfilePreview }) {
         ))}
       </div>
       {profile.story && <div className="mt-6"><h3 className="mb-2 font-medium">Sua história, nas suas palavras</h3><p className="whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{profile.story}</p></div>}
+      {!!profile.followUps?.length && <div className="mt-8 border-t border-white/10 pt-6">
+        <h3 className="mb-4 font-medium text-cyan-200">Sua conversa com a Nira</h3>
+        <dl className="space-y-5">{profile.followUps.map((question) => <div key={question.id} className="rounded-2xl border border-violet-300/10 bg-background/50 p-5">
+          <dt className="text-sm font-medium leading-7">{question.text}</dt>
+          <dd className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground">{question.answer.trim() || "Sem resposta — você pode pular ou revisar esta pergunta."}</dd>
+        </div>)}</dl>
+      </div>}
     </section>
   );
 }
