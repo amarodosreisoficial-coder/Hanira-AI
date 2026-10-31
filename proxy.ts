@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/proxy";
 
-const protectedPaths = ["/chat", "/settings"];
+const protectedPaths = ["/chat", "/settings", "/ikigai"];
 const authPaths = [
   "/login",
   "/cadastro",
@@ -45,6 +45,7 @@ export const config = {
   matcher: [
     "/chat/:path*",
     "/settings/:path*",
+    "/ikigai/:path*",
     "/login",
     "/cadastro",
     "/esqueci-a-senha",

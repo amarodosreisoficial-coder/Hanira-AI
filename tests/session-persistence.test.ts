@@ -72,7 +72,7 @@ describe("Pacote 18.3.6 — logout preservado", () => {
 
 describe("Pacote 18.3.6 — redirecionamento de autenticação (middleware)", () => {
   it("rota protegida sem sessão redireciona para /login com session_expired", () => {
-    expect(proxy).toContain('protectedPaths = ["/chat", "/settings"]');
+    expect(proxy).toContain('protectedPaths = ["/chat", "/settings", "/ikigai"]');
     expect(proxy).toMatch(/protectedRoute && !user[\s\S]*?session_expired/);
   });
 
