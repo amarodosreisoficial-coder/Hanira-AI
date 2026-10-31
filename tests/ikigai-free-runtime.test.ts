@@ -3,6 +3,9 @@ import { generateIkigaiQuestions } from "@/lib/ikigai/interview-generator";
 import { recordCandidateFailure, resetCapacityStateForTests } from "@/lib/ai/capacity/capacity-state";
 import { GROQ_FREE_SECONDARY_CANDIDATE_ID } from "@/lib/ai/capacity/groq-free-candidates";
 import { NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID } from "@/lib/ai/nira/profiles";
+import { generateIkigaiAnalysis } from "@/lib/ikigai/analysis-generator";
+import { buildAnalysisInput } from "@/lib/ikigai/analysis-contract";
+import { analysisAnswers, createAnalysisReport } from "./helpers/ikigai-analysis";
 
 const answers = { identity: "Pessoa privada ABC", love: "Compor música", strengths: "Cantar", impact: "Acolher pessoas", future: "Montar uma banda", story: "" };
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -23,6 +26,27 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); resetCapacityStateForTests(); });
 
 describe("Ikigai: integração do runtime existente sem rede real", () => {
+  it("análise usa o mesmo runtime gratuito em um único fetch simulado, sem conteúdo nos logs", async () => {
+    const logs = [vi.spyOn(console, "info").mockImplementation(() => {}), vi.spyOn(console, "warn").mockImplementation(() => {}), vi.spyOn(console, "error").mockImplementation(() => {})];
+    fetchMock.mockResolvedValueOnce(Response.json({ model: "openai/gpt-oss-20b", choices: [{ message: { content: JSON.stringify(createAnalysisReport()) }, finish_reason: "stop" }] }));
+    const report = await generateIkigaiAnalysis(buildAnalysisInput(analysisAnswers, []), new AbortController().signal);
+    expect(report).toEqual(createAnalysisReport());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(JSON.parse(init.body).model).toBe("openai/gpt-oss-20b");
+    expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toMatch(/Sou professora|Ensinar e escutar|gsk_test_not_real|Produza uma análise/);
+  });
+
+  it("análise também bloqueia candidatos pagos e capacidade gratuita indisponível antes da rede", async () => {
+    vi.stubEnv("HANIRA_FREE_TEXT_CANDIDATES", JSON.stringify([{ id: "paid-extra", provider: "groq", model: "paid-model", costClass: "paid", enabled: true }]));
+    await expect(generateIkigaiAnalysis(buildAnalysisInput(analysisAnswers, []), new AbortController().signal)).rejects.toThrow();
+    vi.stubEnv("HANIRA_FREE_TEXT_CANDIDATES", "");
+    recordCandidateFailure(NIRA_CLOUD_FREE_PREFERRED_CANDIDATE_ID, { code: "rate_limit" });
+    recordCandidateFailure(GROQ_FREE_SECONDARY_CANDIDATE_ID, { code: "rate_limit" });
+    await expect(generateIkigaiAnalysis(buildAnalysisInput(analysisAnswers, []), new AbortController().signal)).rejects.toMatchObject({ code: "capacity_unavailable" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("usa composition root e provider gratuito reais com um único fetch simulado", async () => {
     const logs = [vi.spyOn(console, "info").mockImplementation(() => {}), vi.spyOn(console, "warn").mockImplementation(() => {}), vi.spyOn(console, "error").mockImplementation(() => {})];
     const result = await generateIkigaiQuestions(answers, new AbortController().signal);

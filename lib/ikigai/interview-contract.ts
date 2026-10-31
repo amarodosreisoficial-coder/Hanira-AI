@@ -2,12 +2,13 @@ import { z } from "zod";
 import { IKIGAI_MAX_LENGTH, IKIGAI_QUESTIONS } from "./flow";
 
 const answer = z.string().trim().min(1).max(IKIGAI_MAX_LENGTH);
+export const ikigaiAnswersSchema = z.object({
+  identity: answer, love: answer, strengths: answer, impact: answer, future: answer,
+  story: z.string().trim().max(IKIGAI_MAX_LENGTH).default(""),
+}).strict();
 export const ikigaiInterviewRequestSchema = z.object({
   consent: z.literal(true),
-  answers: z.object({
-    identity: answer, love: answer, strengths: answer, impact: answer, future: answer,
-    story: z.string().trim().max(IKIGAI_MAX_LENGTH),
-  }).strict(),
+  answers: ikigaiAnswersSchema,
 }).strict();
 
 export function normalizeQuestion(text: string): string {
@@ -29,6 +30,6 @@ export const followUpTextSchema = z.string().trim().min(20).max(240)
   .refine((text) => !IKIGAI_QUESTIONS.some((initial) => similarQuestions(text, initial.label)));
 
 export const ikigaiInterviewResponseSchema = z.object({
-  questions: z.array(z.object({ id: z.string().regex(/^nira-[1-3]$/), text: followUpTextSchema }).strict()).min(1).max(3),
+  questions: z.array(z.object({ id: z.enum(["nira-1", "nira-2", "nira-3"]), text: followUpTextSchema }).strict()).min(1).max(3),
 }).strict().refine(({ questions }) => new Set(questions.map(({ id }) => id)).size === questions.length &&
   questions.every((question, index) => questions.slice(0, index).every((other) => !similarQuestions(question.text, other.text))));

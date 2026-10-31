@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { buildIkigaiPreview, createIkigaiAnswers, isIkigaiReady, IKIGAI_MAX_LENGTH } from "@/lib/ikigai/flow";
 import type { IkigaiAnswers, IkigaiStep, IkigaiFollowUp } from "@/lib/ikigai/types";
 import { ikigaiInterviewResponseSchema } from "@/lib/ikigai/interview-contract";
+import { useIkigaiAnalysis } from "./use-ikigai-analysis";
 
 export function useIkigaiFlow() {
   const [step, setStep] = useState<IkigaiStep>("intro");
@@ -17,6 +18,7 @@ export function useIkigaiFlow() {
   const [interviewStatus, setInterviewStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [interviewError, setInterviewError] = useState("");
   const pendingRequest = useRef<AbortController | null>(null);
+  const analysis = useIkigaiAnalysis(answers, followUps, () => setStep("result"));
 
   useEffect(() => () => pendingRequest.current?.abort(), []);
 
@@ -30,6 +32,7 @@ export function useIkigaiFlow() {
   }
 
   function updateAnswer(id: keyof IkigaiAnswers, value: string) {
+    analysis.invalidate();
     setAnswers((current) => ({ ...current, [id]: value.slice(0, IKIGAI_MAX_LENGTH) }));
     // Perguntas antigas não permanecem associadas a respostas iniciais alteradas.
     cancelInterviewRequest();
@@ -67,6 +70,7 @@ export function useIkigaiFlow() {
       const result = ikigaiInterviewResponseSchema.parse(await response.json());
       if (pendingRequest.current !== controller) return;
       setFollowUps(result.questions.map((question) => ({ ...question, answer: "" })));
+      analysis.invalidate();
       setQuestionIndex(0);
       setInterviewStatus("ready");
       setConsentOpen(false);
@@ -83,6 +87,7 @@ export function useIkigaiFlow() {
   }
 
   function updateFollowUp(value: string) {
+    analysis.invalidate();
     setFollowUps((current) => current.map((question, index) => index === questionIndex ? { ...question, answer: value.slice(0, IKIGAI_MAX_LENGTH) } : question));
   }
 
@@ -93,7 +98,28 @@ export function useIkigaiFlow() {
   }
 
   const preview = { ...buildIkigaiPreview(answers), followUps };
+  function editInitialAnswers() {
+    cancelInterviewRequest();
+    analysis.cancelRequest();
+    setStep("questions");
+  }
+  function reviewInterview() {
+    cancelInterviewRequest();
+    analysis.cancelRequest();
+    setQuestionIndex(0);
+    setStep("interview");
+  }
+  function restart() {
+    cancelInterviewRequest();
+    analysis.invalidate();
+    setAnswers(createIkigaiAnswers());
+    setFollowUps([]);
+    setQuestionIndex(0);
+    setInterviewStatus("idle");
+    setStep("intro");
+  }
   return { step, setStep, answers, updateAnswer, ready, isPending, showPreview, preview,
     followUps, questionIndex, setQuestionIndex, consentOpen, setConsentOpen, consent, setConsent,
-    interviewStatus, interviewError, requestInterview, cancelInterviewRequest, updateFollowUp, advanceInterview };
+    interviewStatus, interviewError, requestInterview, cancelInterviewRequest, updateFollowUp, advanceInterview,
+    analysis, editInitialAnswers, reviewInterview, restart };
 }

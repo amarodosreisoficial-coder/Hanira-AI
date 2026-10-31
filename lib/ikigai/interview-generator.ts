@@ -1,8 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { createTextChatRuntime } from "@/lib/ai/runtime/create-text-chat-runtime";
-import { AIProviderError } from "@/lib/ai/types";
-import { recordCandidateFailure, recordCandidateSuccess } from "@/lib/ai/capacity/capacity-state";
+import { generateIkigaiJson } from "./generation";
 import { followUpTextSchema, ikigaiInterviewResponseSchema, normalizeQuestion } from "./interview-contract";
 import type { IkigaiAnswers } from "./types";
 
@@ -46,25 +44,6 @@ export function parseGeneratedQuestions(text: string, answers: IkigaiAnswers) {
 }
 
 export async function generateIkigaiQuestions(answers: IkigaiAnswers, signal: AbortSignal) {
-  // Mesmo composition root do chat: ModelRouter aplica Zero-Cost Guard e cooldowns.
-  // Não passamos candidatos externos, perfil pago, ferramentas, memória ou histórico.
-  const runtime = createTextChatRuntime();
-  try {
-    signal.throwIfAborted();
-    const response = await runtime.provider.generate({
-      model: runtime.model,
-      messages: [{ role: "system", text: INTERVIEW_PROMPT }, { role: "user", text: JSON.stringify(answers) }],
-      maxOutputTokens: 900,
-      temperature: 0.4,
-      signal,
-    });
-    signal.throwIfAborted();
-    if (response.finishReason !== "stop") throw new InvalidIkigaiQuestionsError();
-    const result = parseGeneratedQuestions(response.text, answers);
-    recordCandidateSuccess(runtime.routing.candidateId);
-    return result;
-  } catch (error) {
-    if (error instanceof AIProviderError) recordCandidateFailure(runtime.routing.candidateId, { code: error.code, retryable: error.retryable });
-    throw error;
-  }
+  return generateIkigaiJson({ systemPrompt: INTERVIEW_PROMPT, data: answers, maxOutputTokens: 900, signal,
+    parse: (text) => parseGeneratedQuestions(text, answers), invalidResult: () => new InvalidIkigaiQuestionsError() });
 }

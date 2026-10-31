@@ -1,5 +1,7 @@
 # Ikigai — pacote 20.0-B
 
+Este documento registra o escopo original da entrevista. O pacote 20.0-C adiciona análise com consentimento separado, que pode enviar também os aprofundamentos respondidos; consulte [ikigai-analysis.md](./ikigai-analysis.md).
+
 ## Fluxo e consentimento
 
 Na branch `pacote-20-0-a-ikigai-foundation`, a partir de `b3380c4928e90222059b474c3d7f49b8dde66b7f`, a pessoa preenche as cinco perguntas iniciais e pode continuar usando somente a prévia local. “Aprofundar com a Nira” abre a explicação do envio; somente depois de marcar o consentimento e clicar em “Enviar respostas e gerar perguntas” ocorre uma requisição.

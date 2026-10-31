@@ -38,7 +38,7 @@ export function IkigaiInterview({ flow }: { flow: Flow }) {
     <div role="progressbar" aria-label="Progresso da entrevista" aria-valuemin={0} aria-valuenow={flow.questionIndex + 1} aria-valuemax={flow.followUps.length} className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
       <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-300" style={{ width: `${((flow.questionIndex + 1) / flow.followUps.length) * 100}%` }} />
     </div>
-    <p id="ikigai-interview-help" className="mt-5 text-sm leading-7 text-muted-foreground">Esta pergunta foi gerada pela Nira a partir das suas respostas. Você pode responder, pular ou voltar para revisar. As respostas complementares ficam somente nesta página.</p>
+    <p id="ikigai-interview-help" className="mt-5 text-sm leading-7 text-muted-foreground">Esta pergunta foi gerada pela Nira a partir das suas respostas. Você pode responder, pular ou voltar para revisar. As respostas complementares só serão enviadas à IA se você consentir separadamente com a análise.</p>
     <form className="mt-6" onSubmit={(event) => { event.preventDefault(); if (question.answer.trim()) flow.advanceInterview(); }}>
       <label htmlFor="ikigai-follow-up" className="mb-4 block text-lg font-medium leading-8">{question.text}</label>
       <textarea id="ikigai-follow-up" key={question.id} rows={5} maxLength={IKIGAI_MAX_LENGTH} value={question.answer} onChange={(event) => flow.updateFollowUp(event.target.value)} aria-describedby="ikigai-interview-help" placeholder="Conte o que faz sentido para você. Não há uma resposta perfeita." className={`w-full resize-y rounded-2xl border border-white/10 bg-background p-4 text-sm leading-7 placeholder:text-muted-foreground ${focusStyle}`} />

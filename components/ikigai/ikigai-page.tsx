@@ -6,11 +6,12 @@ import { ArrowLeft, ArrowRight, Compass, Download, Mic, ShieldCheck, Sparkles } 
 import { Button } from "@/components/ui/button";
 import { IkigaiPreview } from "./ikigai-preview";
 import { IkigaiConsent, IkigaiInterview } from "./ikigai-interview";
+import { IkigaiAnalysisConsent, IkigaiAnalysisResult } from "./ikigai-analysis";
 import { useIkigaiFlow } from "./use-ikigai-flow";
 import { answeredQuestions, IKIGAI_MAX_LENGTH, IKIGAI_QUESTIONS } from "@/lib/ikigai/flow";
 
 const steps = ["Conhecer", "Responder", "Converse com a Nira", "Visualizar", "Próximos passos"];
-const stepIndexes = { intro: 0, questions: 1, interview: 2, preview: 3, next: 4 };
+const stepIndexes = { intro: 0, questions: 1, interview: 2, preview: 3, next: 4, result: 4 };
 const focusStyle = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-4 focus-visible:ring-offset-background";
 
 export function IkigaiPage() {
@@ -55,7 +56,7 @@ export function IkigaiPage() {
             <div className="my-8 grid gap-6 sm:grid-cols-3">{[
               ["01", "Olhe para dentro", "Responda cinco perguntas, no seu ritmo."],
               ["02", "Conecte suas ideias", "Veja suas respostas organizadas em quatro áreas."],
-              ["03", "Imagine possibilidades", "Se desejar, converse com a Nira. O mapa final e o PDF chegam em breve."],
+              ["03", "Imagine possibilidades", "Se desejar, converse com a Nira e solicite sua análise personalizada. O PDF chega em breve."],
             ].map(([number, title, text]) => <div key={number}><span className="text-xs text-cyan-300">{number}</span><h3 className="mb-2 mt-3 font-medium">{title}</h3><p className="text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div>
             <Button onClick={() => flow.setStep("questions")} className={`bg-cyan-200 hover:bg-cyan-100 ${focusStyle}`}>Iniciar meu Ikigai<ArrowRight className="size-4" aria-hidden="true" /></Button>
           </section>}
@@ -64,6 +65,7 @@ export function IkigaiPage() {
             <h2 ref={stepTitle} tabIndex={-1} id="ikigai-step-title" className={`rounded text-2xl font-semibold ${focusStyle}`}>Vamos começar por você</h2>
             <p id="ikigai-form-help" className="mt-3 text-sm leading-7 text-muted-foreground">As cinco perguntas são obrigatórias. A história é opcional. Até {IKIGAI_MAX_LENGTH} caracteres por campo; responda no seu ritmo.</p>
             {!!flow.followUps.length && <p className="mt-3 text-sm leading-7 text-violet-200">Alterar uma resposta inicial descarta as perguntas e respostas complementares atuais. Um novo aprofundamento exigirá seu consentimento novamente.</p>}
+            {!!flow.analysis.result && <p className="mt-3 text-sm leading-7 text-cyan-200">Alterar uma resposta descarta a análise atual. Uma nova análise exigirá consentimento específico.</p>}
             <p role="status" className="mt-4 text-sm text-cyan-200">{answeredQuestions(flow.answers)} de 5 perguntas respondidas</p>
             <form className="mt-8 space-y-7" aria-describedby="ikigai-form-help" onSubmit={(event) => { event.preventDefault(); flow.showPreview(); }}>
               {IKIGAI_QUESTIONS.map((question, index) => <div key={question.id}>
@@ -87,19 +89,25 @@ export function IkigaiPage() {
 
           {(flow.step === "preview" || flow.step === "next") && <section aria-labelledby="ikigai-step-title" className="rounded-3xl border border-white/10 bg-card p-6 sm:p-8">
             <h2 ref={stepTitle} tabIndex={-1} id="ikigai-step-title" className={`rounded text-2xl font-semibold ${focusStyle}`}>{flow.step === "preview" ? "Sua prévia está pronta" : "Seu próximo capítulo"}</h2>
-            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Esta prévia organiza suas respostas, sem análise definitiva do Ikigai." : "Você concluiu a reflexão inicial. A geração do mapa final e a exportação em PDF estarão disponíveis em uma próxima versão. Não há geração em andamento."}</p>
+            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Você pode solicitar uma análise personalizada com consentimento próprio, com ou sem o aprofundamento opcional." : "Você concluiu a reflexão inicial. Sua análise personalizada está disponível mediante consentimento. O PDF chegará em uma próxima versão. Não há geração em andamento até você confirmar o envio."}</p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" onClick={() => { flow.cancelInterviewRequest(); flow.setStep("questions"); }} className={focusStyle}>Editar respostas</Button>
-              {flow.step === "preview" && !flow.followUps.length && <Button variant="secondary" disabled={flow.consentOpen} onClick={() => flow.setConsentOpen(true)} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Aprofundar com a Nira</Button>}
-              {!!flow.followUps.length && <Button variant="secondary" onClick={() => { flow.setQuestionIndex(0); flow.setStep("interview"); }} className={focusStyle}>Revisar conversa</Button>}
-              {flow.step === "preview" && <Button onClick={() => { flow.cancelInterviewRequest(); flow.setStep("next"); }} className={focusStyle}>Ver próximas etapas<ArrowRight className="size-4" aria-hidden="true" /></Button>}
+              <Button variant="secondary" onClick={flow.editInitialAnswers} className={focusStyle}>Editar respostas</Button>
+              {flow.step === "preview" && !flow.followUps.length && <Button variant="secondary" disabled={flow.consentOpen} onClick={() => { flow.analysis.cancelRequest(); flow.setConsentOpen(true); }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Aprofundar com a Nira</Button>}
+              {!!flow.followUps.length && <Button variant="secondary" onClick={flow.reviewInterview} className={focusStyle}>Revisar conversa</Button>}
+              {flow.analysis.result ? <Button onClick={() => flow.setStep("result")} className={focusStyle}>Ver minha análise</Button> : <Button disabled={flow.analysis.consentOpen} onClick={() => { flow.cancelInterviewRequest(); flow.analysis.openConsent(); }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Gerar meu Ikigai com a Nira</Button>}
+              {flow.step === "preview" && <Button onClick={() => { flow.cancelInterviewRequest(); flow.analysis.cancelRequest(); flow.setStep("next"); }} className={focusStyle}>Ver próximas etapas<ArrowRight className="size-4" aria-hidden="true" /></Button>}
               <Button disabled variant="secondary"><Download className="size-4" aria-hidden="true" />Baixar PDF (em breve)</Button>
             </div>
             {flow.step === "preview" && flow.consentOpen && <IkigaiConsent flow={flow} />}
+            {flow.analysis.consentOpen && <IkigaiAnalysisConsent flow={flow} />}
             {flow.step === "preview" && !flow.consentOpen && !flow.followUps.length && <p className="mt-4 text-xs leading-6 text-muted-foreground">O aprofundamento é opcional. Antes de enviar suas respostas à IA, você poderá ler os detalhes e consentir.</p>}
           </section>}
 
-          {flow.step !== "interview" && <IkigaiPreview profile={flow.preview} />}
+          {flow.step === "result" && flow.analysis.result && <IkigaiAnalysisResult report={flow.analysis.result} input={{ answers: flow.answers, followUps: flow.followUps }}
+            onEdit={flow.editInitialAnswers} onReview={flow.followUps.length ? flow.reviewInterview : undefined}
+            onDiscard={() => { flow.analysis.invalidate(); flow.setStep("preview"); }} onRestart={flow.restart} />}
+
+          {flow.step !== "interview" && flow.step !== "result" && <IkigaiPreview profile={flow.preview} />}
 
           <aside aria-labelledby="ikigai-privacy-title" className="flex items-start gap-3 rounded-2xl border border-white/10 bg-card p-5">
             <ShieldCheck className="mt-1 size-5 shrink-0 text-violet-300" aria-hidden="true" />
@@ -107,7 +115,8 @@ export function IkigaiPage() {
               <h2 id="ikigai-privacy-title" className="font-medium text-foreground">Um espaço pessoal de reflexão</h2>
               <p>Seu Ikigai é pessoal. Nesta etapa, as respostas não são transformadas em um relatório permanente salvo na plataforma.</p>
               <p>As respostas ficam no estado desta página, sem gravação no banco de dados, histórico ou memória da Nira. Ao sair ou recarregar, você pode perdê-las.</p>
-              <p>Somente ao consentir e solicitar perguntas inteligentes, suas respostas iniciais serão processadas pelo provedor de IA gratuito disponível, sujeitas à política de retenção desse provedor. Respostas complementares permanecem locais nesta versão.</p>
+              <p>Somente ao consentir e solicitar perguntas inteligentes, suas respostas iniciais serão processadas pelo provedor de IA gratuito disponível, sujeitas à política de retenção desse provedor.</p>
+              <p>Para gerar sua análise personalizada, um consentimento separado autoriza também o envio das perguntas complementares respondidas e suas respostas. Perguntas puladas não são enviadas como respostas. A análise fica apenas no estado temporário desta página, sem armazenamento permanente pela aplicação.</p>
               <p>Baixe seu resultado quando estiver pronto, pois essa versão inicial não armazena seu Ikigai. O download ficará disponível em uma próxima versão; por enquanto, copie suas respostas se quiser guardá-las.</p>
             </div>
           </aside>
