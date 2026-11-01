@@ -60,7 +60,7 @@ export function IkigaiPage() {
             <div className="my-8 grid gap-6 sm:grid-cols-3">{[
               ["01", "Olhe para dentro", "Responda cinco perguntas, no seu ritmo."],
               ["02", "Conecte suas ideias", "Veja suas respostas organizadas em quatro áreas."],
-              ["03", "Imagine possibilidades", "Se desejar, converse com a Nira e solicite sua análise personalizada. O PDF chega em breve."],
+              ["03", "Imagine possibilidades", "Se desejar, converse com a Nira e solicite sua análise personalizada. Você pode baixar o relatório em PDF."],
             ].map(([number, title, text]) => <div key={number}><span className="text-xs text-cyan-300">{number}</span><h3 className="mb-2 mt-3 font-medium">{title}</h3><p className="text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div>
             <Button onClick={() => flow.setStep("questions")} className={`bg-cyan-200 hover:bg-cyan-100 ${focusStyle}`}>Iniciar meu Ikigai<ArrowRight className="size-4" aria-hidden="true" /></Button>
           </section>}
@@ -93,7 +93,7 @@ export function IkigaiPage() {
 
           {(flow.step === "preview" || flow.step === "next") && <section aria-labelledby="ikigai-step-title" className="rounded-3xl border border-white/10 bg-card p-6 sm:p-8">
             <h2 ref={stepTitle} tabIndex={-1} id="ikigai-step-title" className={`rounded text-2xl font-semibold ${focusStyle}`}>{flow.step === "preview" ? "Sua prévia está pronta" : "Seu próximo capítulo"}</h2>
-            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Você pode solicitar uma análise personalizada com consentimento próprio, com ou sem o aprofundamento opcional." : "Você concluiu a reflexão inicial. Sua análise personalizada está disponível mediante consentimento. O PDF chegará em uma próxima versão. Não há geração em andamento até você confirmar o envio."}</p>
+            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Você pode solicitar uma análise personalizada com consentimento próprio, com ou sem o aprofundamento opcional." : "Você concluiu a reflexão inicial. Sua análise personalizada está disponível mediante consentimento. O relatório em PDF está disponível para download. Não há geração em andamento até você confirmar o envio."}</p>
             <div className="flex flex-wrap gap-3">
               <Button variant="secondary" onClick={flow.editInitialAnswers} className={focusStyle}>Editar respostas</Button>
               {flow.step === "preview" && !flow.followUps.length && <Button variant="secondary" disabled={flow.consentOpen} onClick={() => { flow.analysis.cancelRequest(); flow.setConsentOpen(true); }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Aprofundar com a Nira</Button>}
@@ -135,7 +135,7 @@ export function IkigaiPage() {
               <p>As respostas ficam no estado desta página, sem gravação no banco de dados, histórico ou memória da Nira. Ao sair ou recarregar, você pode perdê-las.</p>
               <p>Somente ao consentir e solicitar perguntas inteligentes, suas respostas iniciais serão processadas pelo provedor de IA gratuito disponível, sujeitas à política de retenção desse provedor.</p>
               <p>Para gerar sua análise personalizada, um consentimento separado autoriza também o envio das perguntas complementares respondidas e suas respostas. Perguntas puladas não são enviadas como respostas. A análise fica apenas no estado temporário desta página, sem armazenamento permanente pela aplicação.</p>
-              <p>Baixe seu resultado quando estiver pronto, pois essa versão inicial não armazena seu Ikigai. O download ficará disponível em uma próxima versão; por enquanto, copie suas respostas se quiser guardá-las.</p>
+              <p>Baixe seu resultado quando estiver pronto, pois essa versão inicial não armazena seu Ikigai permanentemente.</p>
             </div>
           </aside>
         </div>

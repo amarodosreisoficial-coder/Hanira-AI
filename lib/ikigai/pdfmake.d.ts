@@ -5,7 +5,8 @@ declare module 'pdfmake/build/pdfmake' {
     addVirtualFileSystem(vfs: any): void;
     createPdf(docDefinition: any): {
       getBlob(callback: (blob: Blob) => void): void;
-      getDataUri(callback: (dataUri: string) => void): void;
+      getBuffer(callback: (buffer: Buffer) => void): void;
+      getStream(callback: (stream: any) => void): void;
     };
   };
   export default pdfMake;
