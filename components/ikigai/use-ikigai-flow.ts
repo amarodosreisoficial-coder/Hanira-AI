@@ -15,6 +15,7 @@ export function useIkigaiFlow() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [consentOpen, setConsentOpen] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [displayName, setDisplayName] = useState("");
   const [interviewStatus, setInterviewStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [interviewError, setInterviewError] = useState("");
   const pendingRequest = useRef<AbortController | null>(null);
@@ -91,6 +92,10 @@ export function useIkigaiFlow() {
     setFollowUps((current) => current.map((question, index) => index === questionIndex ? { ...question, answer: value.slice(0, IKIGAI_MAX_LENGTH) } : question));
   }
 
+  function updateDisplayName(value: string) {
+    setDisplayName(value.trim().slice(0, 100));
+  }
+
   function advanceInterview(skip = false) {
     if (skip) updateFollowUp("");
     if (questionIndex + 1 < followUps.length) setQuestionIndex((current) => current + 1);
@@ -115,11 +120,12 @@ export function useIkigaiFlow() {
     setAnswers(createIkigaiAnswers());
     setFollowUps([]);
     setQuestionIndex(0);
+    setDisplayName("");
     setInterviewStatus("idle");
     setStep("intro");
   }
   return { step, setStep, answers, updateAnswer, ready, isPending, showPreview, preview,
     followUps, questionIndex, setQuestionIndex, consentOpen, setConsentOpen, consent, setConsent,
     interviewStatus, interviewError, requestInterview, cancelInterviewRequest, updateFollowUp, advanceInterview,
-    analysis, editInitialAnswers, reviewInterview, restart };
+    analysis, editInitialAnswers, reviewInterview, restart, displayName, updateDisplayName };
 }

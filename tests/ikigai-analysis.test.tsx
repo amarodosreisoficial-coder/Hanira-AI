@@ -84,7 +84,7 @@ describe("Ikigai: análise versionada e fundamentação", () => {
     for (const days of [7, 30, 90]) expect(html).toContain(`Nos próximos ${days} dias`);
     expect(html).toContain("Possibilidade a explorar");
     expect(html).toContain("Nenhum obstáculo explícito");
-    expect(html).toMatch(/disabled=""[^>]*>.*?Baixar PDF \(em breve\)/);
+    expect(html).toContain("Baixar meu Ikigai em PDF");
   });
 
   it("não altera o questionário nem o objeto retornado durante validação", () => {

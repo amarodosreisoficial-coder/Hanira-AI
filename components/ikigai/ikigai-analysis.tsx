@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { analysisSources, type IkigaiAnalysis, type IkigaiInsight, type IkigaiAnalysisInput } from "@/lib/ikigai/analysis-contract";
+import { downloadIkigaiPdf } from "@/lib/ikigai/pdf-generator";
 import type { useIkigaiFlow } from "./use-ikigai-flow";
 
 const focusStyle = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-4 focus-visible:ring-offset-background";
@@ -52,9 +53,10 @@ function InsightCard({ title, items, sources }: { title: string; items: IkigaiIn
   </section>;
 }
 
-export function IkigaiAnalysisResult({ report, input, onEdit, onReview, onDiscard, onRestart }: {
+export function IkigaiAnalysisResult({ report, input, displayName, onEdit, onReview, onDiscard, onRestart }: {
   report: IkigaiAnalysis;
   input: Pick<IkigaiAnalysisInput, "answers" | "followUps">;
+  displayName?: string;
   onEdit: () => void;
   onReview?: () => void;
   onDiscard: () => void;
@@ -74,7 +76,16 @@ export function IkigaiAnalysisResult({ report, input, onEdit, onReview, onDiscar
       <div className="mt-6 flex flex-wrap gap-3">
         <Button variant="secondary" onClick={onEdit} className={focusStyle}>Editar respostas</Button>
         {onReview && <Button variant="secondary" onClick={onReview} className={focusStyle}>Revisar conversa</Button>}
-        <Button disabled variant="secondary"><Download aria-hidden="true" className="size-4" />Baixar PDF (em breve)</Button>
+        <Button onClick={() => {
+          void downloadIkigaiPdf({
+            report,
+            input,
+            displayName,
+            generationDate: new Date().toISOString(),
+          });
+        }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>
+          <Download aria-hidden="true" className="size-4" /> Baixar meu Ikigai em PDF
+        </Button>
         <Button variant="ghost" onClick={onDiscard} className={focusStyle}>Descartar resultado</Button>
       </div>
       <p className="mt-4 text-xs leading-6 text-muted-foreground">Qualquer alteração nas respostas descarta esta análise. Um novo envio exige novo consentimento.</p>

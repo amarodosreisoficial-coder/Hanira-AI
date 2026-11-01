@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { IkigaiPreview } from "./ikigai-preview";
 import { IkigaiConsent, IkigaiInterview } from "./ikigai-interview";
 import { IkigaiAnalysisConsent, IkigaiAnalysisResult } from "./ikigai-analysis";
+import { IkigaiNameInput } from "./ikigai-name-input";
+import { downloadIkigaiPdf } from "@/lib/ikigai/pdf-generator";
 import { useIkigaiFlow } from "./use-ikigai-flow";
 import { answeredQuestions, IKIGAI_MAX_LENGTH, IKIGAI_QUESTIONS } from "@/lib/ikigai/flow";
 
@@ -18,6 +20,8 @@ export function IkigaiPage() {
   const flow = useIkigaiFlow();
   const stepTitle = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(flow.step);
+
+  const reportResult = flow.step === "result" && flow.analysis?.result;
 
   useEffect(() => {
     if (previousStep.current !== flow.step) {
@@ -96,18 +100,32 @@ export function IkigaiPage() {
               {!!flow.followUps.length && <Button variant="secondary" onClick={flow.reviewInterview} className={focusStyle}>Revisar conversa</Button>}
               {flow.analysis.result ? <Button onClick={() => flow.setStep("result")} className={focusStyle}>Ver minha análise</Button> : <Button disabled={flow.analysis.consentOpen} onClick={() => { flow.cancelInterviewRequest(); flow.analysis.openConsent(); }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Gerar meu Ikigai com a Nira</Button>}
               {flow.step === "preview" && <Button onClick={() => { flow.cancelInterviewRequest(); flow.analysis.cancelRequest(); flow.setStep("next"); }} className={focusStyle}>Ver próximas etapas<ArrowRight className="size-4" aria-hidden="true" /></Button>}
-              <Button disabled variant="secondary"><Download className="size-4" aria-hidden="true" />Baixar PDF (em breve)</Button>
+              {flow.step === "preview" && flow.analysis.result ? (
+  <Button onClick={() => {
+    void downloadIkigaiPdf({
+      report: flow.analysis.result!,
+      input: { answers: flow.answers, followUps: flow.followUps },
+      displayName: flow.displayName,
+      generationDate: new Date().toISOString(),
+    });
+  }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>
+    <Download className="size-4" aria-hidden="true" /> Baixar meu Ikigai em PDF
+  </Button>
+) : (
+  <Button disabled variant="secondary"><Download className="size-4" aria-hidden="true" />Baixar PDF (em breve)</Button>
+)}
             </div>
             {flow.step === "preview" && flow.consentOpen && <IkigaiConsent flow={flow} />}
             {flow.analysis.consentOpen && <IkigaiAnalysisConsent flow={flow} />}
             {flow.step === "preview" && !flow.consentOpen && !flow.followUps.length && <p className="mt-4 text-xs leading-6 text-muted-foreground">O aprofundamento é opcional. Antes de enviar suas respostas à IA, você poderá ler os detalhes e consentir.</p>}
           </section>}
 
-          {flow.step === "result" && flow.analysis.result && <IkigaiAnalysisResult report={flow.analysis.result} input={{ answers: flow.answers, followUps: flow.followUps }}
-            onEdit={flow.editInitialAnswers} onReview={flow.followUps.length ? flow.reviewInterview : undefined}
-            onDiscard={() => { flow.analysis.invalidate(); flow.setStep("preview"); }} onRestart={flow.restart} />}
+          {reportResult ? (
+  <IkigaiAnalysisResult report={reportResult!} input={{ answers: flow.answers, followUps: flow.followUps }} displayName={flow.displayName} onEdit={flow.editInitialAnswers} onReview={flow.followUps.length ? flow.reviewInterview : undefined} onDiscard={() => { flow.analysis!.invalidate(); flow.setStep("preview"); }} onRestart={flow.restart} />
+) : null}
 
           {flow.step !== "interview" && flow.step !== "result" && <IkigaiPreview profile={flow.preview} />}
+          {flow.step === "preview" && <IkigaiNameInput value={flow.displayName} onChange={flow.updateDisplayName} />}
 
           <aside aria-labelledby="ikigai-privacy-title" className="flex items-start gap-3 rounded-2xl border border-white/10 bg-card p-5">
             <ShieldCheck className="mt-1 size-5 shrink-0 text-violet-300" aria-hidden="true" />
