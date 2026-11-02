@@ -156,7 +156,7 @@ describe("Ikigai: API da análise protegida", () => {
     const response = await POST(request());
     expect(response.status).toBe(503);
     const text = await response.text();
-    expect(text).toContain("excedeu o tempo disponível");
+    expect(text).toContain("limite de tokens de saída");
     expect(mocks.generate).toHaveBeenCalledTimes(1);
   });
 
