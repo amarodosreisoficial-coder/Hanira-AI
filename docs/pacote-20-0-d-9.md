@@ -1,5 +1,7 @@
 # Pacote 20.0-D.9 — revisão e homologação
 
+> Histórico da primeira entrega. O vídeo e os diagnósticos foram atualizados em [Ajustes D.9](pacote-20-0-d-9-ajustes.md), que descreve o comportamento e a homologação atuais.
+
 Data: 2 de novembro de 2026. Branch: `feature/20-0-d-9-ikigai-fix-visual-nira`.
 Base confirmada com fetch: `4e93588373d87fd8e0fa6380fdb446848c0c14be` (`origin/main`, PRs #37 e #38).
 
@@ -91,9 +93,11 @@ Executar **somente após autorização explícita** para uma chamada gratuita ao
 
 ```powershell
 $env:HANIRA_IKIGAI_LIVE_SMOKE='I_AUTHORIZE_ONE_FREE_REQUEST'
+$env:HANIRA_IKIGAI_FREE_QUOTA_CONFIRMED='true'
 $env:AI_ENGINE_OLLAMA_ENABLED='false'
 node --env-file=.env.local node_modules/vitest/vitest.mjs run tests/ikigai-analysis-live-smoke.test.ts --maxWorkers=1
 Remove-Item Env:HANIRA_IKIGAI_LIVE_SMOKE
+Remove-Item Env:HANIRA_IKIGAI_FREE_QUOTA_CONFIRMED
 Remove-Item Env:AI_ENGINE_OLLAMA_ENABLED
 ```
 

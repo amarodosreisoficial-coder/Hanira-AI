@@ -77,7 +77,7 @@ export function LandingPage() {
       </header>
 
       <section className="relative z-10 mx-auto flex max-w-6xl flex-col items-center justify-center px-5 pb-20 pt-8 text-center lg:pt-12">
-        <div className="grid w-full items-center gap-10 lg:grid-cols-[1.35fr_1fr] lg:text-left">
+        <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_1.1fr] lg:text-left">
         <div>
         <motion.div
           initial={reducedMotion ? false : { opacity: 0 }}
