@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { buildAnalysisInput, validateIkigaiAnalysis, type IkigaiAnalysis } from "@/lib/ikigai/analysis-contract";
 import type { IkigaiAnswers, IkigaiFollowUp } from "@/lib/ikigai/types";
+import { IKIGAI_SERVICE_ERRORS } from "@/lib/ikigai/public-errors";
 
 // Only application-owned public messages may cross the API/UI boundary.
 const publicErrors = new Set([
+  ...Object.values(IKIGAI_SERVICE_ERRORS),
   "Muitas solicitações. Aguarde um instante e tente novamente.",
   "A IA do Ikigai está indisponível no modo demonstração. Continue com sua prévia local.",
   "A Nira já está atendendo uma solicitação sua. Aguarde um instante.",

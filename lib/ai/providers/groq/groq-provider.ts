@@ -36,11 +36,13 @@ interface GroqDiagnosticContext {
   requestId?: string;
   model: string;
   startedAtMs: number;
+  ikigai: boolean;
 }
 
 function isDiagnosticMetadata(value: unknown): value is {
   requestId?: string;
   generationStartedAtMs?: number;
+  diagnosticScope?: string;
 } {
   return typeof value === "object" && value !== null;
 }
@@ -55,6 +57,7 @@ function createDiagnosticContext(
   return {
     requestId: metadata?.requestId,
     model,
+    ikigai: metadata?.diagnosticScope === "ikigai",
     startedAtMs:
       typeof metadata?.generationStartedAtMs === "number"
         ? metadata.generationStartedAtMs
@@ -68,6 +71,7 @@ function logDiagnostic(
   stage: string,
   details: Record<string, unknown> = {},
 ): void {
+  if (context.ikigai) return; // Ikigai emits one allowlisted, correlated outcome.
   console.info(
     JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -137,16 +141,17 @@ export class GroqProvider implements AIProvider {
     });
 
     const controller = new AbortController();
+    const onAbort = () => controller.abort(request.signal?.reason);
+    let timedOut = false;
     const timeoutId = setTimeout(
-      () => controller.abort(),
+      () => { timedOut = true; controller.abort(); },
       this.requestTimeoutMs,
     );
 
     try {
       if (request.signal) {
-        request.signal.addEventListener("abort", () => controller.abort(), {
-          once: true,
-        });
+        request.signal.throwIfAborted();
+        request.signal.addEventListener("abort", onAbort, { once: true });
       }
 
       const response = await this.fetchImpl(
@@ -163,10 +168,15 @@ export class GroqProvider implements AIProvider {
       );
 
       if (!response.ok) {
-        await throwForHttpError(response, model);
+        await throwForHttpError(response, model, diagnostics.requestId, diagnostics.ikigai);
       }
 
-      const parsed = (await response.json()) as GroqChatResponse;
+      let parsed: GroqChatResponse;
+      try { parsed = await response.json() as GroqChatResponse; }
+      catch { throw new AIProviderError({ code: "provider_error", message: "Resposta JSON inválida do provedor.", provider: GROQ_PROVIDER_ID, model, statusCode: response.status, metadata: { reason: "invalid-json", requestId: diagnostics.requestId } }); }
+      if (!parsed || !Array.isArray(parsed.choices) || !parsed.choices[0]?.message || typeof parsed.choices[0].message.content !== "string") {
+        throw new AIProviderError({ code: "provider_error", message: "Estrutura de resposta inválida do provedor.", provider: GROQ_PROVIDER_ID, model, statusCode: response.status, metadata: { reason: "malformed-response", requestId: diagnostics.requestId } });
+      }
       const result = mapGroqChatResponse(parsed, this.model);
 
       logDiagnostic(diagnostics, "generate_response", "provider_response", {
@@ -176,13 +186,15 @@ export class GroqProvider implements AIProvider {
 
       return result;
     } catch (error) {
+      if (timedOut && !request.signal?.aborted) throw new AIProviderError({ code: "timeout", message: "O provedor excedeu o tempo disponível.", provider: GROQ_PROVIDER_ID, model, metadata: { requestId: diagnostics.requestId } });
       throw toGroqProviderError(error, {
         provider: GROQ_PROVIDER_ID,
         model,
-        metadata: { requestId: diagnostics.requestId },
+        metadata: { requestId: diagnostics.requestId, ...(diagnostics.ikigai ? { diagnosticScope: "ikigai" } : {}) },
       });
     } finally {
       clearTimeout(timeoutId);
+      request.signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -402,9 +414,18 @@ export class GroqProvider implements AIProvider {
 async function throwForHttpError(
   response: Response,
   model: string,
+  requestId?: string,
+  ikigai?: boolean,
 ): Promise<never> {
   const errorBody = await response.text();
-  const message = parseGroqErrorBody(safeJsonParse(errorBody));
+  const parsed = safeJsonParse(errorBody);
+  const message = parseGroqErrorBody(parsed);
+  const errorCode = (parsed as { error?: { code?: unknown } } | null)?.error?.code;
+  // Normalize in memory, never log or retain the provider's free-form body.
+  const providerFailure = response.status === 400
+    ? errorCode === "json_validate_failed" ? "output_invalid"
+      : /(?:invalid|unsupported|not supported|not permitted|not allowed).{0,80}(?:json.?schema|response_format)|(?:json.?schema|response_format).{0,80}(?:invalid|unsupported|not supported|not permitted|not allowed)/i.test(message) ? "schema_rejected" : "request_rejected"
+    : undefined;
 
   // Pacote 16.6 (Groq Multi-Free): captura SANITIZADA de headers de
   // rate-limit (apenas valores numericos uteis derivados; NENHUM header cru
@@ -423,6 +444,9 @@ async function throwForHttpError(
       statusCode: response.status,
       metadata: {
         reason: "http-error",
+        ...(requestId ? { requestId } : {}),
+        ...(ikigai ? { diagnosticScope: "ikigai" } : {}),
+        ...(providerFailure ? { providerFailure } : {}),
         ...(providerRateLimit ? { providerRateLimit } : {}),
       },
     },

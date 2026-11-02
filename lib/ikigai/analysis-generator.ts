@@ -2,6 +2,7 @@ import "server-only";
 import { generateIkigaiJson } from "./generation";
 import { AnalysisValidationError, analysisEvidenceCatalog, validateIkigaiAnalysis, type AnalysisValidationCategory, type IkigaiAnalysisInput } from "./analysis-contract";
 import { analysisOutputSchema, hydrateAnalysisEvidence } from "./analysis-output";
+import type { IkigaiDiagnosticContext } from "./diagnostics";
 
 type Category = AnalysisValidationCategory | "json" | "size" | "finish_reason";
 export class InvalidIkigaiAnalysisError extends Error {
@@ -19,11 +20,12 @@ synthesis conecta pelo menos dois aspectos. Considere todas as respostas, inclus
 challenges é [] salvo obstáculo explicitamente informado. Cada item contém apenas evidenceId de um trecho com marcador explícito (falta, dificuldade, dúvida, medo, não, sem). O servidor usa esse trecho literal como texto; não infira obstáculos.
 Não adicione campos, HTML ou caracteres de controle. Não omita dimensões nem etapas do plano.`;
 
-export function parseGeneratedAnalysis(text: string, input: IkigaiAnalysisInput) {
+export function parseGeneratedAnalysis(text: string, input: IkigaiAnalysisInput, context?: IkigaiDiagnosticContext) {
   try {
     if (text.length > 64_000) throw new InvalidIkigaiAnalysisError("size");
     let value: unknown;
     try { value = JSON.parse(text); } catch { throw new InvalidIkigaiAnalysisError("json"); }
+    if (context) context.stage = "validation";
     // Retain the public versioned contract; new generations select excerpt IDs.
     const synthesis = (value as { synthesis?: { evidence?: unknown[] } } | null)?.synthesis;
     if (typeof synthesis?.evidence?.[0] === "string") value = hydrateAnalysisEvidence(value, input);
@@ -32,16 +34,19 @@ export function parseGeneratedAnalysis(text: string, input: IkigaiAnalysisInput)
     const safe = error instanceof InvalidIkigaiAnalysisError ? error
       : new InvalidIkigaiAnalysisError(error instanceof AnalysisValidationError ? error.category : "schema");
     // Allowlisted categories only, never Zod issues, generated text or inputs.
-    console.warn("[ikigai.analysis.rejected]", { category: safe.category });
+    if (!context) console.warn("[ikigai.analysis.rejected]", { category: safe.category });
     throw safe;
   }
 }
 
-export async function generateIkigaiAnalysis(input: IkigaiAnalysisInput, signal: AbortSignal) {
+export async function generateIkigaiAnalysis(input: IkigaiAnalysisInput, signal: AbortSignal, context?: IkigaiDiagnosticContext) {
+  if (context) context.stage = "schema";
+  const evidenceCatalog = analysisEvidenceCatalog(input);
+  if (!evidenceCatalog.length) throw new InvalidIkigaiAnalysisError("evidence");
   return generateIkigaiJson({
     systemPrompt: ANALYSIS_PROMPT,
-    data: { answers: input.answers, followUps: input.followUps, evidenceCatalog: analysisEvidenceCatalog(input) },
-    outputSchema: analysisOutputSchema(input), maxOutputTokens: 8000, signal,
-    parse: (text) => parseGeneratedAnalysis(text, input), invalidResult: () => new InvalidIkigaiAnalysisError(),
+    data: { answers: input.answers, followUps: input.followUps, evidenceCatalog },
+    outputSchema: analysisOutputSchema(input), maxOutputTokens: 8000, signal, context,
+    parse: (text) => parseGeneratedAnalysis(text, input, context), invalidResult: () => new InvalidIkigaiAnalysisError(),
   });
 }

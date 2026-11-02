@@ -96,4 +96,31 @@ describe("Ikigai D.9: evidências determinísticas e diagnóstico privado", () =
     expect(buildGroqChatRequest({ messages: [], outputSchema: schema }, "operator-custom").response_format).toBeUndefined();
     expect(buildGroqChatRequest({ messages: [] }, "openai/gpt-oss-20b").response_format).toBeUndefined();
   });
+  it("audita todos os objetos, required, enums e referências do schema efetivo", () => {
+    const schema = analysisOutputSchema(input());
+    let objects = 0;
+    const keywords = new Set<string>();
+    const inspect = (node: unknown): void => {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return;
+      const value = node as Record<string, unknown>;
+      Object.keys(value).forEach(key => keywords.add(key));
+      if (value.type === "object") {
+        objects++;
+        expect(value.additionalProperties).toBe(false);
+        const properties = value.properties as Record<string, unknown>;
+        expect(value.required).toEqual(Object.keys(properties));
+        Object.values(properties).forEach(inspect);
+      }
+      if (value.items) inspect(value.items);
+      if (value.enum) expect((value.enum as unknown[]).length).toBeGreaterThan(0);
+      if (value.$ref) expect.fail("New internal reference requires a compatibility review");
+    };
+    inspect(schema);
+    expect(objects).toBe(13);
+    expect([...keywords].sort()).toEqual(["$schema", "additionalProperties", "const", "enum", "items", "maxItems", "maxLength", "minItems", "minLength", "properties", "required", "type"].sort());
+  });
+  it("não envia schema com enum vazio quando todas as respostas são insuficientes", () => {
+    const data = buildAnalysisInput({ identity: "a", love: "b", strengths: "c", impact: "d", future: "e", story: "" }, []);
+    expect(() => analysisOutputSchema(data)).toThrow();
+  });
 });

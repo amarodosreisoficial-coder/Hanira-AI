@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/ikigai/analyze/route";
 import { concurrencyLockCountForTests, resetConcurrencyGuardForTests, tryAcquireConcurrencyLock } from "@/lib/security/concurrency-guard";
 import { AIProviderError } from "@/lib/ai/types";
+import { ModelRouterError } from "@/lib/ai/router/errors";
+import { GroqProvider } from "@/lib/ai/providers/groq";
 import { analysisAnswers, createAnalysisReport, createGeneratedAnalysisReport } from "./helpers/ikigai-analysis";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), quota: vi.fn(), rate: vi.fn(), generate: vi.fn(), runtime: vi.fn() }));
@@ -20,7 +22,7 @@ beforeEach(() => {
   mocks.session.mockResolvedValue({ id: "analysis-user", demo: false });
   mocks.rate.mockReturnValue({ allowed: true });
   mocks.quota.mockResolvedValue({ allowed: true });
-  mocks.runtime.mockReturnValue({ provider: { generate: mocks.generate }, model: "free-test", routing: { candidateId: "analysis-test" } });
+  mocks.runtime.mockReturnValue({ provider: { generate: mocks.generate }, providerId: "groq", model: "free-test", routing: { candidateId: "analysis-test" } });
   mocks.generate.mockResolvedValue({ text: JSON.stringify(createGeneratedAnalysisReport()), finishReason: "stop" });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
@@ -81,21 +83,28 @@ describe("Ikigai: API da análise protegida", () => {
     expect((await POST(request())).status).toBe(429);
     mocks.quota.mockRejectedValueOnce(new Error("private database detail"));
     const response = await POST(request());
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(500);
     expect(await response.text()).not.toContain("private");
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(concurrencyLockCountForTests()).toBe(0);
   });
 
-  it.each(["not JSON", JSON.stringify({ title: "Relatório incompleto" }), JSON.stringify({ ...createAnalysisReport(), synthesis: { ...createAnalysisReport().synthesis, evidence: [{ source: "nira-3", quote: "Falta tempo" }] } })])("rejeita saída inválida sem tentar reparar com nova geração", async (text) => {
+  it.each([
+    { text: "not JSON", stage: "parse", category: "analysis_json" },
+    { text: JSON.stringify({ title: "Relatório incompleto" }), stage: "validation", category: "analysis_schema" },
+    { text: JSON.stringify({ ...createAnalysisReport(), synthesis: { ...createAnalysisReport().synthesis, evidence: [{ source: "nira-3", quote: "Falta tempo" }] } }), stage: "validation", category: "analysis_evidence" },
+  ])("diagnóstico $category sem reparar com nova geração", async ({ text, stage, category }) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.generate.mockResolvedValueOnce({ text, finishReason: "stop" });
     expect((await POST(request())).status).toBe(502);
     expect(mocks.generate).toHaveBeenCalledTimes(1);
     expect(concurrencyLockCountForTests()).toBe(0);
+    expect(log.mock.calls).toHaveLength(1);
+    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ stage, failureCategory: category });
   });
 
   it("capacidade gratuita indisponível não inicia geração", async () => {
-    mocks.runtime.mockImplementation(() => { throw new Error("No free capacity / private key"); });
+    mocks.runtime.mockImplementation(() => { throw new ModelRouterError({ code: "capacity_unavailable", message: "private key", metadata: { rejected: [{ candidateId: "free", provider: "groq", reason: "capacity_cooldown" }] } }); });
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("private key");
@@ -107,7 +116,73 @@ describe("Ikigai: API da análise protegida", () => {
     mocks.generate.mockRejectedValueOnce(new AIProviderError({ code: "rate_limit", message: JSON.stringify(analysisAnswers) }));
     expect((await POST(request())).status).toBe(429);
     expect(mocks.generate).toHaveBeenCalledTimes(1);
-    for (const log of logs) expect(log).not.toHaveBeenCalled();
+    expect(JSON.stringify(logs.flatMap(log => log.mock.calls))).not.toContain(analysisAnswers.identity);
+    expect(JSON.parse(logs[2].mock.calls[0][0])).toMatchObject({ stage: "provider", failureCategory: "provider_rate_limit" });
+  });
+
+  it.each([
+    [400, "invalid_json_schema", "Invalid JSON Schema in response_format", "provider_schema_rejected", 502, "technical"],
+    [400, "json_validate_failed", "Generated JSON invalid", "provider_output_invalid", 502, "technical"],
+    [400, "bad_request", "invalid parameter", "provider_request_rejected", 502, "technical"],
+    [401, "invalid_api_key", "private credential", "provider_authentication", 503, "configuration"],
+    [404, "model_not_found", "private model", "model_unavailable", 503, "configuration"],
+    [429, "rate_limit_exceeded", "private quota", "provider_rate_limit", 429, "capacity"],
+  ] as const)("preserva diagnóstico HTTP %i do adaptador real sem expor o corpo", async (providerStatus, code, message, category, status, publicCode) => {
+    const logs = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchImpl = vi.fn().mockResolvedValue(Response.json({ error: { code, message: `${message} ${JSON.stringify(analysisAnswers)}` } }, { status: providerStatus }));
+    const provider = new GroqProvider({ apiKey: "fictional-test-key", defaultModel: "openai/gpt-oss-20b", fetchImpl });
+    mocks.runtime.mockReturnValue({ provider, providerId: "groq", model: "openai/gpt-oss-20b", routing: { candidateId: "analysis-test" } });
+    const response = await POST(request());
+    expect(response.status).toBe(status);
+    const body = await response.json();
+    expect(body.code).toBe(publicCode);
+    expect(body.requestId).toBe(response.headers.get("x-request-id"));
+    expect(JSON.stringify(body)).not.toMatch(/private|professora|Schema|Groq/);
+    const diagnostic = logs.mock.calls.map(call => { try { return JSON.parse(call[0]); } catch { return {}; } }).find(entry => entry.failureCategory);
+    expect(diagnostic).toMatchObject({ requestId: body.requestId, stage: "provider", providerStatus, provider: "groq", model: "openai/gpt-oss-20b", failureCategory: category });
+    expect(Object.keys(diagnostic).sort()).toEqual(["requestId", "stage", "internalCode", "providerStatus", "provider", "model", "durationMs", "failureCategory"].sort());
+    expect(JSON.stringify(logs.mock.calls)).not.toMatch(/professora|private|fictional-test-key|Invalid JSON Schema/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).response_format.json_schema.strict).toBe(true);
+  });
+
+  it("erro de programação não é apresentado como falta de capacidade", async () => {
+    const logs = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.generate.mockRejectedValueOnce(new TypeError(JSON.stringify(analysisAnswers)));
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ code: "technical" });
+    expect(JSON.parse(logs.mock.calls[0][0])).toMatchObject({ stage: "provider", internalCode: "UNEXPECTED_ERROR", failureCategory: "unexpected_error" });
+    expect(JSON.stringify(logs.mock.calls)).not.toContain(analysisAnswers.identity);
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+  it("entrada sem evidência citável não desperdiça chamada gratuita", async () => {
+    const payload = { ...body(), answers: { identity: "a", love: "b", strengths: "c", impact: "d", future: "e", story: "" } };
+    expect((await POST(request(payload))).status).toBe(502);
+    expect(mocks.runtime).not.toHaveBeenCalled();
+    expect(mocks.generate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new AIProviderError({ code: "unavailable", message: "private", retryable: false, metadata: { env: "GROQ_API_KEY" } }),
+    new AIProviderError({ code: "invalid_request", message: "private", retryable: false }),
+    new ModelRouterError({ code: "invalid_configuration", message: "private" }),
+    new ModelRouterError({ code: "capacity_unavailable", message: "private", metadata: { candidatesConsidered: 0, rejected: [] } }),
+  ])("configuração inválida falha antes da geração, com mensagem própria", async error => {
+    mocks.runtime.mockImplementationOnce(() => { throw error; });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "configuration" });
+    expect(mocks.generate).not.toHaveBeenCalled();
+  });
+
+  it.each(["not JSON", "{}"]) ("classifica envelope inválido do Groq sem confundir com cota", async content => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(content, { status: 200 }));
+    mocks.runtime.mockReturnValue({ provider: new GroqProvider({ apiKey: "test", fetchImpl }), providerId: "groq", model: "openai/gpt-oss-20b", routing: { candidateId: "analysis-test" } });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await POST(request())).status).toBe(502);
+    expect(log.mock.calls.map(call => JSON.parse(call[0])).find(entry => entry.failureCategory)).toMatchObject({ failureCategory: "provider_malformed_response", providerStatus: 200 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("cancelamento antes de executar evita geração e libera concorrência", async () => {

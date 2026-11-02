@@ -19,6 +19,7 @@ export const generatedAnalysisSchema = z.object({
 export function analysisOutputSchema(input: IkigaiAnalysisInput) {
   const schema = z.toJSONSchema(generatedAnalysisSchema);
   const ids = analysisEvidenceCatalog(input).map(({ id }) => id);
+  if (!ids.length) throw new AnalysisValidationError("evidence");
   function constrain(node: unknown): void {
     if (!node || typeof node !== "object") return;
     const object = node as Record<string, unknown>;

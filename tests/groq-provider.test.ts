@@ -82,6 +82,18 @@ describe("GroqProvider", () => {
   });
 
   describe("generate", () => {
+    it("classifica deadline real do adaptador e libera listener externo", async () => {
+      const signal = new AbortController().signal;
+      const cleanup = vi.spyOn(signal, "removeEventListener");
+      const mockFetch = vi.fn((_url, init) => new Promise<Response>((_resolve, reject) => {
+        init.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      }));
+      const provider = new GroqProvider({ apiKey: VALID_API_KEY, fetchImpl: mockFetch, requestTimeoutMs: 10 });
+      await expect(provider.generate(makeRequest({ signal }))).rejects.toMatchObject({ code: "timeout", provider: "groq" });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(cleanup).toHaveBeenCalledWith("abort", expect.any(Function));
+      cleanup.mockRestore();
+    });
     it("cria request correto para API Groq", async () => {
       vi.stubEnv("GROQ_MODEL", "");
       const mockFetch = vi.fn().mockResolvedValue(
