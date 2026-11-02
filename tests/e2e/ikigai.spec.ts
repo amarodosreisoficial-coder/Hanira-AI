@@ -27,11 +27,14 @@ test("Ikigai: sidebar, teclado, formulário local, prévia e placeholders", asyn
   await page.goto("/chat");
   const sidebar = page.getByRole("complementary", { name: "Navegação e conversas" });
   await expect(sidebar).toHaveAttribute("data-sidebar-state", "collapsed");
-  const railLink = sidebar.getByRole("link", { name: "Ikigai", exact: true }).filter({ visible: true });
-  await expect(railLink).toHaveAttribute("title", "Ikigai");
+  const railLink = sidebar.getByRole("link", { name: "Ikigai — descubra seu propósito", exact: true }).filter({ visible: true });
+  await expect(railLink).toHaveAttribute("title", "Ikigai — descubra seu propósito");
+  await railLink.focus();
+  await expect(railLink.locator("span")).toBeVisible();
   await sidebar.getByRole("button", { name: "Expandir barra lateral" }).click();
   await expect(sidebar).toHaveAttribute("data-sidebar-state", "expanded");
-  const link = sidebar.getByRole("link", { name: "Ikigai", exact: true }).filter({ visible: true });
+  const link = sidebar.getByRole("link", { name: "Ikigai — descubra seu propósito", exact: true }).filter({ visible: true });
+  await expect(link).toContainText("Explore o que dá sentido à sua vida.");
   await link.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/ikigai$/);
@@ -61,7 +64,7 @@ test("Ikigai: sidebar, teclado, formulário local, prévia e placeholders", asyn
   await page.getByRole("button", { name: "Ver minha prévia" }).click();
   await page.getByRole("button", { name: "Ver próximas etapas" }).click();
   await expect(page.getByRole("heading", { name: "Seu próximo capítulo" })).toBeFocused();
-  await expect(page.getByText(/Não há geração em andamento/)).toBeVisible();
+  await expect(page.getByText(/O PDF será liberado quando a análise estiver concluída/)).toBeVisible();
   expect(writes).toEqual([]);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Seu mapa de Ikigai aparecerá aqui" })).toBeVisible();
