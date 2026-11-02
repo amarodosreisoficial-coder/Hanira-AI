@@ -48,9 +48,14 @@ export function useIkigaiAnalysis(answers: IkigaiAnswers, followUps: IkigaiFollo
       if (!response.ok) {
         if (pending.current !== controller) return;
         setStatus("error");
-        setError(response.status === 401 ? "Sua sessão expirou. Entre novamente para solicitar sua análise."
+        let serverMessage: string | undefined;
+        try {
+          const body = await response.json();
+          serverMessage = typeof body.error === "string" ? body.error : undefined;
+        } catch { /* ignorar corpo não-JSON */ }
+        setError(serverMessage ?? (response.status === 401 ? "Sua sessão expirou. Entre novamente para solicitar sua análise."
           : response.status === 429 ? "O limite gratuito ou a capacidade de atendimento foi atingido. Suas respostas foram mantidas; tente novamente mais tarde."
-          : "A Nira não conseguiu concluir uma análise válida agora. Suas respostas foram mantidas para uma nova tentativa manual.");
+          : "A Nira não conseguiu concluir uma análise válida agora. Suas respostas foram mantidas para uma nova tentativa manual."));
         return;
       }
       const report = validateIkigaiAnalysis(await response.json(), snapshot);

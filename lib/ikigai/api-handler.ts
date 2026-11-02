@@ -69,6 +69,7 @@ export function createIkigaiHandler<T>(options: {
       if (error instanceof InvalidBodyError) return json({ error: options.invalidInputMessage }, 400);
       if (options.isInvalidResult(error)) return json({ error: options.invalidResultMessage }, 502);
       if (error instanceof AIProviderError && error.code === "rate_limit") return json({ error: "A capacidade gratuita está ocupada. Aguarde ou continue com sua prévia local." }, 429, 60);
+      if (error instanceof AIProviderError && error.code === "timeout") return json({ error: "A análise foi interrompida pelo limite de tokens de saída. Tente novamente com respostas mais concisas." }, 503);
       return json({ error: "A Nira está temporariamente sem capacidade gratuita disponível. Suas respostas continuam nesta página para uma nova tentativa manual." }, 503);
     } finally {
       if (lock) releaseConcurrencyLock(lock.userId, lock.requestId);

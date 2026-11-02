@@ -150,4 +150,33 @@ describe("Ikigai: API da análise protegida", () => {
     expect(messages[0].text).toContain("dados não confiáveis");
     expect(JSON.parse(messages[1].text).answers.story).toBe(payload.answers.story);
   });
+
+  it("finishReason max_output_tokens com JSON válido não aceita o conteúdo parcial (503 timeout)", async () => {
+    mocks.generate.mockResolvedValueOnce({ text: JSON.stringify(createAnalysisReport()), finishReason: "max_output_tokens" });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    const text = await response.text();
+    expect(text).toContain("limite de tokens de saída");
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("finishReason max_output_tokens com JSON incompleto não aceita o conteúdo parcial (503 timeout)", async () => {
+    mocks.generate.mockResolvedValueOnce({ text: JSON.stringify({ title: "Relatório incompleto" }), finishReason: "max_output_tokens" });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("AIProviderError code timeout não faz retry nem fallback pago (503)", async () => {
+    mocks.generate.mockRejectedValueOnce(new AIProviderError({ code: "timeout", message: "timeout", retryable: true }));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("não realiza segunda chamada após erro de timeout (sem retry silencioso)", async () => {
+    mocks.generate.mockRejectedValueOnce(new AIProviderError({ code: "timeout", message: "timeout", retryable: true }));
+    await POST(request());
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
 });
