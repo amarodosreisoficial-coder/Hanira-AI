@@ -33,7 +33,7 @@ export function parseGeneratedAnalysis(text: string, input: IkigaiAnalysisInput)
 export async function generateIkigaiAnalysis(input: IkigaiAnalysisInput, signal: AbortSignal) {
   return generateIkigaiJson({
     systemPrompt: ANALYSIS_PROMPT, data: { answers: input.answers, followUps: input.followUps },
-    maxOutputTokens: 4500, signal,
+    maxOutputTokens: 8000, signal,
     parse: (text) => parseGeneratedAnalysis(text, input), invalidResult: () => new InvalidIkigaiAnalysisError(),
   });
 }
