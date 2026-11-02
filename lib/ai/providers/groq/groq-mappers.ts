@@ -78,6 +78,12 @@ export function buildGroqChatRequest(
     stream: false,
   };
 
+  // Groq strict-output support verified for these production models.
+  // Unknown configured models retain prompt + local validation, without retry.
+  if (request.outputSchema && ["openai/gpt-oss-20b", "openai/gpt-oss-120b"].includes(body.model)) {
+    body.response_format = { type: "json_schema", json_schema: { name: "ikigai_analysis", strict: true, schema: request.outputSchema } };
+  }
+
   if (typeof request.temperature === "number" && Number.isFinite(request.temperature)) {
     body.temperature = request.temperature;
   }

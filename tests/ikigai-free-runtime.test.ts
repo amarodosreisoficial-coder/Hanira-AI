@@ -35,6 +35,7 @@ describe("Ikigai: integração do runtime existente sem rede real", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(JSON.parse(init.body).model).toBe("openai/gpt-oss-20b");
+    expect(JSON.parse(init.body).response_format).toMatchObject({ type: "json_schema", json_schema: { strict: true } });
     expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toMatch(/Sou professora|Ensinar e escutar|gsk_test_not_real|Produza uma análise/);
   });
 

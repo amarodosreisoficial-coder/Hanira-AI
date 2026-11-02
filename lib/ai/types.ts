@@ -44,6 +44,8 @@ export interface AIChatRequest {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /** Opt-in output contract; enabled only by supported adapters/models. */
+  outputSchema?: Record<string, unknown>;
   timeoutMs?: number;
   signal?: AbortSignal;
   metadata?: Record<string, unknown>;

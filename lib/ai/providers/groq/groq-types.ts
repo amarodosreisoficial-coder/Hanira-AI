@@ -19,6 +19,7 @@ export interface GroqChatRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  response_format?: { type: "json_schema"; json_schema: { name: string; strict: true; schema: Record<string, unknown> } };
 }
 
 export interface GroqUsage {

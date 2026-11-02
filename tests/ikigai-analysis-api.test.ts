@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/ikigai/analyze/route";
 import { concurrencyLockCountForTests, resetConcurrencyGuardForTests, tryAcquireConcurrencyLock } from "@/lib/security/concurrency-guard";
 import { AIProviderError } from "@/lib/ai/types";
-import { analysisAnswers, createAnalysisReport } from "./helpers/ikigai-analysis";
+import { analysisAnswers, createAnalysisReport, createGeneratedAnalysisReport } from "./helpers/ikigai-analysis";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), quota: vi.fn(), rate: vi.fn(), generate: vi.fn(), runtime: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireSessionUser: mocks.session }));
@@ -21,7 +21,7 @@ beforeEach(() => {
   mocks.rate.mockReturnValue({ allowed: true });
   mocks.quota.mockResolvedValue({ allowed: true });
   mocks.runtime.mockReturnValue({ provider: { generate: mocks.generate }, model: "free-test", routing: { candidateId: "analysis-test" } });
-  mocks.generate.mockResolvedValue({ text: JSON.stringify(createAnalysisReport()), finishReason: "stop" });
+  mocks.generate.mockResolvedValue({ text: JSON.stringify(createGeneratedAnalysisReport()), finishReason: "stop" });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
@@ -34,7 +34,8 @@ describe("Ikigai: API da análise protegida", () => {
     expect(mocks.generate).toHaveBeenCalledTimes(1);
     const { messages } = mocks.generate.mock.calls[0][0];
     expect(messages).toHaveLength(2);
-    expect(JSON.parse(messages[1].text)).toEqual({ answers: analysisAnswers, followUps: [] });
+    expect(JSON.parse(messages[1].text)).toMatchObject({ answers: analysisAnswers, followUps: [] });
+    expect(JSON.parse(messages[1].text).evidenceCatalog).toContainEqual({ id: "love:1", source: "love", quote: analysisAnswers.love });
     expect(concurrencyLockCountForTests()).toBe(0);
   });
 
@@ -171,6 +172,9 @@ describe("Ikigai: API da análise protegida", () => {
     mocks.generate.mockRejectedValueOnce(new AIProviderError({ code: "timeout", message: "timeout", retryable: true }));
     const response = await POST(request());
     expect(response.status).toBe(503);
+    const message = await response.text();
+    expect(message).toContain("tempo disponível");
+    expect(message).not.toContain("limite de tokens");
     expect(mocks.generate).toHaveBeenCalledTimes(1);
   });
 

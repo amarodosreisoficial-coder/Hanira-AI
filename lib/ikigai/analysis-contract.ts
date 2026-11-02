@@ -18,9 +18,13 @@ export const ikigaiAnalysisRequestSchema = z.object({
 }).strict();
 export type IkigaiAnalysisInput = z.infer<typeof ikigaiAnalysisRequestSchema>;
 
-const text = (min: number, max: number) => z.string().trim().min(min).max(max)
-  .refine((value) => !/[<>\u0000-\u0008\u000b-\u001f]|\d\s*%|\bQI\b|pontuaç[ãa]o psicol[óo]gica/i.test(value));
-const evidenceSchema = z.array(z.object({ source: sourceId, quote: text(4, 160) }).strict()).min(1).max(2)
+const literal = (min: number, max: number) => z.string().trim().min(min).max(max)
+  .refine((value) => !/[<>\u0000-\u0008\u000b-\u001f]/.test(value));
+const text = (min: number, max: number) => literal(min, max)
+  .refine((value) => !/\d\s*%|\bQI\b|pontuaç[ãa]o psicol[óo]gica/i.test(value));
+// Literal evidence is not a generated psychological assessment. A percentage
+// provided by the person must not invalidate an otherwise exact citation.
+const evidenceSchema = z.array(z.object({ source: sourceId, quote: literal(4, 160) }).strict()).min(1).max(2)
   .refine((items) => new Set(items.map(({ source }) => source)).size === items.length);
 const insightSchema = z.object({ kind: z.enum(["interpretation", "possibility"]), text: text(20, 360), evidence: evidenceSchema }).strict();
 const recommendationSchema = z.object({ kind: z.literal("possibility"), text: text(20, 360), evidence: evidenceSchema }).strict();
@@ -33,12 +37,36 @@ export const ikigaiAnalysisSchema = z.object({
   passions: insights, strengths: insights, values: insights, contribution: insights,
   sustainablePaths: z.array(recommendationSchema).min(1).max(3),
   possibleDirections: z.array(recommendationSchema).min(1).max(3),
-  challenges: z.array(z.object({ text: text(4, 160), evidence: evidenceSchema }).strict()).max(3),
+  challenges: z.array(z.object({ text: literal(4, 160), evidence: evidenceSchema }).strict()).max(3),
   actionPlan: z.object({ days7: recommendationSchema, days30: recommendationSchema, days90: recommendationSchema }).strict(),
   reflection: text(30, 420),
 }).strict();
 export type IkigaiAnalysis = z.infer<typeof ikigaiAnalysisSchema>;
 export type IkigaiInsight = z.infer<typeof insightSchema>;
+
+export type AnalysisValidationCategory = "schema" | "evidence" | "grounding" | "qualification" | "challenge" | "title";
+export class AnalysisValidationError extends Error {
+  constructor(readonly category: AnalysisValidationCategory) { super(`INVALID_ANALYSIS_${category.toUpperCase()}`); }
+}
+
+// The model selects IDs; only the server copies personal text into citations.
+export function analysisEvidenceCatalog(input: Pick<IkigaiAnalysisInput, "answers" | "followUps">) {
+  return [...analysisSources(input)].flatMap(([source, { answer }]) => {
+    const entries: { id: string; source: IkigaiEvidenceId; quote: string }[] = [];
+    let offset = 0;
+    while (offset < answer.length) {
+      let end = Math.min(offset + 160, answer.length);
+      if (end < answer.length) {
+        const space = answer.lastIndexOf(" ", end);
+        if (space > offset + 60) end = space;
+      }
+      const quote = answer.slice(offset, end).trim();
+      if (quote.length >= 4 && !/[<>\u0000-\u0008\u000b-\u001f]/.test(quote)) entries.push({ id: `${source}:${entries.length + 1}`, source: source as IkigaiEvidenceId, quote });
+      offset = end;
+    }
+    return entries;
+  });
+}
 
 export function buildAnalysisInput(answers: IkigaiAnswers, followUps: IkigaiFollowUp[]): IkigaiAnalysisInput {
   return ikigaiAnalysisRequestSchema.parse({ analysisConsent: true, answers, followUps });
@@ -60,28 +88,30 @@ function themes(value: string) {
 // Verificações estruturais/lexicais detectam referências e alegações inconsistentes.
 // Não equivalem a uma certificação semântica das interpretações da IA.
 export function validateIkigaiAnalysis(value: unknown, input: Pick<IkigaiAnalysisInput, "answers" | "followUps">): IkigaiAnalysis {
-  const result = ikigaiAnalysisSchema.parse(value);
+  const parsed = ikigaiAnalysisSchema.safeParse(value);
+  if (!parsed.success) throw new AnalysisValidationError("schema");
+  const result = parsed.data;
   const sources = analysisSources(input);
   const grounded = [result.synthesis, ...result.passions, ...result.strengths, ...result.values, ...result.contribution,
     ...result.sustainablePaths, ...result.possibleDirections, ...Object.values(result.actionPlan), ...result.challenges];
   for (const item of grounded) {
     for (const ref of item.evidence) {
       const answer = sources.get(ref.source)?.answer;
-      if (!answer || !answer.includes(ref.quote)) throw new Error("INVALID_ANALYSIS_EVIDENCE");
+      if (!answer || !answer.normalize("NFC").replace(/\s+/g, " ").includes(ref.quote.normalize("NFC").replace(/\s+/g, " "))) throw new AnalysisValidationError("evidence");
     }
     const words = new Set(themes(item.evidence.map(({ quote }) => quote).join(" ")));
-    if (!themes(item.text).some((word) => words.has(word))) throw new Error("UNSUPPORTED_ANALYSIS");
+    if (!themes(item.text).some((word) => words.has(word))) throw new AnalysisValidationError("grounding");
     if ("kind" in item && item.kind === "interpretation") {
       const quotes = normalizeQuestion(item.evidence.map(({ quote }) => quote).join(" "));
       const qualifications = normalizeQuestion(item.text).match(/\b(doutorado|mestrado|diploma|diplomas|graduacao|premio|premios|certificacao)\b/g) ?? [];
-      if (qualifications.some((word) => !quotes.split(" ").includes(word))) throw new Error("UNSUPPORTED_QUALIFICATION");
+      if (qualifications.some((word) => !quotes.split(" ").includes(word))) throw new AnalysisValidationError("qualification");
     }
   }
   for (const challenge of result.challenges) {
     if (!challenge.evidence.some(({ quote }) => quote === challenge.text) ||
-      !/\b(nao|sem|falta|faltam|dificuldade|dificuldades|obstaculo|obstaculos|desafio|desafios|duvida|duvidas|medo|receio|incerteza|limitacao|limitacoes)\b/.test(normalizeQuestion(challenge.text))) throw new Error("UNSUPPORTED_CHALLENGE");
+      !/\b(nao|sem|falta|faltam|dificuldade|dificuldades|obstaculo|obstaculos|desafio|desafios|duvida|duvidas|medo|receio|incerteza|limitacao|limitacoes)\b/.test(normalizeQuestion(challenge.text))) throw new AnalysisValidationError("challenge");
   }
   const allAnswers = new Set(themes([...sources.values()].map(({ answer }) => answer).join(" ")));
-  if (!themes(result.title).some((word) => allAnswers.has(word))) throw new Error("UNSUPPORTED_TITLE");
+  if (!themes(result.title).some((word) => allAnswers.has(word))) throw new AnalysisValidationError("title");
   return result;
 }

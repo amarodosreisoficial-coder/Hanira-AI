@@ -43,7 +43,11 @@ test("análise: consentimento próprio, evidências, ações, edição e descart
   for (const days of [7, 30, 90]) await expect(page.getByRole("heading", { name: `Nos próximos ${days} dias` })).toBeVisible();
   await page.locator("details summary").first().click();
   await expect(page.locator("details").first().getByText("O que você mais gosta de fazer?", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Baixar PDF (em breve)", exact: true })).toBeDisabled();
+  const pdfButton = page.getByRole("button", { name: "Baixar meu Ikigai em PDF", exact: true });
+  await expect(pdfButton).toBeEnabled();
+  const download = page.waitForEvent("download");
+  await pdfButton.click();
+  expect((await download).suggestedFilename()).toMatch(/^relatorio-ikigai-.*\.pdf$/);
   expect(requests).toBe(1);
   const persisted = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, cookies: document.cookie }));
   expect(persisted).not.toMatch(/Sou professora|Ensinar e escutar|Apoiar jovens/);
