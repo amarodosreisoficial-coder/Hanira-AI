@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  CircleStop,
   LoaderCircle,
   Mic,
   Pause,
   Play,
+  Square,
   Trash2,
   X,
 } from "lucide-react";
 import { useMediaRecorder } from "@/hooks/use-media-recorder";
 import { STT_MAX_AUDIO_BYTES, STT_MAX_RECORDING_SECONDS } from "@/lib/validation/stt-audio";
+import {
+  setVoiceFlowPhase,
+  setVoiceFlowPhaseToIdleIf,
+} from "@/lib/voice/voice-auto-flow";
+import { interruptSpeech } from "@/lib/voice/browser-tts";
 import { transcribeAudio } from "@/services/media-service";
 import { cn } from "@/lib/utils";
 
@@ -22,12 +27,31 @@ function formatDuration(seconds: number) {
 
 const WAVEFORM_BARS = Array.from({ length: 22 });
 
-function Waveform({ paused }: { paused: boolean }) {
+function Waveform({
+  paused,
+  amplitudes,
+  live = false,
+}: {
+  paused: boolean;
+  amplitudes: number[];
+  live?: boolean;
+}) {
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   return (
-    <span className={cn("waveform", paused && "is-paused")} aria-hidden="true">
-      {WAVEFORM_BARS.map((_, index) => (
-        <i key={index} style={{ animationDelay: `${(index % 8) * 0.08}s` }} />
-      ))}
+    <span className={cn("waveform", paused && "is-paused", live && "live")} aria-hidden="true">
+      {WAVEFORM_BARS.map((_, index) => {
+        const amp = Math.max(0.28, Math.min(1, amplitudes[index] ?? 0.28));
+        return (
+          <i
+            key={index}
+            style={{
+              animationDelay: `${(index % 8) * 0.08}s`,
+              transform: reducedMotion ? undefined : `scaleY(${amp})`,
+              opacity: reducedMotion ? undefined : Math.max(0.6, amp),
+            }}
+          />
+        );
+      })}
     </span>
   );
 }
@@ -51,10 +75,35 @@ export function VoiceRecorder({
   const cancelledRef = useRef(false);
   const requestRef = useRef<AbortController | null>(null);
   const autoStartedRef = useRef(false);
+  // Pacote 18.4.2: waveform reage à amplitude real via AnalyserNode quando
+  // disponível, com fallback para animação CSS simulada.
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const [amplitudes, setAmplitudes] = useState<number[]>(
+    WAVEFORM_BARS.map(() => 0.28),
+  );
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  // Pacote 18.4.2: estado (não ref) para evitar acessar ref durante render
+  // (React hooks/refs rule) ao passar `live` para o Waveform.
+  const [analyserActive, setAnalyserActive] = useState(false);
 
   useEffect(() => () => {
     cancelledRef.current = true;
     requestRef.current?.abort();
+    // Pacote 18.4.2: encerra o AnalyserNode ao desmontar o gravador.
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
+    setAnalyserActive(false);
   }, []);
 
   // Inline mode opens straight into the composer bar, so start capture on
@@ -63,44 +112,125 @@ export function VoiceRecorder({
   useEffect(() => {
     if (inline && !autoStartedRef.current && recorder.status === "idle") {
       autoStartedRef.current = true;
+      setVoiceFlowPhase("listening");
+      // Pacote 18.4 — BARGE-IN: início da gravação interrompe fala da Nira.
+      interruptSpeech();
       void recorder.start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inline, recorder.status]);
 
+  // Pacote 18.4.2: configura AnalyserNode para amplitude real quando a
+  // gravação inicia (não-inline, botão de gravação manual).
+  useEffect(() => {
+    if (recorder.status !== "recording" || analyserActive) return;
+    const stream = recorder.getStream();
+    if (!stream) return;
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: new () => AudioContext })
+          .webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioCtxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      sourceRef.current = source;
+      analyserRef.current = analyser;
+      // Defer setState para evitar cascading renders dentro do effect.
+      requestAnimationFrame(() => setAnalyserActive(true));
+    } catch {
+      // AnalyserNode indisponível: mantém a animação CSS simulada.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.status]);
+
+  // Loop de leitura da amplitude real (AnalyserNode) com fallback CSS.
+  useEffect(() => {
+    if (!analyserRef.current) return;
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    let frame: number | null = null;
+    function tick() {
+      analyser.getByteFrequencyData(dataArray);
+      const bars = WAVEFORM_BARS.map((_, i) => {
+        const start = Math.floor((i * bufferLength) / WAVEFORM_BARS.length);
+        const end = Math.floor(((i + 1) * bufferLength) / WAVEFORM_BARS.length);
+        let max = 0;
+        for (let j = start; j < end; j++) max = Math.max(max, dataArray[j]);
+        return max / 255;
+      });
+      setAmplitudes(bars);
+      frame = requestAnimationFrame(tick);
+    }
+    tick();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
   async function finishAndTranscribe() {
     if (finishingRef.current) return;
     finishingRef.current = true;
     const file = await recorder.finish();
+    // Pacote 18.4.2: encerra o AnalyserNode ao finalizar a gravação.
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
     if (cancelledRef.current) return;
     if (!file) {
       recorder.setError("A gravação ficou vazia.");
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
       finishingRef.current = false;
       return;
     }
     if (file.size > STT_MAX_AUDIO_BYTES) {
       recorder.setError("O áudio excede o limite de 4 MiB. Grave um trecho menor.");
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
       finishingRef.current = false;
       return;
     }
     recorder.setStatus("transcribing");
+    setVoiceFlowPhase("transcribing");
     const controller = new AbortController();
     requestRef.current = controller;
     try {
       const text = await transcribeAudio(file, controller.signal, { language });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        // Cancelamento do usuário/desmontagem: nada é enviado ao chat.
+        setVoiceFlowPhaseToIdleIf("transcribing");
+        return;
+      }
       recorder.setStatus("complete");
       onComplete({ text });
     } catch (caught) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        setVoiceFlowPhaseToIdleIf("transcribing");
+        return;
+      }
+      // Erro do STT: NÃO chama onComplete — o auto-send nunca acontece e o
+      // usuário pode tentar de novo pelo próprio gravador.
       recorder.setError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível transcrever o áudio.",
       );
       recorder.setStatus("error");
+      setVoiceFlowPhaseToIdleIf("transcribing");
     } finally {
       requestRef.current = null;
       finishingRef.current = false;
@@ -148,7 +278,13 @@ export function VoiceRecorder({
             )}
           </span>
 
-          {active && <Waveform paused={recorder.status !== "recording"} />}
+          {active && (
+  <Waveform
+    paused={recorder.status !== "recording"}
+    amplitudes={amplitudes}
+    live={analyserActive}
+  />
+)}
 
           <span className="text-xs tabular-nums text-muted-foreground">
             {formatDuration(recorder.duration)} /{" "}
@@ -159,7 +295,10 @@ export function VoiceRecorder({
             {idleOrError && (
               <button
                 type="button"
-                onClick={() => void recorder.start()}
+                onClick={() => {
+                  setVoiceFlowPhase("listening");
+                  void recorder.start();
+                }}
                 aria-label="Iniciar gravação"
                 className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -193,7 +332,9 @@ export function VoiceRecorder({
                 aria-label="Finalizar e transcrever"
                 className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <CircleStop className="size-4" />
+                <span className="relative grid size-6 place-items-center">
+                  <Square className="size-3 fill-current" />
+                </span>
               </button>
             )}
             <button
@@ -202,6 +343,7 @@ export function VoiceRecorder({
                 cancelledRef.current = true;
                 requestRef.current?.abort();
                 recorder.cancel();
+                setVoiceFlowPhaseToIdleIf("listening", "transcribing");
                 onCancel();
               }}
               aria-label="Cancelar gravação"
@@ -262,7 +404,12 @@ export function VoiceRecorder({
         <div className="flex items-center gap-2">
           {recorder.status === "idle" || recorder.status === "error" ? (
             <button
-              onClick={() => void recorder.start()}
+              onClick={() => {
+                // Pacote 18.4 — BARGE-IN: iniciar gravação interrompe fala da Nira.
+                interruptSpeech();
+                setVoiceFlowPhase("listening");
+                void recorder.start();
+              }}
               className="grid size-11 place-items-center rounded-xl bg-white text-black"
               aria-label="Iniciar gravação"
             >
@@ -291,10 +438,12 @@ export function VoiceRecorder({
               </button>
               <button
                 onClick={() => void finishAndTranscribe()}
-                className="grid size-11 place-items-center rounded-xl bg-white text-black"
+                className="grid size-11 place-items-center rounded-full bg-white text-black"
                 aria-label="Finalizar e transcrever"
               >
-                <CircleStop className="size-4" />
+                <span className="relative grid size-6 place-items-center">
+                  <Square className="size-3 fill-current" />
+                </span>
               </button>
             </>
           ) : null}
@@ -303,7 +452,21 @@ export function VoiceRecorder({
               cancelledRef.current = true;
               requestRef.current?.abort();
               recorder.cancel();
+              setVoiceFlowPhaseToIdleIf("listening", "transcribing");
               onCancel();
+              // Pacote 18.4.2: encerra o AnalyserNode ao cancelar.
+              if (analyserRef.current) {
+                analyserRef.current.disconnect();
+                analyserRef.current = null;
+              }
+              if (sourceRef.current) {
+                sourceRef.current.disconnect();
+                sourceRef.current = null;
+              }
+              if (audioCtxRef.current) {
+                audioCtxRef.current.close();
+                audioCtxRef.current = null;
+              }
             }}
             className="grid size-11 place-items-center rounded-xl text-zinc-600 hover:text-rose-300"
             aria-label="Cancelar gravação"

@@ -46,9 +46,12 @@ describe("Pacote 18.3.5 — composer unificado + microfone inline + sidebar cola
     expect(recorder).toContain("Iniciar gravação");
   });
 
-  it("preserva o fluxo de transcrição sem auto-send (texto vai ao composer)", () => {
-    // onComplete do gravador escreve no draft do composer (edição manual).
-    expect(composer).toContain("store.setDraft(nextDraft)");
+  it("gravador inline entrega a transcrição ao auto-send (Pacote 18.4)", () => {
+    // onComplete do gravador despacha para handleVoiceTranscript (auto-send);
+    // transcript vazio/erro/cancelamento não disparam envio (proteções no
+    // módulo lib/voice/voice-auto-flow.ts).
+    expect(composer).toContain("onComplete={({ text }) => handleVoiceTranscript(text)}");
+    expect(composer).toContain("store.setDraft(decision.content)");
   });
 
   it("sidebar continua colapsável com modo de ícones e rótulos de contrato", () => {

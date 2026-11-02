@@ -10,8 +10,23 @@ import { MessageAttachments } from "@/components/media/message-attachments";
 import { IconButton } from "@/components/ui/icon-button";
 import { SpeechControls } from "@/components/voice/speech-controls";
 import { chatIssueForCode } from "@/lib/chat/chat-errors";
+import { shouldAutoReadVoiceResponse } from "@/lib/voice/voice-auto-flow";
 import type { ChatMessage as ChatMessageData } from "@/types/chat";
 import type { UserSettings } from "@/types/settings";
+
+/**
+ * Valida se uma URL usa esquema http/https seguro.
+ * Substitui o sanitizeWebUrl do lib/web-search (exportado apenas como type
+ * no barrel) para evitar dependência de export conflitante.
+ */
+function isSafeWebUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 export function ChatMessage({
   message,
@@ -30,6 +45,20 @@ export function ChatMessage({
   const issue = message.failed
     ? chatIssueForCode(message.errorCode ?? "unknown")
     : null;
+
+  // Pacote 18.4 — AUTO READ: somente a RESPOSTA de um turno de voz (mensagem
+  // originada do microfone) é lida automaticamente, e somente depois de
+  // concluída (não durante o streaming). Mensagens digitadas nunca recebem
+  // autoReadKey — o comportamento manual é preservado.
+  const autoReadKey =
+    message.role === "assistant" &&
+    !message.pending &&
+    !message.failed &&
+    Boolean(message.content) &&
+    settings.voiceEnabled &&
+    shouldAutoReadVoiceResponse(message.id)
+      ? message.id
+      : null;
 
   if (message.role === "user") {
     return (
@@ -65,7 +94,7 @@ export function ChatMessage({
       <NiraPresence status={message.pending ? "responding" : issue ? "unavailable" : "idle"} />
       <div className="min-w-0 pt-1">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Nira</span>
+          <span className="text-[0.8125rem] font-medium text-muted-foreground">Nira</span>
         </div>
         <MessageAttachments
           attachments={message.attachments ?? []}
@@ -78,7 +107,44 @@ export function ChatMessage({
             generation={message.imageGeneration}
           />
         ) : (
-          message.content && <MessageContent content={message.content} />
+          <>
+            {message.content && <MessageContent content={message.content} />}
+            {message.webSearchSources && message.webSearchSources.length > 0 && (
+              <section className="chat-sources" aria-label="Fontes consultadas">
+                <h4>
+                  Fontes consultadas
+                </h4>
+                <ul>
+                  {message.webSearchSources.map((source, index) => {
+                    const safeUrl = isSafeWebUrl(source.url) ? source.url : "";
+                    return (
+                      <li key={index}>
+                        <span className="text-muted-foreground" aria-hidden="true">
+                          {index + 1}.
+                        </span>
+                        {safeUrl ? (
+                          <a
+                            href={safeUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            {source.title}
+                          </a>
+                        ) : (
+                          <span>
+                            {source.title}
+                          </span>
+                        )}
+                        <span className="chat-source-domain">
+                          ({source.domain})
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </>
         )}
 
         {message.pending && message.content && (
@@ -142,6 +208,8 @@ export function ChatMessage({
                 // Pacote 18.4: idioma da conversa (override) senão o primário
                 // do perfil — nunca fixo em pt-BR quando o perfil muda de idioma.
                 language={conversationLanguage ?? settings.language}
+                // Pacote 18.4: responde a um turno de voz → leitura automática.
+                autoReadKey={autoReadKey}
               />
             )}
           </div>

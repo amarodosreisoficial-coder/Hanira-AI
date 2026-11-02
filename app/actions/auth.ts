@@ -170,3 +170,53 @@ export async function logoutAction() {
   }
   redirect("/login");
 }
+
+// Pacote 18.4 — Login com Google (OAuth). O callback genérico
+// `app/auth/callback/route.ts` troca o authorization code por sessão.
+export async function signInWithGoogleAction(
+  _state: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  if (isDemoMode()) return { status: "success", redirectTo: "/chat" };
+
+  const env = getServerEnv();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return authError();
+
+  // Pacote 18.4.2: no Preview (Vercel) a NEXT_PUBLIC_APP_URL pode apontar para
+  // a producao (hanira-ai.vercel.app). Prioriza a origin da requisicao atual
+  // para que o OAuth redirecione para a URL do Preview, nunca para producao.
+  // Se o origin nao for fornecido, tenta usar a origin do request do navegador
+  // (next url) e cai apenas como ultimo recurso no NEXT_PUBLIC_APP_URL.
+  const formOrigin = formData.get("origin");
+  const requestOrigin =
+    typeof formOrigin === "string" && formOrigin
+      ? formOrigin
+      : typeof window !== "undefined"
+      ? new URL(window.location.origin).origin
+      : null;
+  const isPreview =
+    typeof window !== "undefined" &&
+    (window.location.hostname.includes("vercel.app") ||
+      window.location.hostname.includes("localhost"));
+  const appUrl =
+    isPreview && !requestOrigin
+      ? env.NEXT_PUBLIC_APP_URL
+      : requestOrigin || env.NEXT_PUBLIC_APP_URL;
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${appUrl}/auth/callback?next=/chat`,
+      },
+    });
+    if (error) return authError(error.message);
+    // signInWithOAuth devolve a URL de autorização do provedor; o cliente faz
+    // full-page redirect para esta URL e volta ao callback após o consentimento.
+    if (data?.url) return { status: "success", redirectTo: data.url };
+    return authError("Não foi possível iniciar o login com Google.");
+  } catch (error) {
+    return unknownAuthError(error);
+  }
+}

@@ -28,6 +28,16 @@ import {
 } from "lucide-react";
 import { PrivacyDialog } from "@/components/media/privacy-dialog";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
+import {
+  beginVoiceTurn,
+  cancelVoiceTurn,
+  getVoiceTurnAssistantId,
+  isVoiceAutoReadEnabled,
+  resolveVoiceTranscript,
+  setVoiceFlowPhase,
+  setVoiceFlowPhaseToIdleIf,
+} from "@/lib/voice/voice-auto-flow";
+import { interruptSpeech } from "@/lib/voice/browser-tts";
 import { useAutoResize } from "@/hooks/use-auto-resize";
 import {
   CHAT_MESSAGE_LENGTH_ERROR,
@@ -105,6 +115,10 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
   const [imageReferenceInputKey, setImageReferenceInputKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const imageGenerationAbortRef = useRef<AbortController | null>(null);
+  // Pacote 18.4 — AUTO SEND: 1 gravação = 1 envio. A guarda fica em ref para
+  // valer também com callbacks duplicados/Strict Mode/duplo toque.
+  const voiceSendGuardRef = useRef(false);
+  const recorderOpenRef = useRef(false);
   const handleImageGenerationRef = useRef<ImageGenerationHandler>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +134,30 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       .then((data) => { if (data) setSttAvailable(data.available === true); })
       .catch(() => undefined);
     return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    recorderOpenRef.current = recorderOpen;
+  }, [recorderOpen]);
+  // Pacote 18.4 — anti-eco: se o gravador estiver ativo por condição
+  // inesperada quando o AUTO READ começar, encerra a gravação para que a voz
+  // da Nira não seja capturada como nova entrada. O unmount do VoiceRecorder
+  // aborta a requisição e para as tracks do microfone.
+  useEffect(() => {
+    function onVoiceAutoReadStart() {
+      if (!recorderOpenRef.current) return;
+      setRecorderOpen(false);
+    }
+    window.addEventListener("hanira:voice-auto-read-start", onVoiceAutoReadStart);
+    return () => {
+      window.removeEventListener("hanira:voice-auto-read-start", onVoiceAutoReadStart);
+    };
+  }, []);
+  // Desmontagem do composer (troca de rota/conta): nunca deixar o fluxo de voz
+  // preso fora de IDLE (recorder/TTS/listeners são limpos pelos filhos).
+  useEffect(() => {
+    return () => {
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing", "sending", "thinking");
+    };
   }, []);
   useEffect(() => {
     if (!plusMenuOpen) return;
@@ -389,25 +427,92 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     setPendingMedia((value) => [...value, ...accepted]);
   }
 
+  function openRecorder() {
+    // Pacote 18.4 — BARGE-IN: ao abrir o gravador interrompo qualquer fala da
+    // Nira em andamento para que o microfone capture a nova entrada em voz.
+    interruptSpeech();
+    setVoiceFlowPhase("listening");
+    setRecorderOpen(true);
+  }
+
+  // Pacote 18.4 — VOICE BETA AUTO SEND: a transcrição válida NÃO fica esperando
+  // confirmação no composer; ela entra no MESMO pipeline de envio de mensagens
+  // (mensagem aparece no histórico → Nira responde → auto-read no fim da
+  // resposta). Decisão centralizada em `resolveVoiceTranscript` (proteções de
+  // transcript vazio/limite/Nira ocupada) + guarda anti-duplicidade local.
+  function handleVoiceTranscript(text: string) {
+    // 1 gravação = 1 envio: eventos duplicados (Strict Mode, duplo toque,
+    // MediaRecorder repetido) são ignorados enquanto um auto-send roda.
+    if (voiceSendGuardRef.current) return;
+    const decision = resolveVoiceTranscript({
+      transcript: text,
+      draft: useChatStore.getState().draft,
+      isThinking: useChatStore.getState().isThinking,
+    });
+    setRecorderOpen(false);
+    if (decision.action === "reject") {
+      // Transcript vazio/inválido ou acima do limite: NÃO envia, NÃO inventa
+      // texto — só mostra erro amigável e libera nova tentativa.
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
+      setError(decision.message);
+      return;
+    }
+    if (decision.action === "draft") {
+      // Caminhos sem auto-send (Nira pensando / flag desligada): preserva o
+      // texto no composer, concatenado ao draft existente.
+      setVoiceFlowPhaseToIdleIf("listening", "transcribing");
+      store.setDraft(decision.content);
+      if (decision.notice) setError(decision.notice);
+      return;
+    }
+    setError("");
+    setIssue(null);
+    voiceSendGuardRef.current = true;
+    setVoiceFlowPhase("sending");
+    void submit(decision.content, false, undefined, { voiceOrigin: true }).finally(
+      () => {
+        voiceSendGuardRef.current = false;
+      },
+    );
+  }
+
   async function submit(
     contentOverride?: string,
     retry = false,
     attachmentOverride?: Attachment[],
+    options?: { voiceOrigin?: boolean },
   ) {
+    // Pacote 18.4: true quando este envio veio do microfone (auto-send).
+    const voiceOrigin = options?.voiceOrigin === true;
     const rawContent = contentOverride ?? store.draft;
     if (isChatMessageTooLong(rawContent)) {
       showMessageLengthError();
+      if (voiceOrigin) setVoiceFlowPhaseToIdleIf("sending", "thinking");
       return;
     }
     const content = rawContent.trim();
     const hasMedia = pendingMedia.length > 0 || Boolean(attachmentOverride?.length);
-    if ((!content && !hasMedia) || store.isThinking || uploading) return;
+    if ((!content && !hasMedia) || store.isThinking || uploading) {
+      if (voiceOrigin) {
+        // Corrida rara (Nira ocupada entre a decisão e o envio): preserva a
+        // transcrição no composer em vez de descartar, e volta a IDLE.
+        if (content) store.setDraft(content);
+        setVoiceFlowPhaseToIdleIf("sending", "thinking");
+        setError("A Nira ainda está respondendo. A transcrição ficou no campo de texto.");
+      }
+      return;
+    }
 
     // Pacote 17.4: roteamento determinístico de intent de imagem.
     // Se o modo imagem estiver ativo ou o texto for um pedido claro de imagem,
     // roteamos para o gerador de imagens em vez do chat de texto.
     const intent = resolveComposerIntent({ mode: composerMode, draft: content });
     if (intent === "image" && !retry) {
+      if (voiceOrigin) {
+        // Geração de imagem não produz texto de resposta para ler.
+        cancelVoiceTurn();
+        setVoiceFlowPhaseToIdleIf("sending", "thinking");
+      }
       void handleImageGeneration({
         prompt: content,
         aspectRatio: imageAspectRatio,
@@ -421,7 +526,13 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     }
 
     const conversation = await ensureConversation();
-    if (!conversation) return;
+    if (!conversation) {
+      if (voiceOrigin) {
+        setVoiceFlowPhaseToIdleIf("sending");
+        setError("Não foi possível iniciar uma conversa. Tente novamente.");
+      }
+      return;
+    }
 
     // Pacote 18.4: troca temporária de idioma da conversa detectada no texto
     // ("Nira, agora fale comigo em inglês."). Persiste só no store da conversa
@@ -440,6 +551,8 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
     let assistantId = "";
     let fullText = "";
     let terminalError = false;
+    // Pacote 19.2: fontes de pesquisa web capturadas no evento `start` do stream.
+    let assistantWebSearchSources: Array<{ title: string; url: string; domain: string }> | undefined;
     try {
       if (pendingMedia.length) {
         if (store.mode === "supabase") {
@@ -475,6 +588,11 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
         attachments,
       };
       assistantId = crypto.randomUUID();
+      // Pacote 18.4: resposta de turno de voz será lida automaticamente
+      // (auto-read) quando concluir. Mensagens digitadas não criam turno.
+      if (voiceOrigin && settings.voiceEnabled && isVoiceAutoReadEnabled()) {
+        beginVoiceTurn(assistantId);
+      }
       if (!retry) store.addMessage(userMessage);
       store.addMessage({
         id: assistantId,
@@ -487,6 +605,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       store.setDraft("");
       if (ref.current) ref.current.style.height = "0px";
       store.setThinking(true);
+      if (voiceOrigin) setVoiceFlowPhase("thinking");
       setUploading(false);
       await streamChatMessage(
         {
@@ -530,13 +649,20 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                 niraProfileId: meta?.profile,
               }),
             );
+            // Pacote 19.2: captura fontes de pesquisa web para exibição na mensagem.
+            assistantWebSearchSources = meta?.webSearchSources;
           },
           onDelta: (delta) => {
             fullText += delta;
             store.updateMessage(assistantId, fullText, true);
           },
           onDone: () => {
-            store.updateMessage(assistantId, fullText, false);
+            store.updateMessage(
+              assistantId,
+              fullText,
+              false,
+              assistantWebSearchSources,
+            );
             window.dispatchEvent(
               new CustomEvent("hanira:response-complete", {
                 detail: { text: fullText },
@@ -562,6 +688,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
+        // Interrompido pelo usuário: descarta o turno de voz (não lê resposta
+        // parcial) — o finally devolve a fase a IDLE.
+        if (voiceOrigin) cancelVoiceTurn();
         if (assistantId) {
           if (fullText) store.updateMessage(assistantId, fullText, false);
           else store.removeMessage(assistantId);
@@ -571,6 +700,9 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       const nextIssue = toChatIssue(caught, {
         online: navigator.onLine,
       });
+      // Falha terminal do envio de voz: descarta o turno (não há resposta
+      // concluída para ler) e o finally devolve a fase a IDLE.
+      if (voiceOrigin) cancelVoiceTurn();
       setIssue(nextIssue);
       setError("");
       store.setDraft(content);
@@ -580,6 +712,17 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       abortRef.current = null;
       setUploading(false);
       store.setThinking(false);
+      // Pacote 18.4 — fim do turno de voz:
+      // - sucesso com turno ativo → mantém THINKING até o auto-read começar;
+      // - erro/aborto/resposta vazia/sem turno (leitura desligada) → IDLE.
+      if (voiceOrigin) {
+        const turn = getVoiceTurnAssistantId();
+        const turnIsOurs = turn === assistantId;
+        if (turnIsOurs && (!fullText || terminalError)) cancelVoiceTurn();
+        if (!turnIsOurs || !fullText || terminalError) {
+          setVoiceFlowPhaseToIdleIf("sending", "thinking");
+        }
+      }
     }
   }
 
@@ -713,7 +856,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
       return;
     }
     if (kind === "camera") cameraInputRef.current?.click();
-    else setRecorderOpen(true);
+    else openRecorder();
   }
 
   async function removePending(item: PendingMedia) {
@@ -761,7 +904,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           </p>
         )}
         <div
-          className={`compose-surface nira-composer relative rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none${recorderOpen ? " is-recording" : ""}`}
+          className={`compose-surface nira-composer relative rounded-[1.15rem] bg-composer px-3 py-2.5 focus-within:outline-none flex flex-col gap-2${recorderOpen ? " is-recording" : ""}`}
         >
           {recorderOpen ? (
             <VoiceRecorder
@@ -774,48 +917,135 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
                   : null
               }
               onCancel={() => setRecorderOpen(false)}
-              onComplete={({ text }) => {
-                const nextDraft = `${store.draft}${store.draft ? " " : ""}${text}`.trim();
-                if (isChatMessageTooLong(nextDraft)) {
-                  showMessageLengthError();
-                } else {
-                  clearMessageLengthError();
-                  store.setDraft(nextDraft);
-                }
-                setRecorderOpen(false);
-              }}
+              onComplete={({ text }) => handleVoiceTranscript(text)}
             />
           ) : (
             <>
-          <textarea
-            ref={ref}
-            value={store.draft}
-            rows={1}
-            maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            aria-label="Mensagem para a Nira"
-            aria-describedby={
-              showOperationalIssue
-                ? "chat-message-length chat-operational-error"
-                : "chat-message-length"
-            }
-            placeholder={
-              pendingMedia.length
-                ? "Pergunte sobre o arquivo..."
-                : isImageMode
-                  ? "Descreva a imagem que você quer criar..."
-                  : "Converse com a Nira..."
-            }
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              store.setDraft(nextValue);
-              if (isChatMessageTooLong(nextValue)) showMessageLengthError();
-              else clearMessageLengthError();
-              resize();
-            }}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-                        className="block h-10 w-full resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
-          />
+              {/* Linha do texto: botão "+" à esquerda, textarea começa à direita dele */}
+              <div className="flex items-start gap-3">
+                <div className="relative flex items-center shrink-0" ref={plusMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setPlusMenuOpen((value) => !value)}
+                    aria-label="Mais ações"
+                    aria-haspopup="menu"
+                    aria-expanded={plusMenuOpen}
+                    title="Anexos e ações"
+                    className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Plus className="size-[18px]" />
+                  </button>
+                  {plusMenuOpen && (
+                    <div className="hanira-menu" role="menu" aria-label="Anexos">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); documentInputRef.current?.click(); }}
+                        className="hanira-menu__item"
+                      >
+                        <Paperclip className="size-4" />
+                        Anexar documento
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); imageInputRef.current?.click(); }}
+                        className="hanira-menu__item"
+                      >
+                        <ImagePlus className="size-4" />
+                        Anexar imagem
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
+                        onClick={() => { setPlusMenuOpen(false); void requestMediaAccess("camera"); }}
+                        className="hanira-menu__item"
+                      >
+                        <Camera className="size-4" />
+                        Tirar foto
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <textarea
+                  ref={ref}
+                  value={store.draft}
+                  rows={1}
+                  maxLength={CHAT_MESSAGE_MAX_LENGTH}
+                  aria-label="Mensagem para a Nira"
+                  aria-describedby={
+                    showOperationalIssue
+                      ? "chat-message-length chat-operational-error"
+                      : "chat-message-length"
+                  }
+                  placeholder={
+                    pendingMedia.length
+                      ? "Pergunte sobre o arquivo..."
+                      : isImageMode
+                        ? "Descreva a imagem que você quer criar..."
+                        : "Converse com a Nira..."
+                  }
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    store.setDraft(nextValue);
+                    if (isChatMessageTooLong(nextValue)) showMessageLengthError();
+                    else clearMessageLengthError();
+                    resize();
+                  }}
+                  onPaste={handlePaste}
+                  onKeyDown={handleKeyDown}
+                  className="block h-10 flex-1 min-w-0 resize-none bg-transparent px-3 py-2 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/65"
+                />
+                <span
+                  id="chat-message-length"
+                  className="sr-only"
+                  aria-live="polite"
+                >
+                  {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
+                </span>
+                <button
+                  type="button"
+                  disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
+                  onClick={() => void requestMediaAccess("microphone")}
+                  aria-label="Transcrever áudio do microfone"
+                  title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
+                  className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-zinc-700 disabled:hover:bg-transparent"
+                >
+                  <Mic className="size-[18px]" />
+                </button>
+                {store.isThinking ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      abortRef.current?.abort();
+                      imageGenerationAbortRef.current?.abort();
+                    }}
+                    aria-label="Interromper resposta"
+                    className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={isImageMode ? !canSendImage : !canSend}
+                    aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
+                    className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                  >
+                    {uploading ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : isImageMode ? (
+                      <Sparkles className="size-4" />
+                    ) : (
+                      <ArrowUp className="size-4" />
+                    )}
+                  </button>
+                )}
+              </div>
           {pendingMedia.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1">
               {pendingMedia.map((item) => (
@@ -914,105 +1144,6 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
               onRemoveReference={handleRemoveImageReference}
             />
           )}
-          <div className="flex items-center justify-between px-1 pb-1">
-            <div className="relative flex items-center" ref={plusMenuRef}>
-              {/* HANIRA NEON (18.3.6) — botões do composer são ÍCONES puros:
-                  fundo invisível normalmente; hover revela círculo
-                  translúcido. Enviar ativo usa círculo neon azul/violeta. */}
-              <button
-                type="button"
-                onClick={() => setPlusMenuOpen((value) => !value)}
-                aria-label="Mais ações"
-                aria-haspopup="menu"
-                aria-expanded={plusMenuOpen}
-                title="Anexos e ações"
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Plus className="size-[18px]" />
-              </button>
-              {plusMenuOpen && (
-                <div className="hanira-menu" role="menu" aria-label="Anexos">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); documentInputRef.current?.click(); }}
-                    className="hanira-menu__item"
-                  >
-                    <Paperclip className="size-4" />
-                    Anexar documento
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); imageInputRef.current?.click(); }}
-                    className="hanira-menu__item"
-                  >
-                    <ImagePlus className="size-4" />
-                    Anexar imagem
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={!mediaConfig.visionEnabled || !mediaConfig.attachmentsEnabled}
-                    onClick={() => { setPlusMenuOpen(false); void requestMediaAccess("camera"); }}
-                    className="hanira-menu__item"
-                  >
-                    <Camera className="size-4" />
-                    Tirar foto
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                id="chat-message-length"
-                className={`px-1 text-[10px] ${remainingCharacters <= 200 ? "text-warning" : "text-muted-foreground"}`}
-              >
-                {messageLength}/{CHAT_MESSAGE_MAX_LENGTH}
-              </span>
-              <button
-                type="button"
-                disabled={!sttAvailable || !browserCanRecord || !settings.transcriptionEnabled || store.mode === "demo"}
-                onClick={() => void requestMediaAccess("microphone")}
-                aria-label="Transcrever áudio do microfone"
-                title={store.mode === "demo" ? "Transcrição indisponível no modo demonstração" : !sttAvailable ? "Transcrição indisponível nesta instância" : !browserCanRecord ? "Gravação indisponível neste navegador" : !settings.transcriptionEnabled ? "Ative a transcrição nas configurações" : "Gravar áudio para transcrever"}
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.07] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-zinc-700 disabled:hover:bg-transparent"
-              >
-                <Mic className="size-[18px]" />
-              </button>
-              {store.isThinking ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    abortRef.current?.abort();
-                    imageGenerationAbortRef.current?.abort();
-                  }}
-                  aria-label="Interromper resposta"
-                  className="grid size-9 place-items-center rounded-full bg-foreground text-background transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Square className="size-3.5 fill-current" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  disabled={isImageMode ? !canSendImage : !canSend}
-                  aria-label={isImageMode ? "Gerar imagem" : "Enviar mensagem"}
-                  className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_var(--primary-glow)/25] transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-                >
-                  {uploading ? (
-                    <LoaderCircle className="size-4 animate-spin" />
-                  ) : isImageMode ? (
-                    <Sparkles className="size-4" />
-                  ) : (
-                    <ArrowUp className="size-4" />
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
             </>
           )}
         </div>
@@ -1029,7 +1160,7 @@ export function ChatComposer({ settings }: { settings: UserSettings }) {
           setPrivacyKind(null);
           if (kind) void dismissPrivacy(dismiss, kind);
           if (kind === "camera") cameraInputRef.current?.click();
-          if (kind === "microphone") setRecorderOpen(true);
+          if (kind === "microphone") openRecorder();
         }}
       />
     </>

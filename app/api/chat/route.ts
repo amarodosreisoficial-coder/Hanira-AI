@@ -67,6 +67,7 @@ import { saveExplicitMemory } from "@/services/memory";
 import { routeTool } from "@/lib/tools/router";
 import { formatWeatherCurrent } from "@/lib/tools/weather-current";
 import { formatTimeCurrent } from "@/lib/tools/time-current";
+import { buildWebSearchPrompt, integrateWebSearch, webSearchFailureText } from "@/lib/web-search/integrate";
 
 const SYSTEM_PROMPT =
   "Voce e Nira, a camada de inteligencia da Hanira. Converse em portugues do Brasil por padrao. Seja clara, acolhedora e util, sem fingir ser humana. Adapte profundidade, tom e vocabulario ao usuario. Use as memorias disponiveis somente quando forem relevantes.";
@@ -891,6 +892,49 @@ async function createChatStream(
     return currentWeatherFallback;
   }
 
+  // === PACOTE 19.2 — Pesquisa Web integrada ao chat ===
+  // Decide se deve buscar e executa a busca (somente quando necessário).
+  // O resultado é injetado no system prompt como contexto externo não confiável.
+  const webSearchResult = await integrateWebSearch(payload.message, false);
+  const webSearchSources = webSearchResult.shouldSearch ? webSearchResult.sources : undefined;
+  const searchFailure = webSearchFailureText(webSearchResult);
+  const searchDiagnostics = {
+    decisionReason: webSearchResult.decision.reason,
+    shouldSearch: webSearchResult.shouldSearch,
+    providerInvoked: webSearchResult.providerInvoked ?? false,
+    topic: webSearchResult.decision.topic ?? "general",
+    timeRange: webSearchResult.decision.timeRange ?? "none",
+    sourceCount: webSearchResult.sources.length,
+    success: webSearchResult.shouldSearch && !searchFailure,
+    sourcesDelivered: false,
+  };
+  logServerEvent({
+    level: searchFailure ? "warn" : "info",
+    requestId,
+    route: "/api/chat",
+    event: webSearchResult.shouldSearch ? searchFailure ? "web_search_failed" : "web_search_completed" : "web_search_skipped",
+    providerId: webSearchResult.providerId,
+    status: searchFailure ? 503 : 200,
+    durationMs: Date.now() - startedAt,
+    errorCode: webSearchResult.errorCode,
+    details: searchDiagnostics,
+  });
+  if (searchFailure) {
+    // Não chamar o modelo para substituir uma busca malsucedida por notícias.
+    // O stream determinístico não depende de provider e o lock já pode ser liberado.
+    releaseLock();
+    return createDeterministicTextResponse({
+      request, conversationId, requestId, mode: "web_search_unavailable", text: searchFailure,
+      onComplete: async (assistantContent) => {
+        await persistAssistantResponse({ supabase, conversationId, userId, requestId,
+          projectId: chatContext.projectId, assistantContent, userMessage: payload.message, startedAt });
+      },
+    });
+  }
+  const systemPromptForRouting = buildWebSearchPrompt(systemPrompt, webSearchResult);
+  // A geração recebe o mesmo contexto web usado pelo roteamento.
+  const systemPromptForProvider = systemPromptForRouting;
+
   // Pacote 16.6: routing trace — inicio da avaliacao de roteamento Nira.
   logRoutingTrace({
     requestId,
@@ -900,7 +944,7 @@ async function createChatStream(
   });
 
   const routed = await routeChatCapability({
-    systemPrompt,
+    systemPrompt: systemPromptForRouting,
     context: chatContext.conversationMessages,
     userMessage: payload.message,
     attachments,
@@ -970,7 +1014,7 @@ async function createChatStream(
   const providerRequest =
     routed.capability === "text"
       ? buildTextChatProviderRequest({
-          systemPrompt,
+          systemPrompt: systemPromptForProvider,
           context: [
             ...chatContext.conversationMessages,
             { role: "user", content: payload.message },
@@ -1067,7 +1111,7 @@ async function createChatStream(
     stage: "provider_stream",
   });
 
-  return createTextChatProviderResponse({
+  const response = createTextChatProviderResponse({
     request,
     provider: routed.provider,
     providerRequest: {
@@ -1094,6 +1138,7 @@ async function createChatStream(
     requestId,
     mode: routed.mode,
     profile: routed.niraProfileId,
+    webSearchSources,
     onComplete: async ({ assistantContent }) => {
       releaseLock();
       // Pacote 16.5 (Nira Capacity Engine): sucesso real limpa cooldown do
@@ -1229,11 +1274,15 @@ async function createChatStream(
       });
     },
   });
+  if (webSearchResult.sources.length) {
+    logServerEvent({
+      level: "info", requestId, route: "/api/chat", event: "web_search_sources_delivered",
+      providerId: webSearchResult.providerId, status: 200, durationMs: Date.now() - startedAt,
+      details: { ...searchDiagnostics, sourcesDelivered: true },
+    });
+  }
+  return response;
   } catch (error) {
-    // Concurrency lock must be released on any synchronous throw
-    // (e.g. resolveProjectChatContext, routeChatCapability, provider
-    // response construction). Streaming callbacks release the lock in
-    // their own onComplete/onFailed/onCancelled paths.
     releaseLock();
     throw error;
   }

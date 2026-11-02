@@ -85,7 +85,13 @@ export function ChatInterface({ userName }: { userName: string }) {
               title="Hanira — início"
               className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <HaniraMark compact className="gap-0 [&>span:last-child]:hidden" />
+              <HaniraMark
+                compact
+                className={cn(
+                  "gap-0 [&>span:last-child]:hidden",
+                  store.sidebarCollapsed ? "lg:hidden" : ""
+                )}
+              />
             </Link>
           </div>
 

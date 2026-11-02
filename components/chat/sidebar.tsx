@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Archive,
+  Compass,
   LogOut,
   MessageSquare,
   PanelLeftClose,
@@ -113,7 +114,10 @@ export function Sidebar({ userName }: { userName: string }) {
               title="Expandir barra lateral"
               className="group hidden size-11 place-items-center rounded-full transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid"
             >
-              <span className="transition group-hover:opacity-0 group-focus-visible:opacity-0">
+              <span
+                className="transition group-hover:opacity-100 group-focus-visible:opacity-100 hover:bg-white/[0.06]"
+
+              >
                 <HaniraMark compact />
               </span>
               <span className="absolute inset-0 hidden place-items-center text-muted-foreground group-hover:grid group-focus-visible:grid">
@@ -122,21 +126,17 @@ export function Sidebar({ userName }: { userName: string }) {
             </button>
           ) : (
             <>
-              <Link
-                href="/"
-                aria-label="Página inicial da Hanira"
-                className="min-w-0 flex-1"
-              >
-                <HaniraMark />
-              </Link>
-              <IconButton
-                label="Recolher barra lateral"
-                tooltip="Recolher barra lateral"
+              <button
+                type="button"
+                aria-label="Recolher barra lateral"
+                title="Recolher barra lateral"
+                aria-controls="hanira-sidebar"
+                aria-expanded={!store.sidebarCollapsed}
                 onClick={() => store.setSidebarCollapsed(true)}
-                className="hidden lg:inline-grid"
+                className="group relative grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PanelLeftClose className="size-4" />
-              </IconButton>
+              </button>
             </>
           )}
           <IconButton
@@ -162,6 +162,9 @@ export function Sidebar({ userName }: { userName: string }) {
           <RailButton label="Conversas recentes" tooltip="Conversas recentes" active onClick={() => store.setSidebarCollapsed(false)}>
             <MessageSquare className="size-[18px]" />
           </RailButton>
+          <Link href="/ikigai" aria-label="Ikigai" title="Ikigai" onClick={() => store.setSidebarOpen(false)} className="grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Compass className="size-[18px]" aria-hidden="true" />
+          </Link>
           <Link
             href="/settings/memory"
             aria-label="Memória Hanira"
@@ -202,6 +205,10 @@ export function Sidebar({ userName }: { userName: string }) {
         <div className={cn("flex min-h-0 flex-1 flex-col", store.sidebarCollapsed && "lg:hidden")}>
 
         <div className="px-3 pt-2">
+          <Link href="/ikigai" aria-label="Ikigai" title="Ikigai" onClick={() => store.setSidebarOpen(false)} className="mb-3 flex h-11 items-center gap-3 rounded-xl px-3.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Compass className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>Ikigai</span>
+          </Link>
           <button
             type="button"
             onClick={() => void store.newConversation()}

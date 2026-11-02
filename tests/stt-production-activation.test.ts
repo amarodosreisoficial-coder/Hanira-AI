@@ -123,7 +123,7 @@ describe("production STT activation — route gates", () => {
   });
 });
 
-describe("production STT activation — contrato do composer (sem auto-send, sem fallback)", () => {
+describe("production STT activation — contrato do composer (Pacote 18.4: auto-send, sem fallback pago)", () => {
   const source = (relative: string) => readFileSync(path.join(process.cwd(), relative), "utf8");
   const composer = source("components/chat/chat-composer.tsx");
   const route = source("app/api/audio/transcribe/route.ts");
@@ -137,15 +137,46 @@ describe("production STT activation — contrato do composer (sem auto-send, sem
     expect(recorder).toContain("transcribeAudio");
   });
 
-  it("transcript entra no composer editável e NÃO faz auto-send", () => {
-    expect(composer).toContain("store.setDraft(nextDraft)");
+  it("transcript válido é enviado automaticamente (Pacote 18.4 auto-send)", () => {
     const start = composer.indexOf("onComplete={({ text })");
-    const onCompleteBlock = composer.slice(start, start + 600);
-    expect(onCompleteBlock).not.toContain("submit(");
+    expect(start).toBeGreaterThan(-1);
+    const onCompleteBlock = composer.slice(start, start + 300);
+    // O gravador despacha direto para o pipeline de envio do chat.
+    expect(onCompleteBlock).toContain("handleVoiceTranscript(text)");
+    expect(composer).toContain("resolveVoiceTranscript");
+    expect(composer).toContain(
+      "submit(decision.content, false, undefined, { voiceOrigin: true })",
+    );
+  });
+
+  it("transcript vazio, erro do STT e cancelamento NÃO disparam envio", () => {
+    const flow = source("lib/voice/voice-auto-flow.ts");
+    expect(flow).toContain('return { action: "reject", message: VOICE_TRANSCRIPT_EMPTY_ERROR }');
+    expect(recorder.indexOf("} catch (caught)")).toBeGreaterThan(-1);
+    const catchBlock = recorder.slice(
+      recorder.indexOf("} catch (caught)"),
+      recorder.indexOf("} finally {"),
+    );
+    expect(catchBlock).not.toContain("onComplete(");
+    // Existe pelo menos um cancelamento de usuário (botão) com abort + onCancel.
+    let index = recorder.indexOf("cancelledRef.current = true");
+    let foundButtonCancel = false;
+    while (index !== -1) {
+      const block = recorder.slice(index, index + 320);
+      if (block.includes("onCancel();")) {
+        expect(block).toContain("requestRef.current?.abort();");
+        expect(block).not.toContain("onComplete(");
+        foundButtonCancel = true;
+        break;
+      }
+      index = recorder.indexOf("cancelledRef.current = true", index + 1);
+    }
+    expect(foundButtonCancel).toBe(true);
   });
 
   it("texto existente no composer não é sobrescrito (concatena com espaço)", () => {
-    expect(composer).toContain('${store.draft}${store.draft ? " " : ""}${text}');
+    const flow = source("lib/voice/voice-auto-flow.ts");
+    expect(flow).toContain("draft ? `${draft} ${transcript}` : transcript");
   });
 
   it("rota STT não tem fallback pago (só Cloudflare, sem OpenAI/Groq/Gemini)", () => {

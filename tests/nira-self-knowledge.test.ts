@@ -87,3 +87,49 @@ describe("política canônica de uso", () => {
     expect(text).not.toContain("upgrade");
   });
 });
+
+describe("autoconhecimento da voz (Pacote 18.4.2)", () => {
+  it("descreve conversa por voz, multi-idioma e STOP (pt-BR e en)", () => {
+    const pt = resolveSelfKnowledge({ message: "Você fala?", capabilities });
+    const en = resolveSelfKnowledge({ message: "Can you speak?", capabilities });
+
+    expect(pt?.intent).toBe("voice");
+    expect(pt?.language).toBe("pt-BR");
+    // A resposta descreve o ciclo completo: microfone -> transcrever -> enviar
+    // -> ler em voz alto automaticamente, multi-idioma, com interrupcao STOP.
+    expect(pt?.text).toContain("microfone");
+    expect(pt?.text).toContain("STOP");
+    expect(pt?.text).toContain("espanhol");
+    expect(pt?.text).toContain("voz pt-BR");
+
+    expect(en?.intent).toBe("voice");
+    expect(en?.language).toBe("en");
+    expect(en?.text).toContain("microphone");
+    expect(en?.text).toContain("STOP");
+    expect(en?.text).toContain("Spanish");
+    expect(en?.text).toContain("English");
+  });
+
+  it("interpreta perguntas naturais sobre conversa e interrupcao como intent voice", () => {
+    expect(
+      resolveSelfKnowledge({ message: "Você conversa por voz?", capabilities })
+        ?.intent,
+    ).toBe("voice");
+    expect(
+      resolveSelfKnowledge({ message: "Você pode interromper a fala?", capabilities })
+        ?.intent,
+    ).toBe("voice");
+    expect(
+      resolveSelfKnowledge({ message: "Você para a fala?", capabilities })?.intent,
+    ).toBe("voice");
+    expect(
+      resolveSelfKnowledge({ message: "Can you interrupt your speech?", capabilities })
+        ?.intent,
+    ).toBe("voice");
+  });
+
+  it("nao expõe provider, modelo ou credencial na resposta de voz", () => {
+    const text = resolveSelfKnowledge({ message: "Você fala?", capabilities })?.text ?? "";
+    expect(text.toLowerCase()).not.toMatch(/openai|whisper|cloudflare|billing|cart[aã]o/);
+  });
+});

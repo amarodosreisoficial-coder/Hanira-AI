@@ -48,7 +48,12 @@ interface ChatState {
   archiveConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   addMessage: (message: ChatMessage) => void;
-  updateMessage: (id: string, content: string, pending?: boolean) => void;
+  updateMessage: (
+    id: string,
+    content: string,
+    pending?: boolean,
+    webSearchSources?: Array<{ title: string; url: string; domain: string }>,
+  ) => void;
   updateImageGeneration: (
     id: string,
     imageGeneration: ChatMessage["imageGeneration"],
@@ -82,7 +87,7 @@ export const useChatStore = create<ChatState>()(
       error: null,
       isThinking: false,
       sidebarOpen: false,
-      sidebarCollapsed: false,
+      sidebarCollapsed: true,
       draft: "",
       runtimeState: "unknown",
       conversationLanguages: {},
@@ -102,15 +107,15 @@ export const useChatStore = create<ChatState>()(
               status: "ready",
             });
           } else {
+            // Pacote 18.4.2: /chat SEMPRE abre com activeId = null.
+            // O ChatInterface cria uma nova conversa ao montar quando nao houver activeId.
+            // Nao preseleciona a conversa mais recente do servidor.
             set({
               mode: "supabase",
               conversations: result.conversations,
-              activeId: result.conversations[0]?.id ?? null,
+              activeId: null,
               status: "ready",
             });
-            if (result.conversations[0]) {
-              await get().selectConversation(result.conversations[0].id);
-            }
           }
         } catch (error) {
           set({
@@ -227,14 +232,22 @@ export const useChatStore = create<ChatState>()(
             };
           }),
         })),
-      updateMessage: (id, content, pending = true) =>
+      updateMessage: (id, content, pending = true, webSearchSources) =>
         set((state) => ({
           conversations: state.conversations.map((conversation) => ({
             ...conversation,
             messages: conversation.messages
                   .map((message) =>
               message.id === id
-                ? { ...message, content, pending, failed: false }
+                ? {
+                      ...message,
+                      content,
+                      pending,
+                      failed: false,
+                      ...(webSearchSources !== undefined
+                        ? { webSearchSources }
+                        : {}),
+                    }
                 : message,
             ),
           })),
@@ -343,7 +356,6 @@ export const useChatStore = create<ChatState>()(
               }))
             : [],
         activeId: state.mode === "demo" ? state.activeId : null,
-        sidebarCollapsed: state.sidebarCollapsed,
       }),
     },
   ),
