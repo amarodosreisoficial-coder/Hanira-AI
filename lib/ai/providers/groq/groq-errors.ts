@@ -125,7 +125,7 @@ export function toGroqProviderError(
   context: GroqErrorContext = {},
 ): AIProviderError {
   if (error instanceof AIProviderError) {
-    logAIProviderErrorThrown({
+    if (context.metadata?.diagnosticScope !== "ikigai" && error.metadata?.diagnosticScope !== "ikigai") logAIProviderErrorThrown({
       sourceFile: "lib/ai/providers/groq/groq-errors.ts",
       sourceLine: 118,
       reason: "groq_error_passthrough",
@@ -142,7 +142,7 @@ export function toGroqProviderError(
   const fallback = "O provedor cloud retornou um erro inesperado.";
   const message = getPublicMessage(code, extractMessage(candidate, fallback));
 
-  logAIProviderErrorThrown({
+  if (context.metadata?.diagnosticScope !== "ikigai") logAIProviderErrorThrown({
     sourceFile: "lib/ai/providers/groq/groq-errors.ts",
     sourceLine: 140,
     reason: `groq_error_normalized:${code}:${String(context.metadata?.reason ?? "generic")}`,

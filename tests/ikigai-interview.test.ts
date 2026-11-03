@@ -107,16 +107,16 @@ describe("Ikigai: API e entrevista em uma geração", () => {
     expect(concurrencyLockCountForTests()).toBe(0);
     mocks.quota.mockRejectedValue(new Error("private quota detail"));
     const result = await POST(request());
-    expect(result.status).toBe(503);
+    expect(result.status).toBe(500);
     expect(await result.text()).not.toContain("private");
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(concurrencyLockCountForTests()).toBe(0);
   });
 
-  it("nenhuma capacidade gratuita não ativa fallback nem repete solicitação", async () => {
+  it("falha inesperada de runtime não ativa fallback nem repete solicitação", async () => {
     mocks.runtime.mockImplementation(() => { throw new Error("no free model / secret provider key"); });
     const result = await POST(request());
-    expect(result.status).toBe(503);
+    expect(result.status).toBe(500);
     expect(await result.text()).not.toContain("secret");
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(mocks.runtime).toHaveBeenCalledTimes(1);
@@ -144,7 +144,8 @@ describe("Ikigai: API e entrevista em uma geração", () => {
     await POST(request());
     mocks.generate.mockRejectedValue(new Error(JSON.stringify(answers)));
     await POST(request());
-    for (const log of logs) expect(log).not.toHaveBeenCalled();
+    expect(JSON.stringify(logs.flatMap(log => log.mock.calls))).not.toContain(answers.identity);
+    expect(JSON.parse(logs[2].mock.calls[0][0])).toMatchObject({ failureCategory: "unexpected_error" });
   });
 
   it("instruções pessoais permanecem no papel user e não mudam o sistema", async () => {

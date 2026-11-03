@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { analysisAnswers, createAnalysisReport } from "../helpers/ikigai-analysis";
 import { ikigaiAnalysisRequestSchema } from "@/lib/ikigai/analysis-contract";
+import { IKIGAI_SERVICE_ERRORS } from "@/lib/ikigai/public-errors";
 
 async function initialPreview(page: Page) {
   await page.goto("/ikigai");
@@ -18,6 +19,21 @@ test.beforeEach(({ baseURL }, testInfo) => {
   test.skip(testInfo.project.name !== "chat-demo");
   expect(baseURL).toBe("http://localhost:3050");
 });
+
+for (const [code, status] of [["configuration", 503], ["technical", 500], ["providerUnavailable", 503], ["capacity", 503]] as const) {
+  test(`análise: mensagem pública distinta para ${code} preserva respostas`, async ({ page }) => {
+    let calls = 0;
+    await page.route("**/api/ikigai/analyze", route => { calls++; return route.fulfill({ status, json: { error: IKIGAI_SERVICE_ERRORS[code], code, requestId: "fictional-request-id" } }); });
+    await initialPreview(page);
+    await consentToAnalysis(page);
+    await expect(page.getByRole("alert").filter({ hasText: IKIGAI_SERVICE_ERRORS[code] })).toBeVisible();
+    await expect(page.getByText("fictional-request-id")).toHaveCount(0);
+    expect(calls).toBe(1);
+    await page.getByRole("button", { name: "Cancelar análise", exact: true }).click();
+    await page.getByRole("button", { name: "Editar respostas", exact: true }).click();
+    await expect(page.locator("#ikigai-identity")).toHaveValue(analysisAnswers.identity);
+  });
+}
 
 test("análise: consentimento próprio, evidências, ações, edição e descarte", async ({ page }) => {
   let requests = 0;
@@ -43,7 +59,11 @@ test("análise: consentimento próprio, evidências, ações, edição e descart
   for (const days of [7, 30, 90]) await expect(page.getByRole("heading", { name: `Nos próximos ${days} dias` })).toBeVisible();
   await page.locator("details summary").first().click();
   await expect(page.locator("details").first().getByText("O que você mais gosta de fazer?", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Baixar PDF (em breve)", exact: true })).toBeDisabled();
+  const pdfButton = page.getByRole("button", { name: "Baixar meu Ikigai em PDF", exact: true });
+  await expect(pdfButton).toBeEnabled();
+  const download = page.waitForEvent("download");
+  await pdfButton.click();
+  expect((await download).suggestedFilename()).toMatch(/^relatorio-ikigai-.*\.pdf$/);
   expect(requests).toBe(1);
   const persisted = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, cookies: document.cookie }));
   expect(persisted).not.toMatch(/Sou professora|Ensinar e escutar|Apoiar jovens/);

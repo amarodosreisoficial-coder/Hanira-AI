@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import { build } from "@/lib/ikigai/pdf-generator";
+import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { build, generateIkigaiPdfBlob, generateIkigaiPdfDataUri } from "@/lib/ikigai/pdf-generator";
+import { buildAnalysisInput } from "@/lib/ikigai/analysis-contract";
+import { parseGeneratedAnalysis } from "@/lib/ikigai/analysis-generator";
+import { analysisAnswers, createGeneratedAnalysisReport } from "./helpers/ikigai-analysis";
 import type { IkigaiAnalysis } from "@/lib/ikigai/analysis-contract";
 import type { IkigaiAnswers } from "@/lib/ikigai/types";
 
@@ -43,6 +47,20 @@ const makeInput = (): { answers: IkigaiAnswers; followUps: never[] } => ({
 });
 
 describe("PDF: VFS, fontes e geração de documento", () => {
+  it("gera bytes PDF e data URI com o contrato validado e a API Promise do pdfmake 0.3", async () => {
+    const input = buildAnalysisInput(analysisAnswers, []);
+    const report = parseGeneratedAnalysis(JSON.stringify(createGeneratedAnalysisReport()), input);
+    const options = { report, input, generationDate: "2026-11-02T12:00:00Z", images: { haniraLogo: `data:image/png;base64,${readFileSync("public/hanira-logo-primary.png").toString("base64")}` } };
+    const blob = await generateIkigaiPdfBlob(options);
+    expect(blob.type).toBe("application/pdf");
+    expect(new TextDecoder().decode((await blob.arrayBuffer()).slice(0, 5))).toBe("%PDF-");
+    if (process.env.HANIRA_PDF_QA_OUTPUT === "1") {
+      mkdirSync("test-results", { recursive: true });
+      writeFileSync("test-results/ikigai-fictional-qa.pdf", Buffer.from(await blob.arrayBuffer()));
+      console.log(`PDF fictício: ${blob.size} bytes`);
+    }
+    expect(await generateIkigaiPdfDataUri(options)).toMatch(/^data:application\/pdf;base64,JVBER/);
+  }, 15_000);
   it("VFS está inicializada com fontes", () => {
     expect(pdfMake.vfs).toBeDefined();
     const keys = Object.keys(pdfMake.vfs);

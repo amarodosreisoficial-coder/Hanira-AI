@@ -24,3 +24,11 @@ export function createAnalysisReport(): IkigaiAnalysis {
     reflection: "Use esta leitura como um convite para refletir. Observe o que faz sentido hoje e permita que seus próximos passos mudem conforme suas experiências.",
   };
 }
+
+export function createGeneratedAnalysisReport() {
+  const report = createAnalysisReport();
+  const item = (value: IkigaiAnalysis["passions"][number]) => ({ ...value, evidence: value.evidence.map(({ source }) => `${source}:1`) });
+  return { ...report, synthesis: item(report.synthesis), passions: report.passions.map(item), strengths: report.strengths.map(item),
+    values: report.values.map(item), contribution: report.contribution.map(item), sustainablePaths: report.sustainablePaths.map(item), possibleDirections: report.possibleDirections.map(item),
+    challenges: [] as { evidenceId: string }[], actionPlan: { days7: item(report.actionPlan.days7), days30: item(report.actionPlan.days30), days90: item(report.actionPlan.days90) } };
+}

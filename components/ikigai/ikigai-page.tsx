@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Compass, Download, Mic, ShieldCheck, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, ArrowRight, Download, Mic, ShieldCheck, Sparkles } from "lucide-react";
+import { IkigaiIcon } from "@/components/brand/ikigai-icon";
 import { Button } from "@/components/ui/button";
 import { IkigaiPreview } from "./ikigai-preview";
 import { IkigaiConsent, IkigaiInterview } from "./ikigai-interview";
@@ -35,7 +37,7 @@ export function IkigaiPage() {
       <header className="border-b border-white/[0.06] px-5 py-5 sm:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Link href="/chat" className={`inline-flex items-center gap-2 rounded-lg text-sm text-muted-foreground hover:text-foreground ${focusStyle}`}><ArrowLeft className="size-4" aria-hidden="true" />Voltar ao chat</Link>
-          <span className="flex items-center gap-2 text-sm text-cyan-200"><Compass className="size-4" aria-hidden="true" />Ikigai · Hanira</span>
+          <span className="flex items-center gap-2 text-sm text-cyan-200"><IkigaiIcon size={28} />Ikigai · Hanira</span>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 pb-16 pt-12 sm:px-10 sm:pt-16">
@@ -43,9 +45,14 @@ export function IkigaiPage() {
           <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 size-80 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative max-w-3xl">
             <p className="mb-5 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-cyan-300"><Sparkles className="size-4" aria-hidden="true" />Um encontro com você</p>
+            <IkigaiIcon size={96} className="mb-5" />
             <h1 id="ikigai-title" className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">Descubra seu <span className="bg-gradient-to-r from-cyan-300 via-blue-300 to-violet-300 bg-clip-text text-transparent">Ikigai</span></h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-muted-foreground">Responda algumas perguntas e deixe a Nira ajudar você a encontrar um mapa mais claro de propósito, talentos, impacto e direção.</p>
             <p className="mt-4 text-sm leading-6 text-violet-200">Organize suas reflexões e, se desejar, aprofunde com até três perguntas da Nira. Você escolhe quando compartilhar suas respostas.</p>
+            <aside className="mt-7 border-l-2 border-cyan-300/40 pl-5" aria-labelledby="ikigai-concept-title">
+              <h2 id="ikigai-concept-title" className="font-medium text-cyan-100">O que é Ikigai?</h2>
+              <p className="mt-2 text-sm leading-7 text-zinc-300">Ikigai é um conceito japonês relacionado àquilo que dá sentido e motivação à vida. Pode estar nas relações, nas atividades que amamos, em nossas contribuições e nos pequenos motivos que fazem cada dia valer a pena.</p>
+            </aside>
           </div>
         </section>
 
@@ -56,7 +63,7 @@ export function IkigaiPage() {
         <div className="space-y-8">
           {flow.step === "intro" && <section className="rounded-3xl border border-white/10 bg-card p-6 sm:p-8" aria-labelledby="ikigai-step-title">
             <h2 ref={stepTitle} tabIndex={-1} id="ikigai-step-title" className={`rounded text-2xl font-semibold ${focusStyle}`}>Como funciona</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">Ikigai é um convite para refletir sobre o que dá sentido à sua vida. Não existe uma resposta perfeita: comece pelo que faz sentido hoje.</p>
+            <div className="mt-5 flex items-center gap-4"><Image src="/media/hanira/images/nira-avatar-ring-v1.png" alt="Nira, sua guia nesta reflexão" width={72} height={72} sizes="72px" className="size-18 rounded-full object-cover" /><p className="max-w-2xl text-sm leading-7 text-muted-foreground">Eu sou a Nira. Vou acompanhar você nesta reflexão, uma pergunta de cada vez. Não existe uma resposta perfeita: comece pelo que faz sentido hoje.</p></div>
             <div className="my-8 grid gap-6 sm:grid-cols-3">{[
               ["01", "Olhe para dentro", "Responda cinco perguntas, no seu ritmo."],
               ["02", "Conecte suas ideias", "Veja suas respostas organizadas em quatro áreas."],
@@ -93,7 +100,7 @@ export function IkigaiPage() {
 
           {(flow.step === "preview" || flow.step === "next") && <section aria-labelledby="ikigai-step-title" className="rounded-3xl border border-white/10 bg-card p-6 sm:p-8">
             <h2 ref={stepTitle} tabIndex={-1} id="ikigai-step-title" className={`rounded text-2xl font-semibold ${focusStyle}`}>{flow.step === "preview" ? "Sua prévia está pronta" : "Seu próximo capítulo"}</h2>
-            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Você pode solicitar uma análise personalizada com consentimento próprio, com ou sem o aprofundamento opcional." : "Você concluiu a reflexão inicial. Sua análise personalizada está disponível mediante consentimento. O relatório em PDF está disponível para download. Não há geração em andamento até você confirmar o envio."}</p>
+            <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">{flow.step === "preview" ? "Releia suas palavras e ajuste o que desejar. Você pode solicitar uma análise personalizada com consentimento próprio, com ou sem o aprofundamento opcional." : flow.analysis.result ? "Sua análise personalizada está pronta. Você pode consultá-la e baixar o relatório em PDF." : "Você concluiu a reflexão inicial. Se desejar, solicite sua análise personalizada com consentimento próprio. O PDF será liberado quando a análise estiver concluída."}</p>
             <div className="flex flex-wrap gap-3">
               <Button variant="secondary" onClick={flow.editInitialAnswers} className={focusStyle}>Editar respostas</Button>
               {flow.step === "preview" && !flow.followUps.length && <Button variant="secondary" disabled={flow.consentOpen} onClick={() => { flow.analysis.cancelRequest(); flow.setConsentOpen(true); }} className={`h-auto min-h-11 whitespace-normal py-3 ${focusStyle}`}>Aprofundar com a Nira</Button>}

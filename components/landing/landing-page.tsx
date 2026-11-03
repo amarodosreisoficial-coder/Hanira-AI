@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, MotionConfig, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BrainCircuit,
@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { HaniraMark } from "@/components/brand/hanira-mark";
+import { NiraIntro } from "./nira-intro";
 
 const reveal = {
   initial: { opacity: 0, y: 22 },
@@ -38,9 +39,11 @@ const highlights = [
 ];
 
 export function LandingPage() {
+  const reducedMotion = useReducedMotion();
+  const entry = reducedMotion ? { initial: false as const } : reveal;
   return (
-    <main className="noise min-h-screen overflow-hidden bg-[#070608]">
-      <div className="pointer-events-none absolute left-1/2 top-[-28rem] h-[55rem] w-[55rem] -translate-x-1/2 rounded-full bg-violet-700/15 blur-[120px]" />
+    <MotionConfig reducedMotion="user"><main className="noise min-h-screen overflow-hidden bg-[#080f1c]">
+      <div className="pointer-events-none absolute left-1/2 top-[-28rem] h-[55rem] w-[55rem] -translate-x-1/2 rounded-full bg-blue-500/15 blur-[120px]" />
 
       <header className="relative z-20 mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8">
         <Link href="/" aria-label="Hanira AI">
@@ -65,51 +68,54 @@ export function LandingPage() {
             Entrar
           </Link>
           <a
-            className="hidden rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-violet-100 sm:block"
+            className="rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-black transition hover:bg-cyan-100 sm:px-4"
             href="/chat"
           >
-            Iniciar conversa
+            <span className="sm:hidden">Conversar</span><span className="hidden sm:inline">Iniciar conversa</span>
           </a>
         </div>
       </header>
 
-      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col items-center justify-center px-5 pb-24 pt-16 text-center">
+      <section className="relative z-10 mx-auto flex max-w-6xl flex-col items-center justify-center px-5 pb-20 pt-8 text-center lg:pt-12">
+        <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_1.1fr] lg:text-left">
+        <div>
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6 }}
-          className="mb-8 inline-flex items-center gap-2 rounded-full border border-violet-300/15 bg-violet-500/[0.07] px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.16em] text-violet-200"
+          className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-300/[0.07] px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-100"
         >
           <span className="size-1.5 rounded-full bg-violet-400 shadow-[0_0_10px_#a78bfa]" />
           Inteligência com presença
         </motion.div>
 
         <motion.h1
-          {...reveal}
+          {...entry}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="max-w-5xl text-balance text-[3.25rem] font-medium leading-[0.98] tracking-[-0.065em] text-white sm:text-7xl md:text-[6rem]"
+          className="max-w-3xl text-balance text-[2.8rem] font-medium leading-[1.04] tracking-[-0.055em] text-white sm:text-6xl lg:text-[4.5rem]"
         >
           Pensar melhor começa com a{" "}
-          <span className="text-gradient">conversa certa.</span>
+          <span className="bg-gradient-to-r from-cyan-200 via-blue-300 to-violet-300 bg-clip-text text-transparent">conversa certa.</span>
         </motion.h1>
 
         <motion.p
-          {...reveal}
+          {...entry}
           transition={{ duration: 0.7, delay: 0.2 }}
-          className="mt-8 max-w-2xl text-pretty text-base leading-7 text-zinc-400 sm:text-lg"
+          className="mt-7 max-w-2xl text-pretty text-base leading-7 text-slate-300 sm:text-lg"
         >
           Hanira é uma inteligência artificial pessoal criada para compreender
           você, ampliar suas ideias e transformar complexidade em clareza.
         </motion.p>
 
         <motion.div
-          {...reveal}
+          {...entry}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="mt-10 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row"
+          className="mt-8 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row lg:justify-start"
         >
           <a
             href="/chat"
-            className="group inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-black transition hover:-translate-y-0.5 hover:bg-violet-100"
+            id="start-conversation"
+            className="group inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-cyan-100 px-6 text-sm font-semibold text-slate-950 transition hover:bg-white motion-safe:hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-200"
           >
             Começar agora
             <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
@@ -121,12 +127,16 @@ export function LandingPage() {
             Conhecer Hanira
           </a>
         </motion.div>
+        <Link href="/ikigai" className="mt-5 inline-block rounded text-sm text-cyan-200 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-200">Explore seu Ikigai <span aria-hidden="true">↗</span></Link>
+        </div>
+        <NiraIntro />
+        </div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
+          initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.5 }}
-          className="violet-glow mt-20 w-full max-w-4xl rounded-[1.75rem] border border-white/10 bg-[#0b090d]/85 p-2 shadow-2xl shadow-violet-950/30"
+          className="mt-16 w-full max-w-4xl rounded-[1.75rem] border border-blue-200/15 bg-[#0b1423] p-2 shadow-xl shadow-blue-950/20"
         >
           <div className="overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-[#0c0a0e]">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
@@ -249,6 +259,6 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
-    </main>
+    </main></MotionConfig>
   );
 }

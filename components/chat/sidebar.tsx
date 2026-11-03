@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Archive,
-  Compass,
   LogOut,
   MessageSquare,
   PanelLeftClose,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { HaniraMark } from "@/components/brand/hanira-mark";
+import { IkigaiIcon } from "@/components/brand/ikigai-icon";
 import { IconButton } from "@/components/ui/icon-button";
 import { useChatStore } from "@/lib/stores/chat-store";
 import { cn } from "@/lib/utils";
@@ -162,8 +162,9 @@ export function Sidebar({ userName }: { userName: string }) {
           <RailButton label="Conversas recentes" tooltip="Conversas recentes" active onClick={() => store.setSidebarCollapsed(false)}>
             <MessageSquare className="size-[18px]" />
           </RailButton>
-          <Link href="/ikigai" aria-label="Ikigai" title="Ikigai" onClick={() => store.setSidebarOpen(false)} className="grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <Compass className="size-[18px]" aria-hidden="true" />
+          <Link href="/ikigai" aria-label="Ikigai — descubra seu propósito" title="Ikigai — descubra seu propósito" onClick={() => store.setSidebarOpen(false)} className="group/ikigai relative grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <IkigaiIcon size={32} />
+            <span aria-hidden="true" className="pointer-events-none absolute left-full z-50 ml-2 hidden w-56 rounded-xl border border-white/10 bg-sidebar px-3 py-2 text-sm text-foreground shadow-lg group-hover/ikigai:block group-focus-visible/ikigai:block">Ikigai — descubra seu propósito</span>
           </Link>
           <Link
             href="/settings/memory"
@@ -205,9 +206,9 @@ export function Sidebar({ userName }: { userName: string }) {
         <div className={cn("flex min-h-0 flex-1 flex-col", store.sidebarCollapsed && "lg:hidden")}>
 
         <div className="px-3 pt-2">
-          <Link href="/ikigai" aria-label="Ikigai" title="Ikigai" onClick={() => store.setSidebarOpen(false)} className="mb-3 flex h-11 items-center gap-3 rounded-xl px-3.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <Compass className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <span>Ikigai</span>
+          <Link href="/ikigai" aria-label="Ikigai — descubra seu propósito" title="Ikigai — descubra seu propósito" onClick={() => store.setSidebarOpen(false)} className="mb-3 flex min-h-11 items-center gap-2.5 rounded-xl px-2 py-3 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <IkigaiIcon size={36} />
+            <span className="min-w-0"><span className="block text-sm font-medium leading-5 text-foreground">Ikigai — descubra seu propósito</span><span className="mt-1 block text-xs leading-5">Explore o que dá sentido à sua vida.</span></span>
           </Link>
           <button
             type="button"

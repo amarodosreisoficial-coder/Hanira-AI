@@ -3,6 +3,7 @@ import { z } from "zod";
 import { generateIkigaiJson } from "./generation";
 import { followUpTextSchema, ikigaiInterviewResponseSchema, normalizeQuestion } from "./interview-contract";
 import type { IkigaiAnswers } from "./types";
+import type { IkigaiDiagnosticContext } from "./diagnostics";
 
 const generatedSchema = z.object({ questions: z.array(z.object({
   text: followUpTextSchema,
@@ -43,7 +44,7 @@ export function parseGeneratedQuestions(text: string, answers: IkigaiAnswers) {
   }
 }
 
-export async function generateIkigaiQuestions(answers: IkigaiAnswers, signal: AbortSignal) {
-  return generateIkigaiJson({ systemPrompt: INTERVIEW_PROMPT, data: answers, maxOutputTokens: 900, signal,
+export async function generateIkigaiQuestions(answers: IkigaiAnswers, signal: AbortSignal, context?: IkigaiDiagnosticContext) {
+  return generateIkigaiJson({ systemPrompt: INTERVIEW_PROMPT, data: answers, maxOutputTokens: 900, signal, context,
     parse: (text) => parseGeneratedQuestions(text, answers), invalidResult: () => new InvalidIkigaiQuestionsError() });
 }
