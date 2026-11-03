@@ -45,8 +45,9 @@ export type IkigaiAnalysis = z.infer<typeof ikigaiAnalysisSchema>;
 export type IkigaiInsight = z.infer<typeof insightSchema>;
 
 export type AnalysisValidationCategory = "schema" | "evidence" | "grounding" | "qualification" | "challenge" | "title";
+export type AnalysisSection = "synthesis" | "title" | `passions[${number}]` | `strengths[${number}]` | `values[${number}]` | `contribution[${number}]` | `sustainablePaths[${number}]` | `possibleDirections[${number}]` | `challenges[${number}]` | "actionPlan.days7" | "actionPlan.days30" | "actionPlan.days90";
 export class AnalysisValidationError extends Error {
-  constructor(readonly category: AnalysisValidationCategory) { super(`INVALID_ANALYSIS_${category.toUpperCase()}`); }
+  constructor(readonly category: AnalysisValidationCategory, readonly section?: AnalysisSection) { super(`INVALID_ANALYSIS_${category.toUpperCase()}`); }
 }
 
 // The model selects IDs; only the server copies personal text into citations.
@@ -81,9 +82,33 @@ export function analysisSources(input: Pick<IkigaiAnalysisInput, "answers" | "fo
 }
 
 const commonWords = new Set(["para", "como", "voce", "seus", "suas", "isso", "essa", "esse", "hoje", "vida", "mais", "muito", "quero", "gosto", "pessoas", "fazer"]);
-function themes(value: string) {
-  return normalizeQuestion(value).split(" ").filter((word) => word.length >= 4 && !commonWords.has(word));
+// Small, deliberately explicit families: no unrestricted stemming or guessed synonyms.
+const wordFamilies = [
+  ["ensinar", "ensino", "ensina", "ensinam", "ensinando", "ensinado", "ensinada", "ensinados", "ensinadas", "lecionar", "leciona", "lecionando"],
+  ["organizar", "organiza", "organizam", "organizando", "organizado", "organizada", "organizados", "organizadas"],
+  ["estudante", "estudantes", "aluno", "aluna", "alunos", "alunas"],
+  ["educador", "educadora", "educadores", "educadoras"],
+  ["jovem", "jovens"],
+  ["comunitario", "comunitaria", "comunitarios", "comunitarias"],
+];
+const familyByWord = new Map(wordFamilies.flatMap((family) => family.map((word) => [word, family[0]] as const)));
+function anchor(word: string): string {
+  const family = familyByWord.get(word);
+  if (family) return family;
+  // Plural only when the singular is also present in the compared text; this
+  // normalization does not invent synonyms or strip arbitrary verb endings.
+  if (word.length >= 6 && word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
 }
+function themes(value: string) {
+  return normalizeQuestion(value).split(" ").filter((word) => word.length >= 4 && !commonWords.has(word)).map(anchor);
+}
+
+const claims = /\b(doutorado|mestrado|diplomas?|graduacao|premios?|premiad[oa]s?|certificaca[ou]|certificad[oa]s?|formad[oa]s?|especialist[as]+|conquistei|conquistou|venci|venceu|ganhei|ganhou|recebi|recebeu|liderei|liderou|publiquei|publicou|fundei|fundou|criou)\b/g;
+const unsupportedCertainty = /\b(?:comprova|garante|prova|certamente|indiscutivelmente|detesta|odeia)\b/g;
+// Concrete personal assertions need the same explicit verb in the evidence;
+// this is a narrow guard, not a general-purpose semantic verifier.
+const personalFacts = /\b(?:mora|moro|vive|vivo|trabalha|trabalho|estudou|estudei|nasceu|nasci|possui|possuo)\b/g;
 
 // Verificações estruturais/lexicais detectam referências e alegações inconsistentes.
 // Não equivalem a uma certificação semântica das interpretações da IA.
@@ -92,26 +117,41 @@ export function validateIkigaiAnalysis(value: unknown, input: Pick<IkigaiAnalysi
   if (!parsed.success) throw new AnalysisValidationError("schema");
   const result = parsed.data;
   const sources = analysisSources(input);
-  const grounded = [result.synthesis, ...result.passions, ...result.strengths, ...result.values, ...result.contribution,
-    ...result.sustainablePaths, ...result.possibleDirections, ...Object.values(result.actionPlan), ...result.challenges];
-  for (const item of grounded) {
+  const grounded: { item: IkigaiAnalysis["synthesis"] | IkigaiInsight | IkigaiAnalysis["challenges"][number]; section: AnalysisSection }[] = [
+    { item: result.synthesis, section: "synthesis" },
+    ...(["passions", "strengths", "values", "contribution", "sustainablePaths", "possibleDirections", "challenges"] as const)
+      .flatMap((key) => result[key].map((item, index) => ({ item, section: `${key}[${index}]` as AnalysisSection }))),
+    ...(["days7", "days30", "days90"] as const).map((key) => ({ item: result.actionPlan[key], section: `actionPlan.${key}` as AnalysisSection })),
+  ];
+  for (const { item, section } of grounded) {
     for (const ref of item.evidence) {
       const answer = sources.get(ref.source)?.answer;
-      if (!answer || !answer.normalize("NFC").replace(/\s+/g, " ").includes(ref.quote.normalize("NFC").replace(/\s+/g, " "))) throw new AnalysisValidationError("evidence");
+      if (!answer || !answer.normalize("NFC").replace(/\s+/g, " ").includes(ref.quote.normalize("NFC").replace(/\s+/g, " "))) throw new AnalysisValidationError("evidence", section);
     }
-    const words = new Set(themes(item.evidence.map(({ quote }) => quote).join(" ")));
-    if (!themes(item.text).some((word) => words.has(word))) throw new AnalysisValidationError("grounding");
-    if ("kind" in item && item.kind === "interpretation") {
+    if ("kind" in item) {
       const quotes = normalizeQuestion(item.evidence.map(({ quote }) => quote).join(" "));
-      const qualifications = normalizeQuestion(item.text).match(/\b(doutorado|mestrado|diploma|diplomas|graduacao|premio|premios|certificacao)\b/g) ?? [];
-      if (qualifications.some((word) => !quotes.split(" ").includes(word))) throw new AnalysisValidationError("qualification");
+      const qualifications = normalizeQuestion(item.text).match(claims) ?? [];
+      if (qualifications.some((word) => !quotes.split(" ").includes(word))) throw new AnalysisValidationError("qualification", section);
+      const certainty = normalizeQuestion(item.text).match(unsupportedCertainty) ?? [];
+      if (certainty.some((word) => !quotes.split(" ").includes(word))) throw new AnalysisValidationError("grounding", section);
+      const facts = normalizeQuestion(item.text).match(personalFacts) ?? [];
+      if (facts.some((word) => !quotes.split(" ").includes(word))) throw new AnalysisValidationError("grounding", section);
+      const textAnchors = new Set(themes(item.text));
+      const matched = new Set<string>();
+      for (const ref of item.evidence) {
+        if (/\b(?:nao|nunca|jamais)\b/.test(normalizeQuestion(ref.quote)) && !/\b(?:nao|nunca|jamais)\b/.test(normalizeQuestion(item.text))) throw new AnalysisValidationError("grounding", section);
+        const overlap = themes(ref.quote).filter((word) => textAnchors.has(word));
+        if (!overlap.length) throw new AnalysisValidationError("grounding", section);
+        overlap.forEach((word) => matched.add(word));
+      }
+      if (matched.size < 2) throw new AnalysisValidationError("grounding", section);
     }
   }
-  for (const challenge of result.challenges) {
-    if (!challenge.evidence.some(({ quote }) => quote === challenge.text) ||
-      !/\b(nao|sem|falta|faltam|dificuldade|dificuldades|obstaculo|obstaculos|desafio|desafios|duvida|duvidas|medo|receio|incerteza|limitacao|limitacoes)\b/.test(normalizeQuestion(challenge.text))) throw new AnalysisValidationError("challenge");
+  for (const [index, challenge] of result.challenges.entries()) {
+    if (!challenge.evidence.every(({ quote }) => quote === challenge.text) ||
+      !/\b(nao|sem|falta|faltam|dificuldade|dificuldades|obstaculo|obstaculos|desafio|desafios|duvida|duvidas|medo|receio|incerteza|limitacao|limitacoes)\b/.test(normalizeQuestion(challenge.text))) throw new AnalysisValidationError("challenge", `challenges[${index}]`);
   }
   const allAnswers = new Set(themes([...sources.values()].map(({ answer }) => answer).join(" ")));
-  if (!themes(result.title).some((word) => allAnswers.has(word))) throw new AnalysisValidationError("title");
+  if (!themes(result.title).some((word) => allAnswers.has(word))) throw new AnalysisValidationError("title", "title");
   return result;
 }

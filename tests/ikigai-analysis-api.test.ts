@@ -103,6 +103,17 @@ describe("Ikigai: API da análise protegida", () => {
     expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ stage, failureCategory: category });
   });
 
+  it("registra somente a seção prevista do plano, sem texto ou evidência", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const report = createGeneratedAnalysisReport();
+    report.actionPlan.days30.text = "Tecnologia comprova uma carreira espacial inventada.";
+    mocks.generate.mockResolvedValueOnce({ text: JSON.stringify(report), finishReason: "stop" });
+    expect((await POST(request())).status).toBe(502);
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ failureCategory: "analysis_grounding", section: "actionPlan.days30" });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/carreira espacial|Escutar estudantes|Ensinar com tecnologia/);
+  });
+
   it("capacidade gratuita indisponível não inicia geração", async () => {
     mocks.runtime.mockImplementation(() => { throw new ModelRouterError({ code: "capacity_unavailable", message: "private key", metadata: { rejected: [{ candidateId: "free", provider: "groq", reason: "capacity_cooldown" }] } }); });
     const response = await POST(request());
