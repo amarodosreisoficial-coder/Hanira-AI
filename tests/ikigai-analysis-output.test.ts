@@ -27,7 +27,7 @@ describe("Ikigai D.9: evidências determinísticas e diagnóstico privado", () =
     expect(() => parseGeneratedAnalysis(JSON.stringify(wire), data)).toThrow();
   });
   it.each([
-    { identity: "Pintor", love: "Arte", strengths: "Cores", impact: "Bairro", future: "Quadros", story: "" },
+    { identity: "Pintor", love: "Arte pintura", strengths: "Cores quadros", impact: "Bairro vizinhos", future: "Quadros escola", story: "" },
     { identity: "Cuido da horta comunitária e da minha família", love: "Cultivar verduras e cozinhar aos domingos", strengths: "Organizar sementes e escutar meus vizinhos", impact: "Partilhar alimentos no bairro", future: "Construir uma estufa com recursos disponíveis", story: "Não desejo mudar de profissão, apenas cultivar relações" },
   ])("valida perfis fictícios curtos e variados sem exigir educação como tema", answers => {
     const data = buildAnalysisInput(answers, []);
@@ -63,7 +63,8 @@ describe("Ikigai D.9: evidências determinísticas e diagnóstico privado", () =
   it("normaliza composição Unicode e espaços, sem aceitar citação reescrita", () => {
     const data = buildAnalysisInput({ ...analysisAnswers, love: "Ensinar com tecnologia e educação\npara jovens" }, []);
     const report = createAnalysisReport();
-    report.passions[0].evidence[0].quote = "tecnologia e educação para jovens";
+    report.passions[0].evidence = [{ source: "love", quote: "tecnologia e educação para jovens" }];
+    report.passions[0].text = "Tecnologia e educação parecem uma fonte de realização para você.";
     expect(parseGeneratedAnalysis(JSON.stringify(report), data).passions).toHaveLength(1);
     report.passions[0].evidence[0].quote = "tecnologia avançada";
     expect(() => parseGeneratedAnalysis(JSON.stringify(report), data)).toThrow();
