@@ -1,4 +1,5 @@
 import "server-only";
+import { AIProviderError } from "@/lib/ai/types";
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { requireSessionUser } from "@/lib/auth/session";
@@ -78,7 +79,8 @@ export function createIkigaiHandler<T>(options: {
       const invalidResult = options.isInvalidResult(error);
       const failure = classifyIkigaiFailure(error, context, invalidResult, aborted);
       logIkigaiFailure(error, context, failure);
-       void persistIkigaiDiagnostic(context, failure, "/api/ikigai/analyze", (error as { section?: string })?.section);
+       const providerStatus = error instanceof AIProviderError ? (error as { statusCode?: number }).statusCode ?? null : null;
+       await persistIkigaiDiagnostic(context, { ...failure, providerStatus }, new URL(request.url).pathname || "/api/ikigai/analyze", (error as { section?: string })?.section, providerStatus).catch(() => {});
       let message: string = IKIGAI_PUBLIC_ERRORS[failure.publicCode];
       if (invalidResult && !aborted) message = options.invalidResultMessage;
       if (failure.category === "provider_rate_limit") message = "A capacidade gratuita está ocupada. Aguarde ou continue com sua prévia local.";

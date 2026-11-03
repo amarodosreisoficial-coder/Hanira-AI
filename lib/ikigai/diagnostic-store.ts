@@ -14,9 +14,10 @@ function safeString(value: unknown, max: number): string | null {
 
 export async function persistIkigaiDiagnostic(
   context: IkigaiDiagnosticContext,
-  failure: { internalCode: string; category: string; publicCode: string; status: number },
+  failure: { internalCode: string; category: string; publicCode: string; status: number; providerStatus?: number | null },
   route: string,
   section?: string,
+  providerStatusOverride?: number | null,
 ): Promise<void> {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,7 +31,9 @@ export async function persistIkigaiDiagnostic(
     const model = safeString(context.model, 64);
     const sectionSafe = typeof section === "string" && /^(?:synthesis|title|actionPlan\.days(?:7|30|90)|(?:passions|strengths|values|contribution|sustainablePaths|possibleDirections|challenges)\[[0-2]\])$/.test(section) ? section : null;
     const durationMs = Math.max(0, Date.now() - context.startedAtMs);
-    const client = createSupabaseAdminClient() as { from: (table: string) => { insert: (row: Record<string, unknown>) => PromiseLike<unknown> } };
+    const providerStatusRaw = providerStatusOverride ?? failure.providerStatus ?? null;
+    const providerStatus = typeof providerStatusRaw === "number" && Number.isInteger(providerStatusRaw) && providerStatusRaw >= 100 && providerStatusRaw <= 599 ? providerStatusRaw : null;
+    const client = createSupabaseAdminClient() as { from: (table: string) => { insert: (row: Record<string, unknown>) => PromiseLike<{ error: { code?: string } | null }> } };
     const insert = client.from("ikigai_diagnostics").insert({
       request_id: context.requestId,
       route,
@@ -40,11 +43,13 @@ export async function persistIkigaiDiagnostic(
       public_code: publicCode,
       provider,
       model,
-      provider_status: null,
+      provider_status: providerStatus,
       duration_ms: durationMs,
       section: sectionSafe,
     });
-    await Promise.race([insert, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500))]);
+    const result = await Promise.race([insert, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500))]);
+    const error = (result as { error?: { code?: string } | null } | null)?.error;
+    if (error) console.warn("[ikigai.diagnostic.persist_failed]");
   } catch {
     // best-effort: never propagate
     console.warn("[ikigai.diagnostic.persist_failed]");
