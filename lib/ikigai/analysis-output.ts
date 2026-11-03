@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { analysisEvidenceCatalog, AnalysisValidationError, type IkigaiAnalysisInput } from "./analysis-contract";
+import { analysisEvidenceCatalog, AnalysisValidationError, type AnalysisSection, type IkigaiAnalysisInput } from "./analysis-contract";
 
 // Closed wire objects select IDs. Only the server copies personal citations.
 const evidence = z.array(z.string()).min(1).max(2);
@@ -40,17 +40,17 @@ export function hydrateAnalysisEvidence(value: unknown, input: IkigaiAnalysisInp
   const parsed = generatedAnalysisSchema.safeParse(value);
   if (!parsed.success) throw new AnalysisValidationError("schema");
   const catalog = new Map(analysisEvidenceCatalog(input).map(({ id, ...entry }) => [id, entry]));
-  function resolve(id: string) {
+  function resolve(id: string, section: AnalysisSection) {
     const entry = catalog.get(id);
-    if (!entry) throw new AnalysisValidationError("evidence");
+    if (!entry) throw new AnalysisValidationError("evidence", section);
     return entry;
   }
-  const hydrate = (item: z.infer<typeof insight>) => ({ ...item, evidence: item.evidence.map(resolve) });
+  const hydrate = (item: z.infer<typeof insight>, section: AnalysisSection) => ({ ...item, evidence: item.evidence.map((id) => resolve(id, section)) });
   const result = parsed.data;
-  return { ...result, synthesis: hydrate(result.synthesis),
-    passions: result.passions.map(hydrate), strengths: result.strengths.map(hydrate), values: result.values.map(hydrate),
-    contribution: result.contribution.map(hydrate), sustainablePaths: result.sustainablePaths.map(hydrate), possibleDirections: result.possibleDirections.map(hydrate),
-    challenges: result.challenges.map(({ evidenceId }) => { const entry = resolve(evidenceId); return { text: entry.quote, evidence: [entry] }; }),
-    actionPlan: { days7: hydrate(result.actionPlan.days7), days30: hydrate(result.actionPlan.days30), days90: hydrate(result.actionPlan.days90) },
+  return { ...result, synthesis: hydrate(result.synthesis, "synthesis"),
+    passions: result.passions.map((item, i) => hydrate(item, `passions[${i}]`)), strengths: result.strengths.map((item, i) => hydrate(item, `strengths[${i}]`)), values: result.values.map((item, i) => hydrate(item, `values[${i}]`)),
+    contribution: result.contribution.map((item, i) => hydrate(item, `contribution[${i}]`)), sustainablePaths: result.sustainablePaths.map((item, i) => hydrate(item, `sustainablePaths[${i}]`)), possibleDirections: result.possibleDirections.map((item, i) => hydrate(item, `possibleDirections[${i}]`)),
+    challenges: result.challenges.map(({ evidenceId }, i) => { const entry = resolve(evidenceId, `challenges[${i}]`); return { text: entry.quote, evidence: [entry] }; }),
+    actionPlan: { days7: hydrate(result.actionPlan.days7, "actionPlan.days7"), days30: hydrate(result.actionPlan.days30, "actionPlan.days30"), days90: hydrate(result.actionPlan.days90, "actionPlan.days90") },
   };
 }
