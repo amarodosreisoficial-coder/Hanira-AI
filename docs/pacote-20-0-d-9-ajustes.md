@@ -4,7 +4,7 @@ Branch preservada: `feature/20-0-d-9-ikigai-fix-visual-nira`. Nenhum merge em ma
 
 ## Situação do 503 real
 
-**A causa do 503 observado no Preview continua pendente. Não houve chamada real ao Groq nesta execução.** A mensagem anterior de capacidade gratuita era o fallback de qualquer erro inesperado: seu texto, isoladamente, não comprova falta de cota.
+**A causa do 503 observado no Preview continua pendente. O único smoke real autorizado falhou localmente com HTTP 400 e categoria `provider_output_invalid`.** A mensagem anterior de capacidade gratuita era o fallback de qualquer erro inesperado: seu texto, isoladamente, não comprova falta de cota. A falha local também não comprova que o Preview tenha a mesma causa.
 
 A consulta ao deployment da entrega anterior pela conexão Vercel retornou 403 por falta de acesso à equipe `amarodosreisoficial-9764s-projects`. A criação do link de autorização, tanto pelo ID retornado quanto pelo slug, retornou 404/Team not found. A tentativa de usar uma sessão existente de navegador expirou na aprovação do controle do computador. Não foi possível ler os logs nem auditar variáveis do ambiente Preview; não foi tentado contornar esse acesso.
 
@@ -67,11 +67,41 @@ Testes: `tests/ikigai-analysis-api.test.ts`, `tests/ikigai-analysis-output.test.
 - No Ikigai, a rota é exercitada com o adaptador Groq real e fetch simulado para HTTP 400/401/404/429, envelopes inválidos, logs permitidos e uma chamada por tentativa. O timeout interno também usa timer e sinal de abort reais, sem rede externa.
 - Download de PDF da análise continua passando no navegador. A estrutura visual do PDF não foi alterada neste ajuste.
 
+## Resultado do único smoke real autorizado
+
+Em 2 de novembro de 2026, o responsável autorizou **uma chamada** e confirmou que a chave local usa exclusivamente a cota gratuita. O teste opt-in foi executado uma vez, somente com os dados fictícios preparados, sem retry nem fallback. Ollama foi desabilitado apenas no processo do teste; nenhum arquivo de variáveis foi alterado. As flags foram removidas no finally.
+
+Diagnóstico seguro observado:
+
+```json
+{"requestId":"6207203e-806b-4fbf-986c-177ff1c90001","stage":"provider","internalCode":"invalid_request","providerStatus":400,"provider":"groq","model":"openai/gpt-oss-20b","durationMs":2711,"failureCategory":"provider_output_invalid"}
+```
+
+O adaptador produz essa categoria quando o corpo de erro HTTP 400 contém o código `json_validate_failed`. Isso comprova recusa da saída pelo provedor nesta tentativa local. Não demonstra qual campo ou restrição causou a recusa, incompatibilidade de uma palavra-chave específica, falta de cota ou a causa do 503 anterior no Preview. O corpo bruto não foi registrado nem persistido. A documentação oficial continua indicando suporte a `strict: true` nesse modelo; não é evidência de aceitação deste contrato concreto.
+
+| Etapa | Resultado desta chamada real |
+| --- | --- |
+| Seleção local do Groq | Confirmada; modelo `openai/gpt-oss-20b` |
+| Resposta do provedor | HTTP 400; nenhuma conclusão utilizável entregue |
+| Contrato aceito pelo provedor | Não comprovado; geração recusada com `json_validate_failed` |
+| Validação local da análise | Não alcançada |
+| Renderização do resultado | Não alcançada |
+| Geração de PDF | Não alcançada |
+| Rota autenticada e variáveis do Preview | Não verificadas por esse teste local |
+
+O Vitest reportou **1 teste falho**, `IKIGAI_SMOKE_PROVIDER_OUTPUT_INVALID`. Esse resultado prevalece sobre o código de saída 0 observado no wrapper PowerShell. Não foi executada uma segunda chamada. Não houve alteração especulativa do schema, aumento de tokens ou relaxamento das regras de fundamentação.
+
+O caso HTTP 400 + `json_validate_failed` já está reproduzido em `tests/ikigai-analysis-api.test.ts` com o adaptador real e fetch simulado: a rota retorna HTTP 502 técnico, emite somente os campos permitidos e faz uma única chamada. Esse teste demonstra o tratamento do erro; não demonstra geração real bem-sucedida.
+
+Após o smoke, os dois arquivos de testes de API e contrato foram executados novamente **sem rede externa: 52 testes aprovados**. Somente este relatório foi modificado nesta continuação; o código da aplicação permanece o mesmo que passou TypeScript, ESLint, suíte completa, build e navegador anteriormente.
+
+Entrega de código já enviada: `5d9256d` (diagnósticos) e `76213e4` (vídeo 02). O GitHub registrou sucesso do check Vercel para `76213e4`; [deployment Preview](https://vercel.com/amarodosreisoficial-9764s-projects/hanira-ai/BYMdBEqscx2AkgAZTDFkWt69YgN2). Esse sucesso de deployment não homologa a geração do Ikigai.
+
 ## Próxima homologação real
 
 1. Disponibilizar leitura dos logs da equipe correta ou fornecer somente os campos técnicos da requisição que falhou, sem dados pessoais. Correlacionar `/api/ikigai/analyze` no Preview pelo novo `X-Request-Id`.
-2. **Solicitar autorização explícita e confirmação de que a chave usa exclusivamente a cota Groq Free** antes do smoke. A classificação free do router não verifica o plano financeiro da conta externa.
-3. Executar somente este teste, uma vez, com dados fictícios. Ele verifica seleção do Groq, contrato, validação, renderização estática do resultado e bytes PDF, sem salvar nem imprimir conteúdo. Interrompe na primeira falha. O teste local não comprova variáveis e funcionamento do Preview.
+2. A autorização de uma chamada já foi consumida no smoke acima. **Uma nova chamada exige nova autorização explícita**, mantendo o uso exclusivo da cota gratuita. A classificação free do router não verifica o plano financeiro da conta externa.
+3. O comando abaixo permanece como procedimento para uma futura execução autorizada; não é uma instrução para tentar novamente automaticamente. O teste verifica seleção do Groq, contrato, validação, renderização estática do resultado e bytes PDF, sem salvar nem imprimir conteúdo. Interrompe na primeira falha. O teste local não comprova variáveis e funcionamento do Preview.
 
 ```powershell
 $env:HANIRA_IKIGAI_LIVE_SMOKE='I_AUTHORIZE_ONE_FREE_REQUEST'
@@ -86,4 +116,4 @@ try {
 }
 ```
 
-Nenhuma dessas flags foi ativada nesta execução. Após aprovação do smoke, homologar a rota autenticada e o download no Preview com consentimento. Não fazer merge antes de confirmar o resultado real.
+As flags foram ativadas somente para a única execução autorizada e removidas ao final. A homologação real continua reprovada. Após um smoke bem-sucedido, ainda será necessário homologar a rota autenticada e o download no Preview com consentimento. Não fazer merge antes de confirmar o resultado real.
